@@ -1,0 +1,2762 @@
+{
+    "slugs": [
+        {
+            "id": 36,
+            "key": "business-strategy",
+            "reference_id": 1,
+            "reference_type": "Botble\\Blog\\Models\\Category",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:17",
+            "updated_at": "2026-06-25 11:41:17"
+        },
+        {
+            "id": 37,
+            "key": "market-research",
+            "reference_id": 2,
+            "reference_type": "Botble\\Blog\\Models\\Category",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:17",
+            "updated_at": "2026-06-25 11:41:17"
+        },
+        {
+            "id": 38,
+            "key": "financial-management",
+            "reference_id": 3,
+            "reference_type": "Botble\\Blog\\Models\\Category",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:17",
+            "updated_at": "2026-06-25 11:41:17"
+        },
+        {
+            "id": 39,
+            "key": "entrepreneurship",
+            "reference_id": 4,
+            "reference_type": "Botble\\Blog\\Models\\Category",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:17",
+            "updated_at": "2026-06-25 11:41:17"
+        },
+        {
+            "id": 40,
+            "key": "career-development",
+            "reference_id": 5,
+            "reference_type": "Botble\\Blog\\Models\\Category",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:17",
+            "updated_at": "2026-06-25 11:41:17"
+        },
+        {
+            "id": 41,
+            "key": "startups",
+            "reference_id": 6,
+            "reference_type": "Botble\\Blog\\Models\\Category",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:17",
+            "updated_at": "2026-06-25 11:41:17"
+        },
+        {
+            "id": 42,
+            "key": "success-stories",
+            "reference_id": 7,
+            "reference_type": "Botble\\Blog\\Models\\Category",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:17",
+            "updated_at": "2026-06-25 11:41:17"
+        },
+        {
+            "id": 43,
+            "key": "industry-insights",
+            "reference_id": 8,
+            "reference_type": "Botble\\Blog\\Models\\Category",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:17",
+            "updated_at": "2026-06-25 11:41:17"
+        },
+        {
+            "id": 44,
+            "key": "human-resources",
+            "reference_id": 9,
+            "reference_type": "Botble\\Blog\\Models\\Category",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:17",
+            "updated_at": "2026-06-25 11:41:17"
+        },
+        {
+            "id": 56,
+            "key": "10-strategies-for-business-growth-in-2023",
+            "reference_id": 1,
+            "reference_type": "Botble\\Blog\\Models\\Post",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:18",
+            "updated_at": "2026-06-25 11:41:18"
+        },
+        {
+            "id": 57,
+            "key": "navigating-tax-season-tips-for-small-businesses",
+            "reference_id": 2,
+            "reference_type": "Botble\\Blog\\Models\\Post",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:18",
+            "updated_at": "2026-06-25 11:41:18"
+        },
+        {
+            "id": 58,
+            "key": "the-power-of-data-analytics-in-business-decision-making",
+            "reference_id": 3,
+            "reference_type": "Botble\\Blog\\Models\\Post",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:18",
+            "updated_at": "2026-06-25 11:41:18"
+        },
+        {
+            "id": 59,
+            "key": "how-to-create-a-winning-marketing-plan",
+            "reference_id": 4,
+            "reference_type": "Botble\\Blog\\Models\\Post",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:18",
+            "updated_at": "2026-06-25 11:41:18"
+        },
+        {
+            "id": 60,
+            "key": "mastering-the-art-of-financial-planning-for-entrepreneurs",
+            "reference_id": 5,
+            "reference_type": "Botble\\Blog\\Models\\Post",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:18",
+            "updated_at": "2026-06-25 11:41:18"
+        },
+        {
+            "id": 61,
+            "key": "the-role-of-innovation-in-modern-business",
+            "reference_id": 6,
+            "reference_type": "Botble\\Blog\\Models\\Post",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:18",
+            "updated_at": "2026-06-25 11:41:18"
+        },
+        {
+            "id": 62,
+            "key": "startup-success-stories-lessons-from-industry-leaders",
+            "reference_id": 7,
+            "reference_type": "Botble\\Blog\\Models\\Post",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 63,
+            "key": "balancing-act-work-life-integration-for-business-owners",
+            "reference_id": 8,
+            "reference_type": "Botble\\Blog\\Models\\Post",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 64,
+            "key": "the-impact-of-sustainable-practices-on-business-sustainability",
+            "reference_id": 9,
+            "reference_type": "Botble\\Blog\\Models\\Post",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 65,
+            "key": "building-a-strong-employer-brand-for-talent-acquisition",
+            "reference_id": 10,
+            "reference_type": "Botble\\Blog\\Models\\Post",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 66,
+            "key": "productivity-hacks-for-busy-entrepreneurs",
+            "reference_id": 11,
+            "reference_type": "Botble\\Blog\\Models\\Post",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 67,
+            "key": "the-human-factor-hr-best-practices-for-businesses",
+            "reference_id": 12,
+            "reference_type": "Botble\\Blog\\Models\\Post",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 45,
+            "key": "strategy",
+            "reference_id": 1,
+            "reference_type": "Botble\\Blog\\Models\\Tag",
+            "prefix": "tag",
+            "created_at": "2026-06-25 11:41:17",
+            "updated_at": "2026-06-25 11:41:17"
+        },
+        {
+            "id": 46,
+            "key": "marketing",
+            "reference_id": 2,
+            "reference_type": "Botble\\Blog\\Models\\Tag",
+            "prefix": "tag",
+            "created_at": "2026-06-25 11:41:17",
+            "updated_at": "2026-06-25 11:41:17"
+        },
+        {
+            "id": 47,
+            "key": "finance",
+            "reference_id": 3,
+            "reference_type": "Botble\\Blog\\Models\\Tag",
+            "prefix": "tag",
+            "created_at": "2026-06-25 11:41:17",
+            "updated_at": "2026-06-25 11:41:17"
+        },
+        {
+            "id": 48,
+            "key": "management",
+            "reference_id": 4,
+            "reference_type": "Botble\\Blog\\Models\\Tag",
+            "prefix": "tag",
+            "created_at": "2026-06-25 11:41:17",
+            "updated_at": "2026-06-25 11:41:17"
+        },
+        {
+            "id": 49,
+            "key": "networking",
+            "reference_id": 5,
+            "reference_type": "Botble\\Blog\\Models\\Tag",
+            "prefix": "tag",
+            "created_at": "2026-06-25 11:41:18",
+            "updated_at": "2026-06-25 11:41:18"
+        },
+        {
+            "id": 50,
+            "key": "leadership",
+            "reference_id": 6,
+            "reference_type": "Botble\\Blog\\Models\\Tag",
+            "prefix": "tag",
+            "created_at": "2026-06-25 11:41:18",
+            "updated_at": "2026-06-25 11:41:18"
+        },
+        {
+            "id": 51,
+            "key": "technology",
+            "reference_id": 7,
+            "reference_type": "Botble\\Blog\\Models\\Tag",
+            "prefix": "tag",
+            "created_at": "2026-06-25 11:41:18",
+            "updated_at": "2026-06-25 11:41:18"
+        },
+        {
+            "id": 52,
+            "key": "investment",
+            "reference_id": 8,
+            "reference_type": "Botble\\Blog\\Models\\Tag",
+            "prefix": "tag",
+            "created_at": "2026-06-25 11:41:18",
+            "updated_at": "2026-06-25 11:41:18"
+        },
+        {
+            "id": 53,
+            "key": "branding",
+            "reference_id": 9,
+            "reference_type": "Botble\\Blog\\Models\\Tag",
+            "prefix": "tag",
+            "created_at": "2026-06-25 11:41:18",
+            "updated_at": "2026-06-25 11:41:18"
+        },
+        {
+            "id": 54,
+            "key": "sales",
+            "reference_id": 10,
+            "reference_type": "Botble\\Blog\\Models\\Tag",
+            "prefix": "tag",
+            "created_at": "2026-06-25 11:41:18",
+            "updated_at": "2026-06-25 11:41:18"
+        },
+        {
+            "id": 55,
+            "key": "sustainability",
+            "reference_id": 11,
+            "reference_type": "Botble\\Blog\\Models\\Tag",
+            "prefix": "tag",
+            "created_at": "2026-06-25 11:41:18",
+            "updated_at": "2026-06-25 11:41:18"
+        },
+        {
+            "id": 30,
+            "key": "business",
+            "reference_id": 1,
+            "reference_type": "Botble\\Gallery\\Models\\Gallery",
+            "prefix": "galleries",
+            "created_at": "2026-06-25 11:41:12",
+            "updated_at": "2026-06-25 11:41:12"
+        },
+        {
+            "id": 31,
+            "key": "innovation",
+            "reference_id": 2,
+            "reference_type": "Botble\\Gallery\\Models\\Gallery",
+            "prefix": "galleries",
+            "created_at": "2026-06-25 11:41:12",
+            "updated_at": "2026-06-25 11:41:12"
+        },
+        {
+            "id": 32,
+            "key": "leadership",
+            "reference_id": 3,
+            "reference_type": "Botble\\Gallery\\Models\\Gallery",
+            "prefix": "galleries",
+            "created_at": "2026-06-25 11:41:12",
+            "updated_at": "2026-06-25 11:41:12"
+        },
+        {
+            "id": 33,
+            "key": "technology",
+            "reference_id": 4,
+            "reference_type": "Botble\\Gallery\\Models\\Gallery",
+            "prefix": "galleries",
+            "created_at": "2026-06-25 11:41:12",
+            "updated_at": "2026-06-25 11:41:12"
+        },
+        {
+            "id": 34,
+            "key": "success",
+            "reference_id": 5,
+            "reference_type": "Botble\\Gallery\\Models\\Gallery",
+            "prefix": "galleries",
+            "created_at": "2026-06-25 11:41:12",
+            "updated_at": "2026-06-25 11:41:12"
+        },
+        {
+            "id": 35,
+            "key": "entrepreneurship",
+            "reference_id": 6,
+            "reference_type": "Botble\\Gallery\\Models\\Gallery",
+            "prefix": "galleries",
+            "created_at": "2026-06-25 11:41:12",
+            "updated_at": "2026-06-25 11:41:12"
+        },
+        {
+            "id": 1,
+            "key": "home",
+            "reference_id": 1,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:06",
+            "updated_at": "2026-06-25 11:41:06"
+        },
+        {
+            "id": 2,
+            "key": "consulting",
+            "reference_id": 2,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:07",
+            "updated_at": "2026-06-25 11:41:07"
+        },
+        {
+            "id": 3,
+            "key": "insurance",
+            "reference_id": 3,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:07",
+            "updated_at": "2026-06-25 11:41:07"
+        },
+        {
+            "id": 4,
+            "key": "digital-agency",
+            "reference_id": 4,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:07",
+            "updated_at": "2026-06-25 11:41:07"
+        },
+        {
+            "id": 5,
+            "key": "business",
+            "reference_id": 5,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:07",
+            "updated_at": "2026-06-25 11:41:07"
+        },
+        {
+            "id": 6,
+            "key": "about",
+            "reference_id": 6,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:07",
+            "updated_at": "2026-06-25 11:41:07"
+        },
+        {
+            "id": 7,
+            "key": "about-2",
+            "reference_id": 7,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:08",
+            "updated_at": "2026-06-25 11:41:08"
+        },
+        {
+            "id": 8,
+            "key": "about-3",
+            "reference_id": 8,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:08",
+            "updated_at": "2026-06-25 11:41:08"
+        },
+        {
+            "id": 9,
+            "key": "about-4",
+            "reference_id": 9,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:08",
+            "updated_at": "2026-06-25 11:41:08"
+        },
+        {
+            "id": 10,
+            "key": "about-5",
+            "reference_id": 10,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:08",
+            "updated_at": "2026-06-25 11:41:08"
+        },
+        {
+            "id": 11,
+            "key": "services",
+            "reference_id": 11,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:09",
+            "updated_at": "2026-06-25 11:41:09"
+        },
+        {
+            "id": 12,
+            "key": "services-2",
+            "reference_id": 12,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:09",
+            "updated_at": "2026-06-25 11:41:09"
+        },
+        {
+            "id": 13,
+            "key": "services-3",
+            "reference_id": 13,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:09",
+            "updated_at": "2026-06-25 11:41:09"
+        },
+        {
+            "id": 14,
+            "key": "services-4",
+            "reference_id": 14,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:09",
+            "updated_at": "2026-06-25 11:41:09"
+        },
+        {
+            "id": 15,
+            "key": "services-5",
+            "reference_id": 15,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:09",
+            "updated_at": "2026-06-25 11:41:09"
+        },
+        {
+            "id": 16,
+            "key": "cookies",
+            "reference_id": 16,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:09",
+            "updated_at": "2026-06-25 11:41:09"
+        },
+        {
+            "id": 17,
+            "key": "terms-of-service",
+            "reference_id": 17,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:09",
+            "updated_at": "2026-06-25 11:41:09"
+        },
+        {
+            "id": 18,
+            "key": "privacy-policy",
+            "reference_id": 18,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:09",
+            "updated_at": "2026-06-25 11:41:09"
+        },
+        {
+            "id": 19,
+            "key": "blog",
+            "reference_id": 19,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:09",
+            "updated_at": "2026-06-25 11:41:09"
+        },
+        {
+            "id": 20,
+            "key": "contact",
+            "reference_id": 20,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:09",
+            "updated_at": "2026-06-25 11:41:09"
+        },
+        {
+            "id": 21,
+            "key": "company",
+            "reference_id": 21,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:09",
+            "updated_at": "2026-06-25 11:41:09"
+        },
+        {
+            "id": 22,
+            "key": "case-studies",
+            "reference_id": 22,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:09",
+            "updated_at": "2026-06-25 11:41:09"
+        },
+        {
+            "id": 23,
+            "key": "how-it-work",
+            "reference_id": 23,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:10",
+            "updated_at": "2026-06-25 11:41:10"
+        },
+        {
+            "id": 24,
+            "key": "partners",
+            "reference_id": 24,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:10",
+            "updated_at": "2026-06-25 11:41:10"
+        },
+        {
+            "id": 25,
+            "key": "pricing",
+            "reference_id": 25,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:10",
+            "updated_at": "2026-06-25 11:41:10"
+        },
+        {
+            "id": 26,
+            "key": "testimonials",
+            "reference_id": 26,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:10",
+            "updated_at": "2026-06-25 11:41:10"
+        },
+        {
+            "id": 27,
+            "key": "projects",
+            "reference_id": 27,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:10",
+            "updated_at": "2026-06-25 11:41:10"
+        },
+        {
+            "id": 28,
+            "key": "faqs",
+            "reference_id": 28,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:10",
+            "updated_at": "2026-06-25 11:41:10"
+        },
+        {
+            "id": 29,
+            "key": "coming-soon",
+            "reference_id": 29,
+            "reference_type": "Botble\\Page\\Models\\Page",
+            "prefix": "",
+            "created_at": "2026-06-25 11:41:10",
+            "updated_at": "2026-06-25 11:41:10"
+        }
+    ],
+    "settings": [
+        {
+            "id": 1,
+            "key": "media_random_hash",
+            "value": "7fe3a1027552e4e91d1808b3431a2dd7",
+            "created_at": null,
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 2,
+            "key": "api_enabled",
+            "value": "0",
+            "created_at": null,
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 3,
+            "key": "analytics_dashboard_widgets",
+            "value": "0",
+            "created_at": "2026-06-25 11:40:14",
+            "updated_at": "2026-06-25 11:40:14"
+        },
+        {
+            "id": 4,
+            "key": "activated_plugins",
+            "value": "[\"language\",\"language-advanced\",\"analytics\",\"announcement\",\"audit-log\",\"backup\",\"blog\",\"captcha\",\"career\",\"contact\",\"cookie-consent\",\"faq\",\"gallery\",\"newsletter\"]",
+            "created_at": null,
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 5,
+            "key": "enable_recaptcha_botble_contact_forms_fronts_contact_form",
+            "value": "1",
+            "created_at": "2026-06-25 11:40:20",
+            "updated_at": "2026-06-25 11:40:20"
+        },
+        {
+            "id": 6,
+            "key": "enable_recaptcha_botble_newsletter_forms_fronts_newsletter_form",
+            "value": "1",
+            "created_at": "2026-06-25 11:40:26",
+            "updated_at": "2026-06-25 11:40:26"
+        },
+        {
+            "id": 7,
+            "key": "theme",
+            "value": "gerow",
+            "created_at": null,
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 8,
+            "key": "show_admin_bar",
+            "value": "1",
+            "created_at": null,
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 9,
+            "key": "language_hide_default",
+            "value": "1",
+            "created_at": null,
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 10,
+            "key": "language_switcher_display",
+            "value": "dropdown",
+            "created_at": null,
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 11,
+            "key": "language_display",
+            "value": "all",
+            "created_at": null,
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 12,
+            "key": "language_hide_languages",
+            "value": "[]",
+            "created_at": null,
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 13,
+            "key": "theme-gerow-site_title",
+            "value": "Gerow - Business Consulting",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 14,
+            "key": "theme-gerow-seo_description",
+            "value": "With experience, we make sure to get every project done very fast and in time with high quality using our Botble CMS https://1.envato.market/LWRBY",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 15,
+            "key": "theme-gerow-favicon",
+            "value": "general/favicon.png",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 16,
+            "key": "theme-gerow-website",
+            "value": "https://botble.com",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 17,
+            "key": "theme-gerow-contact_email",
+            "value": "support@botble.com",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 18,
+            "key": "theme-gerow-site_description",
+            "value": "At Gerow, we specialize in comprehensive business solutions designed to enhance your operational efficiency and supply chain excellence. Whether you\u2019re a seasoned entrepreneur looking to fine-tune your strategies, a startup seeking guidance, or a business professional looking for insights and solutions, our platform is your one-stop destination. Our team of experts and a wealth of resources are here to empower your journey towards business excellence. Explore our offerings and discover how we can be your partner in success.",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 19,
+            "key": "theme-gerow-phone",
+            "value": "+01-246-357",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 20,
+            "key": "theme-gerow-address",
+            "value": "4517 Washington Ave. Manchester, Kentucky 39495",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 21,
+            "key": "theme-gerow-cookie_consent_message",
+            "value": "Your experience on this site will be improved by allowing cookies ",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 22,
+            "key": "theme-gerow-cookie_consent_learn_more_url",
+            "value": "/cookie-policy",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 23,
+            "key": "theme-gerow-cookie_consent_learn_more_text",
+            "value": "Cookie Policy",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 24,
+            "key": "theme-gerow-homepage_id",
+            "value": "1",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 25,
+            "key": "theme-gerow-logo",
+            "value": "general/logo.png",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 26,
+            "key": "theme-gerow-primary_color",
+            "value": "#0055FF",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 27,
+            "key": "theme-gerow-primary_hover_color",
+            "value": "#0049DC",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 28,
+            "key": "theme-gerow-secondary_color",
+            "value": "#00194C",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 29,
+            "key": "theme-gerow-heading_color",
+            "value": "#00194C",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 30,
+            "key": "theme-gerow-text_color",
+            "value": "#334770",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 31,
+            "key": "theme-gerow-heading_font",
+            "value": "Urbanist",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 32,
+            "key": "theme-gerow-primary_font",
+            "value": "Plus Jakarta Sans",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 33,
+            "key": "theme-gerow-blog_page_id",
+            "value": "19",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 34,
+            "key": "theme-gerow-breadcrumb_background",
+            "value": "general/breadcrumb-bg.png",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 35,
+            "key": "theme-gerow-breadcrumb_first_shape_image",
+            "value": "backgrounds/breadcrumb-shape01.png",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 36,
+            "key": "theme-gerow-breadcrumb_second_shape_image",
+            "value": "backgrounds/breadcrumb-shape02.png",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 37,
+            "key": "theme-gerow-footer_background_image",
+            "value": "backgrounds/bg-footer.png",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 38,
+            "key": "theme-gerow-footer_background_color",
+            "value": "#fff",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 39,
+            "key": "theme-gerow-footer_text_color",
+            "value": "#00194C",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 40,
+            "key": "theme-gerow-footer_text_muted_color",
+            "value": "#334770",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 41,
+            "key": "theme-gerow-footer_border_color",
+            "value": "#0055FF",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 42,
+            "key": "theme-gerow-footer_bottom_background_color",
+            "value": "#fff",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 43,
+            "key": "theme-gerow-preloader_version",
+            "value": "v1",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 44,
+            "key": "theme-gerow-lazy_load_images",
+            "value": "1",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 45,
+            "key": "theme-gerow-lazy_load_placeholder_image",
+            "value": "general/placeholder.png",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 46,
+            "key": "theme-gerow-social_links",
+            "value": "[[{\"key\":\"social-name\",\"value\":\"Facebook\"},{\"key\":\"social-icon\",\"value\":\"ti ti-brand-facebook\"},{\"key\":\"social-url\",\"value\":\"https:\\/\\/www.facebook.com\\/\"}],[{\"key\":\"social-name\",\"value\":\"Instagram\"},{\"key\":\"social-icon\",\"value\":\"ti ti-brand-instagram\"},{\"key\":\"social-url\",\"value\":\"https:\\/\\/www.instagram.com\\/\"}],[{\"key\":\"social-name\",\"value\":\"X (Twitter)\"},{\"key\":\"social-icon\",\"value\":\"ti ti-brand-x\"},{\"key\":\"social-url\",\"value\":\"https:\\/\\/www.x.com\\/\"}],[{\"key\":\"social-name\",\"value\":\"YouTube\"},{\"key\":\"social-icon\",\"value\":\"ti ti-brand-youtube\"},{\"key\":\"social-url\",\"value\":\"https:\\/\\/www.youtube.com\\/\"}],[{\"key\":\"social-name\",\"value\":\"Pinterest\"},{\"key\":\"social-icon\",\"value\":\"ti ti-brand-pinterest\"},{\"key\":\"social-url\",\"value\":\"https:\\/\\/www.pinterest.com\\/\"}]]",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 47,
+            "key": "theme-gerow-newsletter_popup_enable",
+            "value": "1",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 48,
+            "key": "theme-gerow-newsletter_popup_image",
+            "value": "general/newsletter-popup.jpg",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 49,
+            "key": "theme-gerow-newsletter_popup_title",
+            "value": "Subscribe Now",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 50,
+            "key": "theme-gerow-newsletter_popup_subtitle",
+            "value": "Newsletter",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 51,
+            "key": "theme-gerow-newsletter_popup_description",
+            "value": "Stay in the Loop: Sign Up for Our Newsletter!",
+            "created_at": null,
+            "updated_at": null
+        },
+        {
+            "id": 52,
+            "key": "theme-gerow-show_service_image_at_the_top_of_service_page",
+            "value": "no",
+            "created_at": null,
+            "updated_at": null
+        }
+    ],
+    "widgets": [
+        {
+            "id": 1,
+            "widget_id": "ContactInfoWidget",
+            "sidebar_id": "header_top_sidebar_style_1",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"ContactInfoWidget\",\"address\":\"1247\\/Plot No. 39, 15th Phase, Kanpur\",\"email\":\"contact@example.com\"}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 2,
+            "widget_id": "SocialLinksWidget",
+            "sidebar_id": "header_top_sidebar_style_1",
+            "theme": "gerow",
+            "position": 1,
+            "data": "{\"id\":\"SocialLinksWidget\",\"button_label\":\"Free Consulting\",\"button_url\":\"\\/contact\"}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 3,
+            "widget_id": "HeaderActionButtonWidget",
+            "sidebar_id": "header_top_sidebar_style_1",
+            "theme": "gerow",
+            "position": 2,
+            "data": "{\"content\":\"Free Consulting\",\"link\":\"\\/contact\",\"icon\":\"flaticon-briefcase\"}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 4,
+            "widget_id": "SiteInformationWidget",
+            "sidebar_id": "footer_sidebar",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"SiteInformationWidget\",\"title\":\"Information\",\"logo\":null,\"description\":\"When An Unknown Printer Took A Galley Of Type Aawer Awtnd Scrambled It To Make A Type Specimen Book.\",\"hotline\":\"+123456789\",\"opening_hours\":\"Mon \\u2013 Sat: 8 am \\u2013 5 pm, <br> Sunday: <span>CLOSED<\\/span>\"}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 5,
+            "widget_id": "Botble\\Widget\\Widgets\\CoreSimpleMenu",
+            "sidebar_id": "footer_sidebar",
+            "theme": "gerow",
+            "position": 1,
+            "data": "{\"id\":\"Botble\\\\Widget\\\\Widgets\\\\CoreSimpleMenu\",\"name\":\"Menu\",\"items\":[[{\"key\":\"label\",\"value\":\"Company\"},{\"key\":\"url\",\"value\":\"\\/company\"}],[{\"key\":\"label\",\"value\":\"Careers\"},{\"key\":\"url\",\"value\":\"\\/careers\"}],[{\"key\":\"label\",\"value\":\"Press Media\"},{\"key\":\"url\",\"value\":\"\\/galleries\"}],[{\"key\":\"label\",\"value\":\"Our Blog\"},{\"key\":\"url\",\"value\":\"\\/blog\"}],[{\"key\":\"label\",\"value\":\"Privacy Policy\"},{\"key\":\"url\",\"value\":\"\\/privacy-policy\"}]]}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 6,
+            "widget_id": "Botble\\Widget\\Widgets\\CoreSimpleMenu",
+            "sidebar_id": "footer_sidebar",
+            "theme": "gerow",
+            "position": 2,
+            "data": "{\"id\":\"Botble\\\\Widget\\\\Widgets\\\\CoreSimpleMenu\",\"name\":\"Quick Links\",\"items\":[[{\"key\":\"label\",\"value\":\"How it work\"},{\"key\":\"url\",\"value\":\"\\/how-it-work\"}],[{\"key\":\"label\",\"value\":\"Partners\"},{\"key\":\"url\",\"value\":\"\\/partners\"}],[{\"key\":\"label\",\"value\":\"Testimonials\"},{\"key\":\"url\",\"value\":\"\\/testimonials\"}],[{\"key\":\"label\",\"value\":\"Case Studies\"},{\"key\":\"url\",\"value\":\"\\/case-studies\"}],[{\"key\":\"label\",\"value\":\"Pricing\"},{\"key\":\"url\",\"value\":\"\\/pricing\"}]]}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 7,
+            "widget_id": "NewsletterWidget",
+            "sidebar_id": "footer_sidebar",
+            "theme": "gerow",
+            "position": 3,
+            "data": "{\"id\":\"NewsletterWidget\",\"name\":\"Our Newsletters\",\"description\":\"\\ud83d\\udce9 Stay in the Loop: Sign Up for Our Newsletter! \\ud83d\\udce9\"}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 8,
+            "widget_id": "SiteCopyrightWidget",
+            "sidebar_id": "footer_bottom",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"SiteCopyrightWidget\",\"name\":\"Site Copyright\",\"copyright\":\"\\u00a9 2026 Botble Technologies. All right reserved.\"}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 9,
+            "widget_id": "ContactFormWidget",
+            "sidebar_id": "pre_footer_sidebar",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"ContactFormWidget\",\"name\":\"Request a call back\",\"description\":\"Ever Find Yourself Staring At Your Computer Screen A Good Consulting Slogan To Come To Mind? Oftentimes\",\"background_image_1\":\"backgrounds\\/shape01.png\",\"background_image_2\":\"backgrounds\\/shape02.png\"}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 10,
+            "widget_id": "SidebarInformationWidget",
+            "sidebar_id": "side_sidebar",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"SidebarInformationWidget\",\"name\":\"Site Copyright\",\"address\":\"123\\/A, Miranda City Likaoli <br\\/> Prikano, Dope\",\"phone_number\":\"+0989 7876 9865 9 <br\\/> +(090) 8765 86543 85\",\"email\":\"info@example.com <br\\/> example.mail@hum.com\"}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 11,
+            "widget_id": "GalleriesWidget",
+            "sidebar_id": "side_sidebar",
+            "theme": "gerow",
+            "position": 1,
+            "data": "{\"id\":\"GalleriesWidget\",\"name\":\"Galleries Widget\",\"gallery_id\":3}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 12,
+            "widget_id": "ContactInfoWidget",
+            "sidebar_id": "header_top_sidebar_style_2",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"ContactInfoWidget\",\"address\":\"256 Avenue, Mark Street, New York City\",\"email\":\"gerow@gmail.com\"}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 13,
+            "widget_id": "SocialLinksWidget",
+            "sidebar_id": "header_top_sidebar_style_2",
+            "theme": "gerow",
+            "position": 1,
+            "data": "{\"id\":\"SocialLinksWidget\",\"content\":\"+123 8989 444\",\"icon\":\"flaticon-phone-call\"}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 14,
+            "widget_id": "HeaderLogoWidget",
+            "sidebar_id": "header_style_1",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"HeaderLogoWidget\",\"logo_image\":null}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 15,
+            "widget_id": "HeaderMainMenuWidget",
+            "sidebar_id": "header_style_1",
+            "theme": "gerow",
+            "position": 1,
+            "data": "{\"direction\":\"left\"}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 16,
+            "widget_id": "HeaderActionContactWidget",
+            "sidebar_id": "header_style_1",
+            "theme": "gerow",
+            "position": 3,
+            "data": "{\"content\":\"Hotline Number\",\"detail\":\"+123 8989 444\",\"icon\":\"flaticon-phone-call\"}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 17,
+            "widget_id": "HeaderActionSearchWidget",
+            "sidebar_id": "header_style_1",
+            "theme": "gerow",
+            "position": 4,
+            "data": "[]",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 18,
+            "widget_id": "HeaderActionMenuButtonWidget",
+            "sidebar_id": "header_style_1",
+            "theme": "gerow",
+            "position": 5,
+            "data": "[]",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 19,
+            "widget_id": "HeaderLogoWidget",
+            "sidebar_id": "header_style_2",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"HeaderLogoWidget\",\"logo_image\":null}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 20,
+            "widget_id": "HeaderMainMenuWidget",
+            "sidebar_id": "header_style_2",
+            "theme": "gerow",
+            "position": 1,
+            "data": "{\"direction\":\"center\"}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 21,
+            "widget_id": "HeaderActionSearchWidget",
+            "sidebar_id": "header_style_2",
+            "theme": "gerow",
+            "position": 3,
+            "data": "[]",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 22,
+            "widget_id": "HeaderActionMenuButtonWidget",
+            "sidebar_id": "header_style_2",
+            "theme": "gerow",
+            "position": 4,
+            "data": "[]",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 23,
+            "widget_id": "HeaderActionContactWidget",
+            "sidebar_id": "header_style_2",
+            "theme": "gerow",
+            "position": 5,
+            "data": "{\"content\":\"Hotline Number\",\"detail\":\"+123 8989 444\",\"icon\":\"flaticon-phone-call\"}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 24,
+            "widget_id": "HeaderLogoWidget",
+            "sidebar_id": "header_style_3",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"HeaderLogoWidget\",\"logo_image\":null}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 25,
+            "widget_id": "HeaderMainMenuWidget",
+            "sidebar_id": "header_style_3",
+            "theme": "gerow",
+            "position": 1,
+            "data": "{\"direction\":\"center\"}",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 26,
+            "widget_id": "HeaderActionSearchWidget",
+            "sidebar_id": "header_style_3",
+            "theme": "gerow",
+            "position": 3,
+            "data": "[]",
+            "created_at": "2026-06-25 11:41:19",
+            "updated_at": "2026-06-25 11:41:19"
+        },
+        {
+            "id": 27,
+            "widget_id": "HeaderActionButtonWidget",
+            "sidebar_id": "header_style_3",
+            "theme": "gerow",
+            "position": 4,
+            "data": "{\"content\":\"GET A QUOTE\",\"link\":\"\\/contact\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 28,
+            "widget_id": "BlogSearchWidget",
+            "sidebar_id": "blog_sidebar",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"BlogSearchWidget\",\"name\":\"Blog Search\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 29,
+            "widget_id": "BlogCategoriesWidget",
+            "sidebar_id": "blog_sidebar",
+            "theme": "gerow",
+            "position": 1,
+            "data": "{\"id\":\"BlogCategoriesWidget\",\"name\":\"Blog Categories\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 30,
+            "widget_id": "BlogPostsWidget",
+            "sidebar_id": "blog_sidebar",
+            "theme": "gerow",
+            "position": 2,
+            "data": "{\"id\":\"BlogPostsWidget\",\"name\":\"Blog Posts\",\"type\":\"recent\",\"limit\":5}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 31,
+            "widget_id": "BlogTagsWidget",
+            "sidebar_id": "blog_sidebar",
+            "theme": "gerow",
+            "position": 3,
+            "data": "{\"id\":\"BlogTagsWidget\",\"name\":\"Blog Tags\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 32,
+            "widget_id": "SiteInformationWidget",
+            "sidebar_id": "footer_sidebar_style_1",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"SiteInformationWidget\",\"title\":\"Information\",\"description\":\"When An Unknown Printer Took A Galley Of Type Aawer Awtnd Scrambled It To Make A Type Specimen Book.\",\"logo\":null,\"address\":\"58 Street Commercial Road Fratton, Australia\",\"hotline\":\"+123456789\",\"opening_hours\":\"Mon \\u2013 Sat: 8 am \\u2013 5 pm, <br> Sunday: <span>CLOSED<\\/span>\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 33,
+            "widget_id": "Botble\\Widget\\Widgets\\CoreSimpleMenu",
+            "sidebar_id": "footer_sidebar_style_1",
+            "theme": "gerow",
+            "position": 1,
+            "data": "{\"id\":\"Botble\\\\Widget\\\\Widgets\\\\CoreSimpleMenu\",\"name\":\"Menu\",\"items\":[[{\"key\":\"label\",\"value\":\"Company\"},{\"key\":\"url\",\"value\":\"\\/company\"}],[{\"key\":\"label\",\"value\":\"Careers\"},{\"key\":\"url\",\"value\":\"\\/careers\"}],[{\"key\":\"label\",\"value\":\"Press Media\"},{\"key\":\"url\",\"value\":\"\\/galleries\"}],[{\"key\":\"label\",\"value\":\"Our Blog\"},{\"key\":\"url\",\"value\":\"\\/blog\"}],[{\"key\":\"label\",\"value\":\"Privacy Policy\"},{\"key\":\"url\",\"value\":\"\\/privacy-policy\"}]]}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 34,
+            "widget_id": "Botble\\Widget\\Widgets\\CoreSimpleMenu",
+            "sidebar_id": "footer_sidebar_style_1",
+            "theme": "gerow",
+            "position": 2,
+            "data": "{\"id\":\"Botble\\\\Widget\\\\Widgets\\\\CoreSimpleMenu\",\"name\":\"Quick Links\",\"items\":[[{\"key\":\"label\",\"value\":\"How it work\"},{\"key\":\"url\",\"value\":\"\\/how-it-work\"}],[{\"key\":\"label\",\"value\":\"Partners\"},{\"key\":\"url\",\"value\":\"\\/partners\"}],[{\"key\":\"label\",\"value\":\"Testimonials\"},{\"key\":\"url\",\"value\":\"\\/testimonials\"}],[{\"key\":\"label\",\"value\":\"Case Studies\"},{\"key\":\"url\",\"value\":\"\\/case-studies\"}],[{\"key\":\"label\",\"value\":\"Pricing\"},{\"key\":\"url\",\"value\":\"\\/pricing\"}]]}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 35,
+            "widget_id": "NewsletterWidget",
+            "sidebar_id": "footer_sidebar_style_1",
+            "theme": "gerow",
+            "position": 3,
+            "data": "{\"id\":\"NewsletterWidget\",\"name\":\"Our Newsletters\",\"description\":\"Add A Newsletter To Your Widget Area.\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 36,
+            "widget_id": "SiteCopyrightWidget",
+            "sidebar_id": "footer_bottom_style_1",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"SiteCopyrightWidget\",\"name\":\"Site Copyright\",\"logo\":\"general\\/logo-white.png\",\"copyright\":\"\\u00a9 2026 Botble Technologies. All right reserved.\",\"style\":\"style-1\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 37,
+            "widget_id": "SocialLinksWidget",
+            "sidebar_id": "footer_bottom_style_1",
+            "theme": "gerow",
+            "position": 1,
+            "data": "{\"id\":\"SocialLinksWidget\",\"name\":\"Social Links\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 38,
+            "widget_id": "ServicesListWidget",
+            "sidebar_id": "service_detail_sidebar",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"ServicesListWidget\",\"title\":\"Our Services\",\"limit\":\"7\",\"style\":\"style-1\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 39,
+            "widget_id": "ServiceActionWidget",
+            "sidebar_id": "service_detail_sidebar",
+            "theme": "gerow",
+            "position": 1,
+            "data": "{\"id\":\"ServiceActionWidget\",\"title\":\"If You Need Any Help Contact Us\",\"label\":\" +91 705 2101 786\",\"link\":\"tel:0123456789\",\"button_color\":\"0055ff\",\"icon\":\"flaticon-phone-call\",\"background_color\":\"#334770\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 40,
+            "widget_id": "ServiceGetAQuoteWidget",
+            "sidebar_id": "service_detail_sidebar",
+            "theme": "gerow",
+            "position": 2,
+            "data": "{\"id\":\"ServiceGetAQuoteWidget\",\"title\":\"Get A Free Quote\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 41,
+            "widget_id": "BrandsWidget",
+            "sidebar_id": "service_detail_bottom_sidebar",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"BrandsWidget\",\"name_1\":\"Zelus\",\"logo_1\":\"brands\\/brand-img04.png\",\"link_1\":\"https:\\/\\/zelus.com\",\"name_2\":\"The bird\",\"logo_2\":\"brands\\/brand-img05.png\",\"link_2\":\"https:\\/\\/thebird.com\",\"name_3\":\"Nature Wave\",\"logo_3\":\"brands\\/brand-img03.png\",\"link_3\":\"https:\\/\\/naturewave.com\",\"name_4\":\"Finance\",\"logo_4\":\"brands\\/brand-img02.png\",\"link_4\":\"https:\\/\\/finance.com\",\"name_5\":\"Start\",\"logo_5\":\"brands\\/brand-img01.png\",\"link_5\":\"https:\\/\\/start.com\",\"name_6\":\"Zelus\",\"logo_6\":\"brands\\/brand-img04.png\",\"link_6\":\"https:\\/\\/zelus.com\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 42,
+            "widget_id": "BrandsWidget",
+            "sidebar_id": "project_detail_bottom_sidebar",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"BrandsWidget\",\"name_1\":\"Zelus\",\"logo_1\":\"brands\\/brand-img04.png\",\"link_1\":\"https:\\/\\/zelus.com\",\"name_2\":\"The bird\",\"logo_2\":\"brands\\/brand-img05.png\",\"link_2\":\"https:\\/\\/thebird.com\",\"name_3\":\"Nature Wave\",\"logo_3\":\"brands\\/brand-img03.png\",\"link_3\":\"https:\\/\\/naturewave.com\",\"name_4\":\"Finance\",\"logo_4\":\"brands\\/brand-img02.png\",\"link_4\":\"https:\\/\\/finance.com\",\"name_5\":\"Start\",\"logo_5\":\"brands\\/brand-img01.png\",\"link_5\":\"https:\\/\\/start.com\",\"name_6\":\"Zelus\",\"logo_6\":\"brands\\/brand-img04.png\",\"link_6\":\"https:\\/\\/zelus.com\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 43,
+            "widget_id": "ContactFormWidget",
+            "sidebar_id": "pre_footer_sidebar_1",
+            "theme": "gerow",
+            "position": 0,
+            "data": "{\"id\":\"ContactFormWidget\",\"name\":\"Request a call back\",\"description\":\"Ever Find Yourself Staring At Your Computer Screen A Good Consulting Slogan To Come To Mind? Oftentimes\",\"background_image_1\":\"backgrounds\\/shape01.png\",\"background_image_2\":\"backgrounds\\/shape02.png\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 44,
+            "widget_id": "BrandsWidget",
+            "sidebar_id": "pre_footer_sidebar_1",
+            "theme": "gerow",
+            "position": 1,
+            "data": "{\"id\":\"BrandsWidget\",\"name_1\":\"Zelus\",\"logo_1\":\"brands\\/brand-img04.png\",\"link_1\":\"https:\\/\\/zelus.com\",\"name_2\":\"The bird\",\"logo_2\":\"brands\\/brand-img05.png\",\"link_2\":\"https:\\/\\/thebird.com\",\"name_3\":\"Nature Wave\",\"logo_3\":\"brands\\/brand-img03.png\",\"link_3\":\"https:\\/\\/naturewave.com\",\"name_4\":\"Finance\",\"logo_4\":\"brands\\/brand-img02.png\",\"link_4\":\"https:\\/\\/finance.com\",\"name_5\":\"Start\",\"logo_5\":\"brands\\/brand-img01.png\",\"link_5\":\"https:\\/\\/start.com\",\"name_6\":\"Zelus\",\"logo_6\":\"brands\\/brand-img04.png\",\"link_6\":\"https:\\/\\/zelus.com\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 45,
+            "widget_id": "LanguageSwitcherWidget",
+            "sidebar_id": "header_style_1",
+            "theme": "gerow",
+            "position": 2,
+            "data": "{\"id\":\"LanguageSwitcherWidget\",\"name\":\"Language switcher\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 46,
+            "widget_id": "LanguageSwitcherWidget",
+            "sidebar_id": "header_style_2",
+            "theme": "gerow",
+            "position": 2,
+            "data": "{\"id\":\"LanguageSwitcherWidget\",\"name\":\"Language switcher\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 47,
+            "widget_id": "LanguageSwitcherWidget",
+            "sidebar_id": "header_style_3",
+            "theme": "gerow",
+            "position": 2,
+            "data": "{\"id\":\"LanguageSwitcherWidget\",\"name\":\"Language switcher\"}",
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20"
+        }
+    ],
+    "galleries": [
+        {
+            "id": 1,
+            "name": "Business",
+            "description": "Moments of achievement and triumph in various business contexts.",
+            "is_featured": 1,
+            "order": 0,
+            "image": "galleries/1.png",
+            "user_id": 1,
+            "status": "published",
+            "created_at": "2026-06-25 11:41:12",
+            "updated_at": "2026-06-25 11:41:12"
+        },
+        {
+            "id": 2,
+            "name": "Innovation",
+            "description": "Visualizing financial strategies, investments, and economic landscapes.",
+            "is_featured": 1,
+            "order": 0,
+            "image": "galleries/2.png",
+            "user_id": 1,
+            "status": "published",
+            "created_at": "2026-06-25 11:41:12",
+            "updated_at": "2026-06-25 11:41:12"
+        },
+        {
+            "id": 3,
+            "name": "Leadership",
+            "description": "Images that exemplify effective guidance and inspirational leadership.",
+            "is_featured": 1,
+            "order": 0,
+            "image": "galleries/3.png",
+            "user_id": 1,
+            "status": "published",
+            "created_at": "2026-06-25 11:41:12",
+            "updated_at": "2026-06-25 11:41:12"
+        },
+        {
+            "id": 4,
+            "name": "Technology",
+            "description": "Efficient organization, team leadership, and operational excellence.",
+            "is_featured": 1,
+            "order": 0,
+            "image": "galleries/4.png",
+            "user_id": 1,
+            "status": "published",
+            "created_at": "2026-06-25 11:41:12",
+            "updated_at": "2026-06-25 11:41:12"
+        },
+        {
+            "id": 5,
+            "name": "Success",
+            "description": "Images that exemplify effective guidance and inspirational leadership.",
+            "is_featured": 1,
+            "order": 0,
+            "image": "galleries/5.png",
+            "user_id": 1,
+            "status": "published",
+            "created_at": "2026-06-25 11:41:12",
+            "updated_at": "2026-06-25 11:41:12"
+        },
+        {
+            "id": 6,
+            "name": "Entrepreneurship",
+            "description": "Visualizing financial strategies, investments, and economic landscapes.",
+            "is_featured": 1,
+            "order": 0,
+            "image": "galleries/6.png",
+            "user_id": 1,
+            "status": "published",
+            "created_at": "2026-06-25 11:41:12",
+            "updated_at": "2026-06-25 11:41:12"
+        }
+    ],
+    "media_folders": [
+        {
+            "id": 1,
+            "user_id": 0,
+            "name": "backgrounds",
+            "slug": "backgrounds",
+            "parent_id": 0,
+            "created_at": "2026-06-25 11:40:33",
+            "updated_at": "2026-06-25 11:40:33",
+            "deleted_at": null,
+            "color": null
+        },
+        {
+            "id": 2,
+            "user_id": 0,
+            "name": "general",
+            "slug": "general",
+            "parent_id": 0,
+            "created_at": "2026-06-25 11:40:54",
+            "updated_at": "2026-06-25 11:40:54",
+            "deleted_at": null,
+            "color": null
+        },
+        {
+            "id": 3,
+            "user_id": 0,
+            "name": "brands",
+            "slug": "brands",
+            "parent_id": 0,
+            "created_at": "2026-06-25 11:41:03",
+            "updated_at": "2026-06-25 11:41:03",
+            "deleted_at": null,
+            "color": null
+        },
+        {
+            "id": 4,
+            "user_id": 0,
+            "name": "icons",
+            "slug": "icons",
+            "parent_id": 0,
+            "created_at": "2026-06-25 11:41:04",
+            "updated_at": "2026-06-25 11:41:04",
+            "deleted_at": null,
+            "color": null
+        },
+        {
+            "id": 5,
+            "user_id": 0,
+            "name": "sliders",
+            "slug": "sliders",
+            "parent_id": 0,
+            "created_at": "2026-06-25 11:41:04",
+            "updated_at": "2026-06-25 11:41:04",
+            "deleted_at": null,
+            "color": null
+        },
+        {
+            "id": 6,
+            "user_id": 0,
+            "name": "galleries",
+            "slug": "galleries",
+            "parent_id": 0,
+            "created_at": "2026-06-25 11:41:10",
+            "updated_at": "2026-06-25 11:41:10",
+            "deleted_at": null,
+            "color": null
+        },
+        {
+            "id": 7,
+            "user_id": 0,
+            "name": "news",
+            "slug": "news",
+            "parent_id": 0,
+            "created_at": "2026-06-25 11:41:12",
+            "updated_at": "2026-06-25 11:41:12",
+            "deleted_at": null,
+            "color": null
+        },
+        {
+            "id": 8,
+            "user_id": 0,
+            "name": "testimonials",
+            "slug": "testimonials",
+            "parent_id": 0,
+            "created_at": "2026-06-25 11:41:20",
+            "updated_at": "2026-06-25 11:41:20",
+            "deleted_at": null,
+            "color": null
+        }
+    ],
+    "media_files": [
+        {
+            "id": 1,
+            "name": "about-bg",
+            "url": "backgrounds/about-bg.jpg",
+            "folder_id": 1,
+            "mime_type": "image/jpeg",
+            "size": 33768,
+            "created_at": "2026-06-25 11:40:33"
+        },
+        {
+            "id": 2,
+            "name": "about-img-shape01",
+            "url": "backgrounds/about-img-shape01.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 6492,
+            "created_at": "2026-06-25 11:40:34"
+        },
+        {
+            "id": 3,
+            "name": "about-shape01",
+            "url": "backgrounds/about-shape01.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 1060,
+            "created_at": "2026-06-25 11:40:34"
+        },
+        {
+            "id": 4,
+            "name": "about-shape02",
+            "url": "backgrounds/about-shape02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 2113,
+            "created_at": "2026-06-25 11:40:34"
+        },
+        {
+            "id": 5,
+            "name": "about-shape03",
+            "url": "backgrounds/about-shape03.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 18296,
+            "created_at": "2026-06-25 11:40:34"
+        },
+        {
+            "id": 6,
+            "name": "about-shape04",
+            "url": "backgrounds/about-shape04.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 77065,
+            "created_at": "2026-06-25 11:40:35"
+        },
+        {
+            "id": 7,
+            "name": "about-shape06",
+            "url": "backgrounds/about-shape06.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 8130,
+            "created_at": "2026-06-25 11:40:35"
+        },
+        {
+            "id": 8,
+            "name": "about-shape07",
+            "url": "backgrounds/about-shape07.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 10793,
+            "created_at": "2026-06-25 11:40:35"
+        },
+        {
+            "id": 9,
+            "name": "about-shape08",
+            "url": "backgrounds/about-shape08.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 10165,
+            "created_at": "2026-06-25 11:40:36"
+        },
+        {
+            "id": 10,
+            "name": "banner-shape",
+            "url": "backgrounds/banner-shape.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 877,
+            "created_at": "2026-06-25 11:40:36"
+        },
+        {
+            "id": 11,
+            "name": "banner-shape01",
+            "url": "backgrounds/banner-shape01.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 1841,
+            "created_at": "2026-06-25 11:40:36"
+        },
+        {
+            "id": 12,
+            "name": "banner-shape02",
+            "url": "backgrounds/banner-shape02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 1420,
+            "created_at": "2026-06-25 11:40:36"
+        },
+        {
+            "id": 13,
+            "name": "banner-shape03",
+            "url": "backgrounds/banner-shape03.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 6020,
+            "created_at": "2026-06-25 11:40:36"
+        },
+        {
+            "id": 14,
+            "name": "banner-shape05",
+            "url": "backgrounds/banner-shape05.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 307,
+            "created_at": "2026-06-25 11:40:36"
+        },
+        {
+            "id": 15,
+            "name": "bg-footer-dark",
+            "url": "backgrounds/bg-footer-dark.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 24883,
+            "created_at": "2026-06-25 11:40:37"
+        },
+        {
+            "id": 16,
+            "name": "bg-footer",
+            "url": "backgrounds/bg-footer.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 24488,
+            "created_at": "2026-06-25 11:40:37"
+        },
+        {
+            "id": 17,
+            "name": "blog-bg",
+            "url": "backgrounds/blog-bg.jpg",
+            "folder_id": 1,
+            "mime_type": "image/jpeg",
+            "size": 24117,
+            "created_at": "2026-06-25 11:40:37"
+        },
+        {
+            "id": 18,
+            "name": "blog-bg-1",
+            "url": "backgrounds/blog-bg-1.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 32465,
+            "created_at": "2026-06-25 11:40:38"
+        },
+        {
+            "id": 19,
+            "name": "breadcrumb-shape01",
+            "url": "backgrounds/breadcrumb-shape01.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 10761,
+            "created_at": "2026-06-25 11:40:39"
+        },
+        {
+            "id": 20,
+            "name": "breadcrumb-shape02",
+            "url": "backgrounds/breadcrumb-shape02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 1566,
+            "created_at": "2026-06-25 11:40:39"
+        },
+        {
+            "id": 21,
+            "name": "choose-img-shape01",
+            "url": "backgrounds/choose-img-shape01.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 9244,
+            "created_at": "2026-06-25 11:40:39"
+        },
+        {
+            "id": 22,
+            "name": "choose-img-shape02",
+            "url": "backgrounds/choose-img-shape02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 2113,
+            "created_at": "2026-06-25 11:40:39"
+        },
+        {
+            "id": 23,
+            "name": "choose-shape",
+            "url": "backgrounds/choose-shape.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 17262,
+            "created_at": "2026-06-25 11:40:39"
+        },
+        {
+            "id": 24,
+            "name": "consulting-about-img02",
+            "url": "backgrounds/consulting-about-img02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 3159,
+            "created_at": "2026-06-25 11:40:40"
+        },
+        {
+            "id": 25,
+            "name": "consulting-about-shape01",
+            "url": "backgrounds/consulting-about-shape01.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 11339,
+            "created_at": "2026-06-25 11:40:40"
+        },
+        {
+            "id": 26,
+            "name": "consulting-about-shape02",
+            "url": "backgrounds/consulting-about-shape02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 3159,
+            "created_at": "2026-06-25 11:40:40"
+        },
+        {
+            "id": 27,
+            "name": "consulting-about-shape03",
+            "url": "backgrounds/consulting-about-shape03.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 459,
+            "created_at": "2026-06-25 11:40:40"
+        },
+        {
+            "id": 28,
+            "name": "consulting-banner-img02",
+            "url": "backgrounds/consulting-banner-img02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 3899,
+            "created_at": "2026-06-25 11:40:40"
+        },
+        {
+            "id": 29,
+            "name": "consulting-banner-shape01",
+            "url": "backgrounds/consulting-banner-shape01.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 2421,
+            "created_at": "2026-06-25 11:40:41"
+        },
+        {
+            "id": 30,
+            "name": "contact-bg",
+            "url": "backgrounds/contact-bg.jpg",
+            "folder_id": 1,
+            "mime_type": "image/jpeg",
+            "size": 28641,
+            "created_at": "2026-06-25 11:40:41"
+        },
+        {
+            "id": 31,
+            "name": "contact-shape",
+            "url": "backgrounds/contact-shape.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 2767,
+            "created_at": "2026-06-25 11:40:41"
+        },
+        {
+            "id": 32,
+            "name": "counter-bg",
+            "url": "backgrounds/counter-bg.jpg",
+            "folder_id": 1,
+            "mime_type": "image/jpeg",
+            "size": 12584,
+            "created_at": "2026-06-25 11:40:41"
+        },
+        {
+            "id": 33,
+            "name": "counter-shape01",
+            "url": "backgrounds/counter-shape01.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 937,
+            "created_at": "2026-06-25 11:40:42"
+        },
+        {
+            "id": 34,
+            "name": "cta-bg",
+            "url": "backgrounds/cta-bg.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 6978,
+            "created_at": "2026-06-25 11:40:42"
+        },
+        {
+            "id": 35,
+            "name": "cta-bg02",
+            "url": "backgrounds/cta-bg02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 6896,
+            "created_at": "2026-06-25 11:40:42"
+        },
+        {
+            "id": 36,
+            "name": "cta-bg03",
+            "url": "backgrounds/cta-bg03.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 4304,
+            "created_at": "2026-06-25 11:40:42"
+        },
+        {
+            "id": 37,
+            "name": "faq-img02",
+            "url": "backgrounds/faq-img02.jpg",
+            "folder_id": 1,
+            "mime_type": "image/jpeg",
+            "size": 5878,
+            "created_at": "2026-06-25 11:40:42"
+        },
+        {
+            "id": 38,
+            "name": "faq-shape01",
+            "url": "backgrounds/faq-shape01.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 7014,
+            "created_at": "2026-06-25 11:40:43"
+        },
+        {
+            "id": 39,
+            "name": "faq-shape02",
+            "url": "backgrounds/faq-shape02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 36555,
+            "created_at": "2026-06-25 11:40:43"
+        },
+        {
+            "id": 40,
+            "name": "features-bg",
+            "url": "backgrounds/features-bg.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 31023,
+            "created_at": "2026-06-25 11:40:44"
+        },
+        {
+            "id": 41,
+            "name": "features-shape02",
+            "url": "backgrounds/features-shape02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 1476,
+            "created_at": "2026-06-25 11:40:44"
+        },
+        {
+            "id": 42,
+            "name": "finance-banner-bg",
+            "url": "backgrounds/finance-banner-bg.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 41475,
+            "created_at": "2026-06-25 11:40:44"
+        },
+        {
+            "id": 43,
+            "name": "inner-about-img04",
+            "url": "backgrounds/inner-about-img04.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 5885,
+            "created_at": "2026-06-25 11:40:45"
+        },
+        {
+            "id": 44,
+            "name": "inner-services-bg",
+            "url": "backgrounds/inner-services-bg.jpg",
+            "folder_id": 1,
+            "mime_type": "image/jpeg",
+            "size": 121184,
+            "created_at": "2026-06-25 11:40:45"
+        },
+        {
+            "id": 45,
+            "name": "insurance-banner-bg",
+            "url": "backgrounds/insurance-banner-bg.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 24538,
+            "created_at": "2026-06-25 11:40:46"
+        },
+        {
+            "id": 46,
+            "name": "insurance-banner-shape02",
+            "url": "backgrounds/insurance-banner-shape02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 2482,
+            "created_at": "2026-06-25 11:40:47"
+        },
+        {
+            "id": 47,
+            "name": "insurance-banner-shape03",
+            "url": "backgrounds/insurance-banner-shape03.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 15535,
+            "created_at": "2026-06-25 11:40:47"
+        },
+        {
+            "id": 48,
+            "name": "mask-img",
+            "url": "backgrounds/mask-img.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 16021,
+            "created_at": "2026-06-25 11:40:47"
+        },
+        {
+            "id": 49,
+            "name": "mask-img02",
+            "url": "backgrounds/mask-img02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 10851,
+            "created_at": "2026-06-25 11:40:48"
+        },
+        {
+            "id": 50,
+            "name": "overview-img-shape",
+            "url": "backgrounds/overview-img-shape.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 5386,
+            "created_at": "2026-06-25 11:40:48"
+        },
+        {
+            "id": 51,
+            "name": "overview-img02",
+            "url": "backgrounds/overview-img02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 5878,
+            "created_at": "2026-06-25 11:40:48"
+        },
+        {
+            "id": 52,
+            "name": "overview-img04",
+            "url": "backgrounds/overview-img04.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 5030,
+            "created_at": "2026-06-25 11:40:48"
+        },
+        {
+            "id": 53,
+            "name": "overview-shape",
+            "url": "backgrounds/overview-shape.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 13278,
+            "created_at": "2026-06-25 11:40:48"
+        },
+        {
+            "id": 54,
+            "name": "overview-shape01",
+            "url": "backgrounds/overview-shape01.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 1625,
+            "created_at": "2026-06-25 11:40:48"
+        },
+        {
+            "id": 55,
+            "name": "overview-shape02",
+            "url": "backgrounds/overview-shape02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 4572,
+            "created_at": "2026-06-25 11:40:49"
+        },
+        {
+            "id": 56,
+            "name": "pricing-shape",
+            "url": "backgrounds/pricing-shape.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 14455,
+            "created_at": "2026-06-25 11:40:49"
+        },
+        {
+            "id": 57,
+            "name": "project-bg",
+            "url": "backgrounds/project-bg.jpg",
+            "folder_id": 1,
+            "mime_type": "image/jpeg",
+            "size": 35373,
+            "created_at": "2026-06-25 11:40:49"
+        },
+        {
+            "id": 58,
+            "name": "project-bg02",
+            "url": "backgrounds/project-bg02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 34955,
+            "created_at": "2026-06-25 11:40:50"
+        },
+        {
+            "id": 59,
+            "name": "request-bg",
+            "url": "backgrounds/request-bg.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 12797,
+            "created_at": "2026-06-25 11:40:51"
+        },
+        {
+            "id": 60,
+            "name": "services-bg",
+            "url": "backgrounds/services-bg.jpg",
+            "folder_id": 1,
+            "mime_type": "image/jpeg",
+            "size": 104571,
+            "created_at": "2026-06-25 11:40:51"
+        },
+        {
+            "id": 61,
+            "name": "services-bg02",
+            "url": "backgrounds/services-bg02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 62786,
+            "created_at": "2026-06-25 11:40:52"
+        },
+        {
+            "id": 62,
+            "name": "services-item-shape",
+            "url": "backgrounds/services-item-shape.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 1106,
+            "created_at": "2026-06-25 11:40:52"
+        },
+        {
+            "id": 63,
+            "name": "shape01",
+            "url": "backgrounds/shape01.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 3103,
+            "created_at": "2026-06-25 11:40:52"
+        },
+        {
+            "id": 64,
+            "name": "shape02",
+            "url": "backgrounds/shape02.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 14965,
+            "created_at": "2026-06-25 11:40:52"
+        },
+        {
+            "id": 65,
+            "name": "team-bg",
+            "url": "backgrounds/team-bg.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 43370,
+            "created_at": "2026-06-25 11:40:53"
+        },
+        {
+            "id": 66,
+            "name": "team-shape",
+            "url": "backgrounds/team-shape.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 13845,
+            "created_at": "2026-06-25 11:40:53"
+        },
+        {
+            "id": 67,
+            "name": "testimonial-bg",
+            "url": "backgrounds/testimonial-bg.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 75707,
+            "created_at": "2026-06-25 11:40:53"
+        },
+        {
+            "id": 68,
+            "name": "testimonial-bg1",
+            "url": "backgrounds/testimonial-bg1.png",
+            "folder_id": 1,
+            "mime_type": "image/png",
+            "size": 127349,
+            "created_at": "2026-06-25 11:40:54"
+        },
+        {
+            "id": 69,
+            "name": "about-author",
+            "url": "general/about-author.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 827,
+            "created_at": "2026-06-25 11:40:54"
+        },
+        {
+            "id": 70,
+            "name": "about-img",
+            "url": "general/about-img.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 9679,
+            "created_at": "2026-06-25 11:40:55"
+        },
+        {
+            "id": 71,
+            "name": "about-img01",
+            "url": "general/about-img01.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 11011,
+            "created_at": "2026-06-25 11:40:55"
+        },
+        {
+            "id": 72,
+            "name": "about-img02",
+            "url": "general/about-img02.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 3374,
+            "created_at": "2026-06-25 11:40:55"
+        },
+        {
+            "id": 73,
+            "name": "about-img04",
+            "url": "general/about-img04.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 2161,
+            "created_at": "2026-06-25 11:40:55"
+        },
+        {
+            "id": 74,
+            "name": "banner-main-img",
+            "url": "general/banner-main-img.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 11898,
+            "created_at": "2026-06-25 11:40:56"
+        },
+        {
+            "id": 75,
+            "name": "banner-shape01",
+            "url": "general/banner-shape01.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 5798,
+            "created_at": "2026-06-25 11:40:56"
+        },
+        {
+            "id": 76,
+            "name": "breadcrumb-bg",
+            "url": "general/breadcrumb-bg.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 10270,
+            "created_at": "2026-06-25 11:40:56"
+        },
+        {
+            "id": 77,
+            "name": "choose-bg",
+            "url": "general/choose-bg.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 24863,
+            "created_at": "2026-06-25 11:40:57"
+        },
+        {
+            "id": 78,
+            "name": "choose-img",
+            "url": "general/choose-img.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 8544,
+            "created_at": "2026-06-25 11:40:57"
+        },
+        {
+            "id": 79,
+            "name": "consulting-banner-img03",
+            "url": "general/consulting-banner-img03.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 1804,
+            "created_at": "2026-06-25 11:40:58"
+        },
+        {
+            "id": 80,
+            "name": "contact-img",
+            "url": "general/contact-img.jpg",
+            "folder_id": 2,
+            "mime_type": "image/jpeg",
+            "size": 13078,
+            "created_at": "2026-06-25 11:40:58"
+        },
+        {
+            "id": 81,
+            "name": "estimate-img",
+            "url": "general/estimate-img.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 10042,
+            "created_at": "2026-06-25 11:40:58"
+        },
+        {
+            "id": 82,
+            "name": "favicon",
+            "url": "general/favicon.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 653,
+            "created_at": "2026-06-25 11:40:58"
+        },
+        {
+            "id": 83,
+            "name": "finance-banner-img",
+            "url": "general/finance-banner-img.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 8958,
+            "created_at": "2026-06-25 11:40:59"
+        },
+        {
+            "id": 84,
+            "name": "inner-about-img05",
+            "url": "general/inner-about-img05.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 9666,
+            "created_at": "2026-06-25 11:40:59"
+        },
+        {
+            "id": 85,
+            "name": "inner-choose-img",
+            "url": "general/inner-choose-img.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 21167,
+            "created_at": "2026-06-25 11:40:59"
+        },
+        {
+            "id": 86,
+            "name": "insurance-banner-img",
+            "url": "general/insurance-banner-img.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 11800,
+            "created_at": "2026-06-25 11:41:00"
+        },
+        {
+            "id": 87,
+            "name": "logo-white",
+            "url": "general/logo-white.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 2984,
+            "created_at": "2026-06-25 11:41:00"
+        },
+        {
+            "id": 88,
+            "name": "logo",
+            "url": "general/logo.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 3838,
+            "created_at": "2026-06-25 11:41:00"
+        },
+        {
+            "id": 89,
+            "name": "newsletter-popup",
+            "url": "general/newsletter-popup.jpg",
+            "folder_id": 2,
+            "mime_type": "image/jpeg",
+            "size": 39739,
+            "created_at": "2026-06-25 11:41:01"
+        },
+        {
+            "id": 90,
+            "name": "overview-img01",
+            "url": "general/overview-img01.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 8593,
+            "created_at": "2026-06-25 11:41:01"
+        },
+        {
+            "id": 91,
+            "name": "placeholder",
+            "url": "general/placeholder.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 12581,
+            "created_at": "2026-06-25 11:41:02"
+        },
+        {
+            "id": 92,
+            "name": "signature",
+            "url": "general/signature.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 2327,
+            "created_at": "2026-06-25 11:41:02"
+        },
+        {
+            "id": 93,
+            "name": "testimonial-img",
+            "url": "general/testimonial-img.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 8609,
+            "created_at": "2026-06-25 11:41:02"
+        },
+        {
+            "id": 94,
+            "name": "testimonial-img01",
+            "url": "general/testimonial-img01.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 7828,
+            "created_at": "2026-06-25 11:41:02"
+        },
+        {
+            "id": 95,
+            "name": "testimonial-img03",
+            "url": "general/testimonial-img03.png",
+            "folder_id": 2,
+            "mime_type": "image/png",
+            "size": 8333,
+            "created_at": "2026-06-25 11:41:03"
+        },
+        {
+            "id": 96,
+            "name": "brand-img01",
+            "url": "brands/brand-img01.png",
+            "folder_id": 3,
+            "mime_type": "image/png",
+            "size": 901,
+            "created_at": "2026-06-25 11:41:03"
+        },
+        {
+            "id": 97,
+            "name": "brand-img02",
+            "url": "brands/brand-img02.png",
+            "folder_id": 3,
+            "mime_type": "image/png",
+            "size": 901,
+            "created_at": "2026-06-25 11:41:03"
+        },
+        {
+            "id": 98,
+            "name": "brand-img03",
+            "url": "brands/brand-img03.png",
+            "folder_id": 3,
+            "mime_type": "image/png",
+            "size": 901,
+            "created_at": "2026-06-25 11:41:03"
+        },
+        {
+            "id": 99,
+            "name": "brand-img04",
+            "url": "brands/brand-img04.png",
+            "folder_id": 3,
+            "mime_type": "image/png",
+            "size": 901,
+            "created_at": "2026-06-25 11:41:03"
+        },
+        {
+            "id": 100,
+            "name": "brand-img05",
+            "url": "brands/brand-img05.png",
+            "folder_id": 3,
+            "mime_type": "image/png",
+            "size": 901,
+            "created_at": "2026-06-25 11:41:03"
+        },
+        {
+            "id": 101,
+            "name": "quote",
+            "url": "icons/quote.png",
+            "folder_id": 4,
+            "mime_type": "image/png",
+            "size": 1378,
+            "created_at": "2026-06-25 11:41:04"
+        },
+        {
+            "id": 102,
+            "name": "rating",
+            "url": "icons/rating.png",
+            "folder_id": 4,
+            "mime_type": "image/png",
+            "size": 1488,
+            "created_at": "2026-06-25 11:41:04"
+        },
+        {
+            "id": 103,
+            "name": "testimonial-shape04",
+            "url": "icons/testimonial-shape04.png",
+            "folder_id": 4,
+            "mime_type": "image/png",
+            "size": 1147,
+            "created_at": "2026-06-25 11:41:04"
+        },
+        {
+            "id": 104,
+            "name": "banner-bg",
+            "url": "sliders/banner-bg.jpg",
+            "folder_id": 5,
+            "mime_type": "image/jpeg",
+            "size": 24422,
+            "created_at": "2026-06-25 11:41:05"
+        },
+        {
+            "id": 105,
+            "name": "banner-bg02",
+            "url": "sliders/banner-bg02.jpg",
+            "folder_id": 5,
+            "mime_type": "image/jpeg",
+            "size": 24422,
+            "created_at": "2026-06-25 11:41:06"
+        },
+        {
+            "id": 106,
+            "name": "1",
+            "url": "galleries/1.png",
+            "folder_id": 6,
+            "mime_type": "image/png",
+            "size": 13024,
+            "created_at": "2026-06-25 11:41:10"
+        },
+        {
+            "id": 107,
+            "name": "2",
+            "url": "galleries/2.png",
+            "folder_id": 6,
+            "mime_type": "image/png",
+            "size": 3152,
+            "created_at": "2026-06-25 11:41:11"
+        },
+        {
+            "id": 108,
+            "name": "3",
+            "url": "galleries/3.png",
+            "folder_id": 6,
+            "mime_type": "image/png",
+            "size": 11055,
+            "created_at": "2026-06-25 11:41:11"
+        },
+        {
+            "id": 109,
+            "name": "4",
+            "url": "galleries/4.png",
+            "folder_id": 6,
+            "mime_type": "image/png",
+            "size": 8025,
+            "created_at": "2026-06-25 11:41:11"
+        },
+        {
+            "id": 110,
+            "name": "5",
+            "url": "galleries/5.png",
+            "folder_id": 6,
+            "mime_type": "image/png",
+            "size": 10354,
+            "created_at": "2026-06-25 11:41:11"
+        },
+        {
+            "id": 111,
+            "name": "6",
+            "url": "galleries/6.png",
+            "folder_id": 6,
+            "mime_type": "image/png",
+            "size": 9667,
+            "created_at": "2026-06-25 11:41:12"
+        },
+        {
+            "id": 112,
+            "name": "1",
+            "url": "news/1.png",
+            "folder_id": 7,
+            "mime_type": "image/png",
+            "size": 10595,
+            "created_at": "2026-06-25 11:41:13"
+        },
+        {
+            "id": 113,
+            "name": "10",
+            "url": "news/10.png",
+            "folder_id": 7,
+            "mime_type": "image/png",
+            "size": 10595,
+            "created_at": "2026-06-25 11:41:13"
+        },
+        {
+            "id": 114,
+            "name": "11",
+            "url": "news/11.png",
+            "folder_id": 7,
+            "mime_type": "image/png",
+            "size": 10595,
+            "created_at": "2026-06-25 11:41:13"
+        },
+        {
+            "id": 115,
+            "name": "12",
+            "url": "news/12.png",
+            "folder_id": 7,
+            "mime_type": "image/png",
+            "size": 10595,
+            "created_at": "2026-06-25 11:41:14"
+        },
+        {
+            "id": 116,
+            "name": "2",
+            "url": "news/2.png",
+            "folder_id": 7,
+            "mime_type": "image/png",
+            "size": 10595,
+            "created_at": "2026-06-25 11:41:14"
+        },
+        {
+            "id": 117,
+            "name": "3",
+            "url": "news/3.png",
+            "folder_id": 7,
+            "mime_type": "image/png",
+            "size": 10595,
+            "created_at": "2026-06-25 11:41:14"
+        },
+        {
+            "id": 118,
+            "name": "4",
+            "url": "news/4.png",
+            "folder_id": 7,
+            "mime_type": "image/png",
+            "size": 10595,
+            "created_at": "2026-06-25 11:41:15"
+        },
+        {
+            "id": 119,
+            "name": "5",
+            "url": "news/5.png",
+            "folder_id": 7,
+            "mime_type": "image/png",
+            "size": 10595,
+            "created_at": "2026-06-25 11:41:15"
+        },
+        {
+            "id": 120,
+            "name": "6",
+            "url": "news/6.png",
+            "folder_id": 7,
+            "mime_type": "image/png",
+            "size": 10595,
+            "created_at": "2026-06-25 11:41:15"
+        },
+        {
+            "id": 121,
+            "name": "7",
+            "url": "news/7.png",
+            "folder_id": 7,
+            "mime_type": "image/png",
+            "size": 10595,
+            "created_at": "2026-06-25 11:41:16"
+        },
+        {
+            "id": 122,
+            "name": "8",
+            "url": "news/8.png",
+            "folder_id": 7,
+            "mime_type": "image/png",
+            "size": 10595,
+            "created_at": "2026-06-25 11:41:16"
+        },
+        {
+            "id": 123,
+            "name": "9",
+            "url": "news/9.png",
+            "folder_id": 7,
+            "mime_type": "image/png",
+            "size": 10595,
+            "created_at": "2026-06-25 11:41:16"
+        },
+        {
+            "id": 124,
+            "name": "1",
+            "url": "testimonials/1.png",
+            "folder_id": 8,
+            "mime_type": "image/png",
+            "size": 2537,
+            "created_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 125,
+            "name": "2",
+            "url": "testimonials/2.png",
+            "folder_id": 8,
+            "mime_type": "image/png",
+            "size": 2537,
+            "created_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 126,
+            "name": "3",
+            "url": "testimonials/3.png",
+            "folder_id": 8,
+            "mime_type": "image/png",
+            "size": 2537,
+            "created_at": "2026-06-25 11:41:20"
+        },
+        {
+            "id": 127,
+            "name": "4",
+            "url": "testimonials/4.png",
+            "folder_id": 8,
+            "mime_type": "image/png",
+            "size": 2537,
+            "created_at": "2026-06-25 11:41:21"
+        }
+    ],
+    "users": [
+        {
+            "id": 1,
+            "first_name": "Wilfredo",
+            "last_name": "Schmeler",
+            "email": "elenor.lueilwitz@thompson.com"
+        }
+    ]
+}

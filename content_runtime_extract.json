@@ -1,0 +1,266 @@
+{
+    "service_table_info": [
+        {
+            "cid": 0,
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 1
+        },
+        {
+            "cid": 1,
+            "name": "parent_id",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+        },
+        {
+            "cid": 2,
+            "name": "name",
+            "type": "varchar",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+        },
+        {
+            "cid": 3,
+            "name": "description",
+            "type": "varchar",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+        },
+        {
+            "cid": 4,
+            "name": "image",
+            "type": "varchar",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+        },
+        {
+            "cid": 5,
+            "name": "order",
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": "'0'",
+            "pk": 0
+        },
+        {
+            "cid": 6,
+            "name": "status",
+            "type": "varchar",
+            "notnull": 1,
+            "dflt_value": "'published'",
+            "pk": 0
+        },
+        {
+            "cid": 7,
+            "name": "created_at",
+            "type": "datetime",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+        },
+        {
+            "cid": 8,
+            "name": "updated_at",
+            "type": "datetime",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+        }
+    ],
+    "service_translations_table_info": [
+        {
+            "cid": 0,
+            "name": "lang_code",
+            "type": "varchar",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 1
+        },
+        {
+            "cid": 1,
+            "name": "pf_service_categories_id",
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 2
+        },
+        {
+            "cid": 2,
+            "name": "name",
+            "type": "varchar",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+        },
+        {
+            "cid": 3,
+            "name": "description",
+            "type": "varchar",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+        }
+    ],
+    "faq_table_info": [
+        {
+            "cid": 0,
+            "name": "id",
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 1
+        },
+        {
+            "cid": 1,
+            "name": "question",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+        },
+        {
+            "cid": 2,
+            "name": "answer",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+        },
+        {
+            "cid": 3,
+            "name": "category_id",
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+        },
+        {
+            "cid": 4,
+            "name": "status",
+            "type": "varchar",
+            "notnull": 1,
+            "dflt_value": "'published'",
+            "pk": 0
+        },
+        {
+            "cid": 5,
+            "name": "created_at",
+            "type": "datetime",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+        },
+        {
+            "cid": 6,
+            "name": "updated_at",
+            "type": "datetime",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+        }
+    ],
+    "faq_translations_table_info": [
+        {
+            "cid": 0,
+            "name": "lang_code",
+            "type": "varchar",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 1
+        },
+        {
+            "cid": 1,
+            "name": "faqs_id",
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 2
+        },
+        {
+            "cid": 2,
+            "name": "question",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+        },
+        {
+            "cid": 3,
+            "name": "answer",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+        }
+    ],
+    "services": [],
+    "servicesTranslations": [],
+    "posts": [
+        {
+            "id": 1,
+            "name": "10 Strategies for Business Growth in 2023",
+            "description": "Learn how businesses can leverage technology to gain a competitive edge, streamline operations, and deliver exceptional value to customers.",
+            "views": 1482
+        },
+        {
+            "id": 2,
+            "name": "Navigating Tax Season: Tips for Small Businesses",
+            "description": "Learn the essential steps and elements to craft a winning marketing plan that effectively reaches your target audience and drives results.",
+            "views": 1748
+        },
+        {
+            "id": 3,
+            "name": "The Power of Data Analytics in Business Decision-Making",
+            "description": "Discover how data analytics can transform decision-making processes, drive innovation, and enhance competitiveness in today\u2019s business world.",
+            "views": 1648
+        },
+        {
+            "id": 4,
+            "name": "How to Create a Winning Marketing Plan",
+            "description": "Dive into the qualities and strategies of effective leadership that inspire teams, foster growth, and achieve remarkable success.",
+            "views": 431
+        },
+        {
+            "id": 5,
+            "name": "Mastering the Art of Financial Planning for Entrepreneurs",
+            "description": "Get expert advice on how small businesses can navigate tax season efficiently, minimize liabilities, and stay compliant with tax regulations.",
+            "views": 973
+        },
+        {
+            "id": 6,
+            "name": "The Role of Innovation in Modern Business",
+            "description": "Learn how businesses can leverage technology to gain a competitive edge, streamline operations, and deliver exceptional value to customers.",
+            "views": 358
+        }
+    ],
+    "faqs": [],
+    "faqTranslations": [],
+    "settings": [
+        {
+            "key": "theme-gerow-address",
+            "value": "4517 Washington Ave. Manchester, Kentucky 39495"
+        },
+        {
+            "key": "theme-gerow-contact_email",
+            "value": "support@botble.com"
+        },
+        {
+            "key": "theme-gerow-phone",
+            "value": "+01-246-357"
+        },
+        {
+            "key": "theme-gerow-site_description",
+            "value": "At Gerow, we specialize in comprehensive business solutions designed to enhance your operational efficiency and supply chain excellence. Whether you\u2019re a seasoned entrepreneur looking to fine-tune your strategies, a startup seeking guidance, or a business professional looking for insights and solutions, our platform is your one-stop destination. Our team of experts and a wealth of resources are here to empower your journey towards business excellence. Explore our offerings and discover how we can be your partner in success."
+        },
+        {
+            "key": "theme-gerow-site_title",
+            "value": "Gerow - Business Consulting"
+        }
+    ]
+}

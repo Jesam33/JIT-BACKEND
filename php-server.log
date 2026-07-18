@@ -1,0 +1,362 @@
+[Wed Jul 15 08:37:21 2026] PHP 8.2.31 Development Server (http://127.0.0.1:8000) started
+[Wed Jul 15 08:37:30 2026] 127.0.0.1:59126 Accepted
+[Wed Jul 15 08:37:35 2026] 127.0.0.1:59126 [422]: POST /api/frontend/lms/login
+[Wed Jul 15 08:37:35 2026] 127.0.0.1:59126 Closing
+[Wed Jul 15 08:37:35 2026] 127.0.0.1:59127 Accepted
+[Wed Jul 15 08:37:38 2026] 127.0.0.1:59127 [422]: POST /api/frontend/lms/staff/login
+[Wed Jul 15 08:37:38 2026] 127.0.0.1:59127 Closing
+[Wed Jul 15 08:37:51 2026] 127.0.0.1:59750 Accepted
+[Wed Jul 15 08:37:53 2026] 127.0.0.1:59750 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:37:53 2026] 127.0.0.1:59750 Closing
+[Wed Jul 15 08:37:53 2026] 127.0.0.1:51261 Accepted
+[Wed Jul 15 08:37:55 2026] 127.0.0.1:51261 [200]: GET /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:37:55 2026] 127.0.0.1:51261 Closing
+[Wed Jul 15 08:38:18 2026] 127.0.0.1:58113 Accepted
+[Wed Jul 15 08:38:20 2026] 127.0.0.1:58113 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:38:20 2026] 127.0.0.1:58113 Closing
+[Wed Jul 15 08:38:20 2026] 127.0.0.1:50011 Accepted
+[Wed Jul 15 08:38:22 2026] 127.0.0.1:50011 [200]: GET /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:38:22 2026] 127.0.0.1:50011 Closing
+[Wed Jul 15 08:38:51 2026] 127.0.0.1:56003 Accepted
+[Wed Jul 15 08:38:52 2026] 127.0.0.1:56003 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:38:52 2026] 127.0.0.1:56003 Closing
+[Wed Jul 15 08:38:52 2026] 127.0.0.1:56183 Accepted
+[Wed Jul 15 08:38:56 2026] 127.0.0.1:56183 [200]: GET /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:38:56 2026] 127.0.0.1:56183 Closing
+[Wed Jul 15 08:39:15 2026] 127.0.0.1:56458 Accepted
+[Wed Jul 15 08:39:17 2026] 127.0.0.1:56458 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:39:17 2026] 127.0.0.1:56458 Closing
+[Wed Jul 15 08:39:17 2026] 127.0.0.1:63032 Accepted
+[Wed Jul 15 08:39:19 2026] 127.0.0.1:63032 [200]: GET /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:39:19 2026] 127.0.0.1:63032 Closing
+[Wed Jul 15 08:39:33 2026] 127.0.0.1:51587 Accepted
+[Wed Jul 15 08:39:35 2026] 127.0.0.1:51587 [204]: OPTIONS /api/frontend/lms/staff/me
+[Wed Jul 15 08:39:35 2026] 127.0.0.1:51587 Closing
+[Wed Jul 15 08:39:35 2026] 127.0.0.1:59107 Accepted
+[Wed Jul 15 08:39:38 2026] 127.0.0.1:59107 [200]: GET /api/frontend/lms/staff/me
+[Wed Jul 15 08:39:38 2026] 127.0.0.1:59107 Closing
+[Wed Jul 15 08:39:38 2026] 127.0.0.1:57783 Accepted
+[Wed Jul 15 08:39:41 2026] 127.0.0.1:57783 [204]: OPTIONS /api/frontend/lms/staff/me
+[Wed Jul 15 08:39:41 2026] 127.0.0.1:57783 Closing
+[Wed Jul 15 08:39:41 2026] 127.0.0.1:55628 Accepted
+[Wed Jul 15 08:39:41 2026] 127.0.0.1:58821 Accepted
+[Wed Jul 15 08:39:42 2026] 127.0.0.1:55628 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:39:42 2026] 127.0.0.1:55628 Closing
+[Wed Jul 15 08:39:42 2026] 127.0.0.1:58482 Accepted
+[Wed Jul 15 08:39:44 2026] 127.0.0.1:58821 [204]: OPTIONS /api/frontend/lms/staff/modules
+[Wed Jul 15 08:39:44 2026] 127.0.0.1:58821 Closing
+[Wed Jul 15 08:39:44 2026] 127.0.0.1:62406 Accepted
+[Wed Jul 15 08:39:45 2026] 127.0.0.1:58482 [204]: OPTIONS /api/frontend/lms/staff/me
+[Wed Jul 15 08:39:45 2026] 127.0.0.1:58482 Closing
+[Wed Jul 15 08:39:45 2026] 127.0.0.1:62926 Accepted
+[Wed Jul 15 08:39:47 2026] 127.0.0.1:62406 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:39:47 2026] 127.0.0.1:62406 Closing
+[Wed Jul 15 08:39:47 2026] 127.0.0.1:58242 Accepted
+[Wed Jul 15 08:39:49 2026] 127.0.0.1:62926 [204]: OPTIONS /api/frontend/lms/staff/modules
+[Wed Jul 15 08:39:49 2026] 127.0.0.1:62926 Closing
+[Wed Jul 15 08:39:49 2026] 127.0.0.1:51118 Accepted
+[Wed Jul 15 08:39:51 2026] 127.0.0.1:58242 [200]: GET /api/frontend/lms/staff/me
+[Wed Jul 15 08:39:51 2026] 127.0.0.1:58242 Closing
+[Wed Jul 15 08:39:51 2026] 127.0.0.1:51073 Accepted
+[Wed Jul 15 08:39:52 2026] 127.0.0.1:51118 [200]: GET /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:39:52 2026] 127.0.0.1:51118 Closing
+[Wed Jul 15 08:39:52 2026] 127.0.0.1:57766 Accepted
+[Wed Jul 15 08:39:55 2026] 127.0.0.1:51073 [200]: GET /api/frontend/lms/staff/modules
+[Wed Jul 15 08:39:55 2026] 127.0.0.1:51073 Closing
+[Wed Jul 15 08:39:55 2026] 127.0.0.1:59471 Accepted
+[Wed Jul 15 08:39:57 2026] 127.0.0.1:57766 [200]: GET /api/frontend/lms/staff/me
+[Wed Jul 15 08:39:57 2026] 127.0.0.1:57766 Closing
+[Wed Jul 15 08:39:57 2026] 127.0.0.1:56746 Accepted
+[Wed Jul 15 08:39:59 2026] 127.0.0.1:59471 [200]: GET /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:39:59 2026] 127.0.0.1:59471 Closing
+[Wed Jul 15 08:39:59 2026] 127.0.0.1:55230 Accepted
+[Wed Jul 15 08:40:00 2026] 127.0.0.1:56746 [200]: GET /api/frontend/lms/staff/modules
+[Wed Jul 15 08:40:00 2026] 127.0.0.1:56746 Closing
+[Wed Jul 15 08:40:00 2026] 127.0.0.1:53048 Accepted
+[Wed Jul 15 08:40:01 2026] 127.0.0.1:55230 [204]: OPTIONS /api/frontend/lms/staff/courses
+[Wed Jul 15 08:40:01 2026] 127.0.0.1:55230 Closing
+[Wed Jul 15 08:40:01 2026] 127.0.0.1:63693 Accepted
+[Wed Jul 15 08:40:01 2026] 127.0.0.1:53048 [200]: GET /storage/profile-photos/1V9sxomd0pABtBkvQsMmYEsNRJNm7zQcmr2FB3wh.jpg
+[Wed Jul 15 08:40:01 2026] 127.0.0.1:57741 Accepted
+[Wed Jul 15 08:40:02 2026] 127.0.0.1:63693 [204]: OPTIONS /api/frontend/lms/staff/courses
+[Wed Jul 15 08:40:02 2026] 127.0.0.1:63693 Closing
+[Wed Jul 15 08:40:04 2026] 127.0.0.1:57741 [200]: GET /api/frontend/lms/staff/courses
+[Wed Jul 15 08:40:04 2026] 127.0.0.1:57741 Closing
+[Wed Jul 15 08:40:04 2026] 127.0.0.1:56704 Accepted
+[Wed Jul 15 08:40:04 2026] 127.0.0.1:62971 Accepted
+[Wed Jul 15 08:40:05 2026] 127.0.0.1:56704 [200]: GET /api/frontend/lms/staff/courses
+[Wed Jul 15 08:40:05 2026] 127.0.0.1:56704 Closing
+[Wed Jul 15 08:40:05 2026] 127.0.0.1:61045 Accepted
+[Wed Jul 15 08:40:06 2026] 127.0.0.1:62971 [204]: OPTIONS /api/frontend/lms/staff/scheduled-classes
+[Wed Jul 15 08:40:06 2026] 127.0.0.1:62971 Closing
+[Wed Jul 15 08:40:06 2026] 127.0.0.1:53048 Closing
+[Wed Jul 15 08:40:07 2026] 127.0.0.1:61045 [204]: OPTIONS /api/frontend/lms/staff/scheduled-classes
+[Wed Jul 15 08:40:07 2026] 127.0.0.1:61045 Closing
+[Wed Jul 15 08:40:07 2026] 127.0.0.1:64400 Accepted
+[Wed Jul 15 08:40:08 2026] 127.0.0.1:64400 [200]: GET /api/frontend/lms/staff/scheduled-classes
+[Wed Jul 15 08:40:08 2026] 127.0.0.1:64400 Closing
+[Wed Jul 15 08:40:08 2026] 127.0.0.1:54557 Accepted
+[Wed Jul 15 08:40:08 2026] 127.0.0.1:64980 Accepted
+[Wed Jul 15 08:40:09 2026] 127.0.0.1:54557 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:40:09 2026] 127.0.0.1:54557 Closing
+[Wed Jul 15 08:40:09 2026] 127.0.0.1:62238 Accepted
+[Wed Jul 15 08:40:10 2026] 127.0.0.1:64980 [200]: GET /api/frontend/lms/staff/scheduled-classes
+[Wed Jul 15 08:40:10 2026] 127.0.0.1:64980 Closing
+[Wed Jul 15 08:40:11 2026] 127.0.0.1:62238 [200]: GET /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:40:11 2026] 127.0.0.1:62238 Closing
+[Wed Jul 15 08:40:38 2026] 127.0.0.1:59414 Accepted
+[Wed Jul 15 08:40:39 2026] 127.0.0.1:59414 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:40:39 2026] 127.0.0.1:59414 Closing
+[Wed Jul 15 08:40:39 2026] 127.0.0.1:56392 Accepted
+[Wed Jul 15 08:40:41 2026] 127.0.0.1:56392 [200]: GET /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:40:41 2026] 127.0.0.1:56392 Closing
+[Wed Jul 15 08:40:44 2026] 127.0.0.1:52932 Accepted
+[Wed Jul 15 08:40:47 2026] 127.0.0.1:52932 [204]: OPTIONS /api/frontend/lms/me
+[Wed Jul 15 08:40:47 2026] 127.0.0.1:52932 Closing
+[Wed Jul 15 08:40:47 2026] 127.0.0.1:50229 Accepted
+[Wed Jul 15 08:40:50 2026] 127.0.0.1:50229 [200]: GET /api/frontend/lms/me
+[Wed Jul 15 08:40:50 2026] 127.0.0.1:50229 Closing
+[Wed Jul 15 08:40:50 2026] 127.0.0.1:56364 Accepted
+[Wed Jul 15 08:40:52 2026] 127.0.0.1:56364 [204]: OPTIONS /api/frontend/lms/chats/unread
+[Wed Jul 15 08:40:52 2026] 127.0.0.1:56364 Closing
+[Wed Jul 15 08:40:52 2026] 127.0.0.1:52466 Accepted
+[Wed Jul 15 08:40:52 2026] 127.0.0.1:54444 Accepted
+[Wed Jul 15 08:40:54 2026] 127.0.0.1:52466 [204]: OPTIONS /api/frontend/lms/modules
+[Wed Jul 15 08:40:54 2026] 127.0.0.1:52466 Closing
+[Wed Jul 15 08:40:54 2026] 127.0.0.1:61336 Accepted
+[Wed Jul 15 08:40:57 2026] 127.0.0.1:54444 [204]: OPTIONS /api/frontend/lms/chats/unread
+[Wed Jul 15 08:40:57 2026] 127.0.0.1:54444 Closing
+[Wed Jul 15 08:40:57 2026] 127.0.0.1:54669 Accepted
+[Wed Jul 15 08:40:58 2026] 127.0.0.1:61336 [204]: OPTIONS /api/frontend/lms/modules
+[Wed Jul 15 08:40:58 2026] 127.0.0.1:61336 Closing
+[Wed Jul 15 08:41:00 2026] 127.0.0.1:54669 [204]: OPTIONS /api/frontend/lms/me
+[Wed Jul 15 08:41:00 2026] 127.0.0.1:54669 Closing
+[Wed Jul 15 08:41:00 2026] 127.0.0.1:57388 Accepted
+[Wed Jul 15 08:41:00 2026] 127.0.0.1:49882 Accepted
+[Wed Jul 15 08:41:02 2026] 127.0.0.1:57388 [204]: OPTIONS /api/frontend/lms/staff/me
+[Wed Jul 15 08:41:02 2026] 127.0.0.1:57388 Closing
+[Wed Jul 15 08:41:02 2026] 127.0.0.1:50079 Accepted
+[Wed Jul 15 08:41:04 2026] 127.0.0.1:49882 [200]: GET /api/frontend/lms/me
+[Wed Jul 15 08:41:04 2026] 127.0.0.1:49882 Closing
+[Wed Jul 15 08:41:06 2026] 127.0.0.1:50079 [200]: GET /api/frontend/lms/staff/me
+[Wed Jul 15 08:41:06 2026] 127.0.0.1:50079 Closing
+[Wed Jul 15 08:41:06 2026] 127.0.0.1:51044 Accepted
+[Wed Jul 15 08:41:06 2026] 127.0.0.1:57656 Accepted
+[Wed Jul 15 08:41:08 2026] 127.0.0.1:51044 [204]: OPTIONS /api/frontend/lms/chats/unread
+[Wed Jul 15 08:41:08 2026] 127.0.0.1:51044 Closing
+[Wed Jul 15 08:41:08 2026] 127.0.0.1:61436 Accepted
+[Wed Jul 15 08:41:10 2026] 127.0.0.1:57656 [204]: OPTIONS /api/frontend/lms/modules
+[Wed Jul 15 08:41:10 2026] 127.0.0.1:57656 Closing
+[Wed Jul 15 08:41:10 2026] 127.0.0.1:49362 Accepted
+[Wed Jul 15 08:41:12 2026] 127.0.0.1:61436 [204]: OPTIONS /api/frontend/lms/chats/unread
+[Wed Jul 15 08:41:12 2026] 127.0.0.1:61436 Closing
+[Wed Jul 15 08:41:12 2026] 127.0.0.1:64962 Accepted
+[Wed Jul 15 08:41:14 2026] 127.0.0.1:49362 [204]: OPTIONS /api/frontend/lms/modules
+[Wed Jul 15 08:41:14 2026] 127.0.0.1:49362 Closing
+[Wed Jul 15 08:41:14 2026] 127.0.0.1:62908 Accepted
+[Wed Jul 15 08:41:16 2026] 127.0.0.1:64962 [204]: OPTIONS /api/frontend/lms/staff/me
+[Wed Jul 15 08:41:16 2026] 127.0.0.1:64962 Closing
+[Wed Jul 15 08:41:16 2026] 127.0.0.1:52292 Accepted
+[Wed Jul 15 08:41:19 2026] 127.0.0.1:62908 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:41:19 2026] 127.0.0.1:62908 Closing
+[Wed Jul 15 08:41:19 2026] 127.0.0.1:56125 Accepted
+[Wed Jul 15 08:41:21 2026] 127.0.0.1:52292 [204]: OPTIONS /api/frontend/lms/staff/modules
+[Wed Jul 15 08:41:21 2026] 127.0.0.1:52292 Closing
+[Wed Jul 15 08:41:21 2026] 127.0.0.1:60338 Accepted
+[Wed Jul 15 08:41:22 2026] 127.0.0.1:56125 [204]: OPTIONS /api/frontend/lms/staff/me
+[Wed Jul 15 08:41:22 2026] 127.0.0.1:56125 Closing
+[Wed Jul 15 08:41:22 2026] 127.0.0.1:49746 Accepted
+[Wed Jul 15 08:41:25 2026] 127.0.0.1:60338 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:41:25 2026] 127.0.0.1:60338 Closing
+[Wed Jul 15 08:41:25 2026] 127.0.0.1:58832 Accepted
+[Wed Jul 15 08:41:27 2026] 127.0.0.1:49746 [204]: OPTIONS /api/frontend/lms/staff/modules
+[Wed Jul 15 08:41:27 2026] 127.0.0.1:49746 Closing
+[Wed Jul 15 08:41:27 2026] 127.0.0.1:58585 Accepted
+[Wed Jul 15 08:41:29 2026] 127.0.0.1:58832 [200]: GET /api/frontend/lms/chats/unread
+[Wed Jul 15 08:41:29 2026] 127.0.0.1:58832 Closing
+[Wed Jul 15 08:41:29 2026] 127.0.0.1:65375 Accepted
+[Wed Jul 15 08:41:30 2026] 127.0.0.1:58585 [200]: GET /api/frontend/lms/modules
+[Wed Jul 15 08:41:30 2026] 127.0.0.1:58585 Closing
+[Wed Jul 15 08:41:30 2026] 127.0.0.1:50791 Accepted
+[Wed Jul 15 08:41:31 2026] 127.0.0.1:65375 [200]: GET /api/frontend/lms/chats/unread
+[Wed Jul 15 08:41:31 2026] 127.0.0.1:65375 Closing
+[Wed Jul 15 08:41:31 2026] 127.0.0.1:63695 Accepted
+[Wed Jul 15 08:41:32 2026] 127.0.0.1:50791 [204]: OPTIONS /api/frontend/lms/me
+[Wed Jul 15 08:41:32 2026] 127.0.0.1:50791 Closing
+[Wed Jul 15 08:41:32 2026] 127.0.0.1:62982 Accepted
+[Wed Jul 15 08:41:34 2026] 127.0.0.1:63695 [200]: GET /api/frontend/lms/staff/me
+[Wed Jul 15 08:41:34 2026] 127.0.0.1:63695 Closing
+[Wed Jul 15 08:41:34 2026] 127.0.0.1:64802 Accepted
+[Wed Jul 15 08:41:35 2026] 127.0.0.1:62982 [200]: GET /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:41:35 2026] 127.0.0.1:62982 Closing
+[Wed Jul 15 08:41:35 2026] 127.0.0.1:50302 Accepted
+[Wed Jul 15 08:41:37 2026] 127.0.0.1:64802 [200]: GET /api/frontend/lms/staff/modules
+[Wed Jul 15 08:41:37 2026] 127.0.0.1:64802 Closing
+[Wed Jul 15 08:41:37 2026] 127.0.0.1:56235 Accepted
+[Wed Jul 15 08:41:38 2026] 127.0.0.1:50302 [204]: OPTIONS /api/frontend/lms/me
+[Wed Jul 15 08:41:38 2026] 127.0.0.1:50302 Closing
+[Wed Jul 15 08:41:38 2026] 127.0.0.1:54760 Accepted
+[Wed Jul 15 08:41:39 2026] 127.0.0.1:56235 [204]: OPTIONS /api/frontend/lms/staff/courses
+[Wed Jul 15 08:41:39 2026] 127.0.0.1:56235 Closing
+[Wed Jul 15 08:41:39 2026] 127.0.0.1:56105 Accepted
+[Wed Jul 15 08:41:41 2026] 127.0.0.1:54760 [204]: OPTIONS /api/frontend/lms/staff/courses
+[Wed Jul 15 08:41:41 2026] 127.0.0.1:54760 Closing
+[Wed Jul 15 08:41:41 2026] 127.0.0.1:49585 Accepted
+[Wed Jul 15 08:41:44 2026] 127.0.0.1:56105 [204]: OPTIONS /api/frontend/lms/staff/me
+[Wed Jul 15 08:41:44 2026] 127.0.0.1:56105 Closing
+[Wed Jul 15 08:41:44 2026] 127.0.0.1:59527 Accepted
+[Wed Jul 15 08:41:45 2026] 127.0.0.1:49585 [200]: GET /api/frontend/lms/me
+[Wed Jul 15 08:41:45 2026] 127.0.0.1:49585 Closing
+[Wed Jul 15 08:41:47 2026] 127.0.0.1:59527 [200]: GET /api/frontend/lms/staff/me
+[Wed Jul 15 08:41:47 2026] 127.0.0.1:59527 Closing
+[Wed Jul 15 08:41:47 2026] 127.0.0.1:64262 Accepted
+[Wed Jul 15 08:41:47 2026] 127.0.0.1:50445 Accepted
+[Wed Jul 15 08:41:48 2026] 127.0.0.1:64262 [204]: OPTIONS /api/frontend/lms/chats/unread
+[Wed Jul 15 08:41:48 2026] 127.0.0.1:64262 Closing
+[Wed Jul 15 08:41:48 2026] 127.0.0.1:61578 Accepted
+[Wed Jul 15 08:41:49 2026] 127.0.0.1:50445 [204]: OPTIONS /api/frontend/lms/modules
+[Wed Jul 15 08:41:49 2026] 127.0.0.1:50445 Closing
+[Wed Jul 15 08:41:49 2026] 127.0.0.1:65418 Accepted
+[Wed Jul 15 08:41:51 2026] 127.0.0.1:61578 [204]: OPTIONS /api/frontend/lms/chats/unread
+[Wed Jul 15 08:41:51 2026] 127.0.0.1:61578 Closing
+[Wed Jul 15 08:41:51 2026] 127.0.0.1:51232 Accepted
+[Wed Jul 15 08:41:54 2026] 127.0.0.1:65418 [204]: OPTIONS /api/frontend/lms/modules
+[Wed Jul 15 08:41:54 2026] 127.0.0.1:65418 Closing
+[Wed Jul 15 08:41:54 2026] 127.0.0.1:56400 Accepted
+[Wed Jul 15 08:41:57 2026] 127.0.0.1:51232 [204]: OPTIONS /api/frontend/lms/staff/me
+[Wed Jul 15 08:41:57 2026] 127.0.0.1:51232 Closing
+[Wed Jul 15 08:41:57 2026] 127.0.0.1:56519 Accepted
+[Wed Jul 15 08:41:59 2026] 127.0.0.1:56400 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:41:59 2026] 127.0.0.1:56400 Closing
+[Wed Jul 15 08:41:59 2026] 127.0.0.1:63414 Accepted
+[Wed Jul 15 08:42:01 2026] 127.0.0.1:56519 [204]: OPTIONS /api/frontend/lms/staff/modules
+[Wed Jul 15 08:42:01 2026] 127.0.0.1:56519 Closing
+[Wed Jul 15 08:42:01 2026] 127.0.0.1:64432 Accepted
+[Wed Jul 15 08:42:03 2026] 127.0.0.1:63414 [204]: OPTIONS /api/frontend/lms/staff/me
+[Wed Jul 15 08:42:03 2026] 127.0.0.1:63414 Closing
+[Wed Jul 15 08:42:03 2026] 127.0.0.1:55821 Accepted
+[Wed Jul 15 08:42:05 2026] 127.0.0.1:64432 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:42:05 2026] 127.0.0.1:64432 Closing
+[Wed Jul 15 08:42:05 2026] 127.0.0.1:57486 Accepted
+[Wed Jul 15 08:42:07 2026] 127.0.0.1:55821 [204]: OPTIONS /api/frontend/lms/staff/modules
+[Wed Jul 15 08:42:07 2026] 127.0.0.1:55821 Closing
+[Wed Jul 15 08:42:07 2026] 127.0.0.1:57575 Accepted
+[Wed Jul 15 08:42:09 2026] 127.0.0.1:57486 [200]: GET /api/frontend/lms/chats/unread
+[Wed Jul 15 08:42:09 2026] 127.0.0.1:57486 Closing
+[Wed Jul 15 08:42:09 2026] 127.0.0.1:52338 Accepted
+[Wed Jul 15 08:42:11 2026] 127.0.0.1:57575 [200]: GET /api/frontend/lms/modules
+[Wed Jul 15 08:42:11 2026] 127.0.0.1:57575 Closing
+[Wed Jul 15 08:42:11 2026] 127.0.0.1:65110 Accepted
+[Wed Jul 15 08:42:13 2026] 127.0.0.1:52338 [204]: OPTIONS /api/frontend/lms/staff/courses
+[Wed Jul 15 08:42:13 2026] 127.0.0.1:52338 Closing
+[Wed Jul 15 08:42:13 2026] 127.0.0.1:52012 Accepted
+[Wed Jul 15 08:42:16 2026] 127.0.0.1:65110 [204]: OPTIONS /api/frontend/lms/staff/courses
+[Wed Jul 15 08:42:16 2026] 127.0.0.1:65110 Closing
+[Wed Jul 15 08:42:16 2026] 127.0.0.1:53363 Accepted
+[Wed Jul 15 08:42:18 2026] 127.0.0.1:52012 [204]: OPTIONS /api/frontend/lms/me
+[Wed Jul 15 08:42:18 2026] 127.0.0.1:52012 Closing
+[Wed Jul 15 08:42:18 2026] 127.0.0.1:56643 Accepted
+[Wed Jul 15 08:42:20 2026] 127.0.0.1:53363 [204]: OPTIONS /api/frontend/lms/staff/me
+[Wed Jul 15 08:42:20 2026] 127.0.0.1:53363 Closing
+[Wed Jul 15 08:42:20 2026] 127.0.0.1:59462 Accepted
+[Wed Jul 15 08:42:22 2026] 127.0.0.1:56643 [200]: GET /api/frontend/lms/me
+[Wed Jul 15 08:42:22 2026] 127.0.0.1:56643 Closing
+[Wed Jul 15 08:42:24 2026] 127.0.0.1:59462 [200]: GET /api/frontend/lms/staff/me
+[Wed Jul 15 08:42:24 2026] 127.0.0.1:59462 Closing
+[Wed Jul 15 08:42:24 2026] 127.0.0.1:64078 Accepted
+[Wed Jul 15 08:42:24 2026] 127.0.0.1:62588 Accepted
+[Wed Jul 15 08:42:26 2026] 127.0.0.1:64078 [204]: OPTIONS /api/frontend/lms/chats/unread
+[Wed Jul 15 08:42:26 2026] 127.0.0.1:64078 Closing
+[Wed Jul 15 08:42:26 2026] 127.0.0.1:64556 Accepted
+[Wed Jul 15 08:42:28 2026] 127.0.0.1:62588 [204]: OPTIONS /api/frontend/lms/modules
+[Wed Jul 15 08:42:28 2026] 127.0.0.1:62588 Closing
+[Wed Jul 15 08:42:28 2026] 127.0.0.1:57049 Accepted
+[Wed Jul 15 08:42:31 2026] 127.0.0.1:64556 [204]: OPTIONS /api/frontend/lms/chats/unread
+[Wed Jul 15 08:42:31 2026] 127.0.0.1:64556 Closing
+[Wed Jul 15 08:42:31 2026] 127.0.0.1:60990 Accepted
+[Wed Jul 15 08:42:33 2026] 127.0.0.1:57049 [204]: OPTIONS /api/frontend/lms/modules
+[Wed Jul 15 08:42:33 2026] 127.0.0.1:57049 Closing
+[Wed Jul 15 08:42:33 2026] 127.0.0.1:54769 Accepted
+[Wed Jul 15 08:42:36 2026] 127.0.0.1:60990 [204]: OPTIONS /api/frontend/lms/staff/me
+[Wed Jul 15 08:42:36 2026] 127.0.0.1:60990 Closing
+[Wed Jul 15 08:42:36 2026] 127.0.0.1:58093 Accepted
+[Wed Jul 15 08:42:38 2026] 127.0.0.1:54769 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:42:38 2026] 127.0.0.1:54769 Closing
+[Wed Jul 15 08:42:38 2026] 127.0.0.1:57748 Accepted
+[Wed Jul 15 08:42:40 2026] 127.0.0.1:58093 [204]: OPTIONS /api/frontend/lms/staff/modules
+[Wed Jul 15 08:42:40 2026] 127.0.0.1:58093 Closing
+[Wed Jul 15 08:42:40 2026] 127.0.0.1:56504 Accepted
+[Wed Jul 15 08:42:42 2026] 127.0.0.1:57748 [204]: OPTIONS /api/frontend/lms/staff/me
+[Wed Jul 15 08:42:42 2026] 127.0.0.1:57748 Closing
+[Wed Jul 15 08:42:42 2026] 127.0.0.1:51975 Accepted
+[Wed Jul 15 08:42:43 2026] 127.0.0.1:56504 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:42:43 2026] 127.0.0.1:56504 Closing
+[Wed Jul 15 08:42:43 2026] 127.0.0.1:54994 Accepted
+[Wed Jul 15 08:42:44 2026] 127.0.0.1:51975 [204]: OPTIONS /api/frontend/lms/staff/modules
+[Wed Jul 15 08:42:44 2026] 127.0.0.1:51975 Closing
+[Wed Jul 15 08:42:44 2026] 127.0.0.1:60563 Accepted
+[Wed Jul 15 08:42:45 2026] 127.0.0.1:54994 [204]: OPTIONS /api/frontend/lms/me
+[Wed Jul 15 08:42:45 2026] 127.0.0.1:54994 Closing
+[Wed Jul 15 08:42:45 2026] 127.0.0.1:49535 Accepted
+[Wed Jul 15 08:42:46 2026] 127.0.0.1:60563 [204]: OPTIONS /api/frontend/lms/staff/courses
+[Wed Jul 15 08:42:46 2026] 127.0.0.1:60563 Closing
+[Wed Jul 15 08:42:46 2026] 127.0.0.1:56137 Accepted
+[Wed Jul 15 08:42:48 2026] 127.0.0.1:49535 [204]: OPTIONS /api/frontend/lms/me
+[Wed Jul 15 08:42:48 2026] 127.0.0.1:49535 Closing
+[Wed Jul 15 08:42:48 2026] 127.0.0.1:50186 Accepted
+[Wed Jul 15 08:42:49 2026] 127.0.0.1:56137 [204]: OPTIONS /api/frontend/lms/staff/courses
+[Wed Jul 15 08:42:49 2026] 127.0.0.1:56137 Closing
+[Wed Jul 15 08:42:49 2026] 127.0.0.1:55743 Accepted
+[Wed Jul 15 08:42:51 2026] 127.0.0.1:50186 [204]: OPTIONS /api/frontend/lms/staff/me
+[Wed Jul 15 08:42:51 2026] 127.0.0.1:50186 Closing
+[Wed Jul 15 08:42:51 2026] 127.0.0.1:50267 Accepted
+[Wed Jul 15 08:42:53 2026] 127.0.0.1:55743 [200]: GET /api/frontend/lms/me
+[Wed Jul 15 08:42:53 2026] 127.0.0.1:55743 Closing
+[Wed Jul 15 08:42:53 2026] 127.0.0.1:57380 Accepted
+[Wed Jul 15 08:42:55 2026] 127.0.0.1:50267 [200]: GET /api/frontend/lms/me
+[Wed Jul 15 08:42:55 2026] 127.0.0.1:50267 Closing
+[Wed Jul 15 08:42:56 2026] 127.0.0.1:57380 [200]: GET /api/frontend/lms/staff/me
+[Wed Jul 15 08:42:56 2026] 127.0.0.1:57380 Closing
+[Wed Jul 15 08:42:56 2026] 127.0.0.1:64323 Accepted
+[Wed Jul 15 08:42:58 2026] 127.0.0.1:64323 [204]: OPTIONS /api/frontend/lms/staff/me
+[Wed Jul 15 08:42:58 2026] 127.0.0.1:64323 Closing
+[Wed Jul 15 08:42:58 2026] 127.0.0.1:63675 Accepted
+[Wed Jul 15 08:42:58 2026] 127.0.0.1:56162 Accepted
+[Wed Jul 15 08:43:00 2026] 127.0.0.1:63675 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:43:00 2026] 127.0.0.1:63675 Closing
+[Wed Jul 15 08:43:00 2026] 127.0.0.1:57395 Accepted
+[Wed Jul 15 08:43:01 2026] 127.0.0.1:56162 [204]: OPTIONS /api/frontend/lms/staff/modules
+[Wed Jul 15 08:43:01 2026] 127.0.0.1:56162 Closing
+[Wed Jul 15 08:43:01 2026] 127.0.0.1:55467 Accepted
+[Wed Jul 15 08:43:02 2026] 127.0.0.1:57395 [204]: OPTIONS /api/frontend/lms/staff/me
+[Wed Jul 15 08:43:02 2026] 127.0.0.1:57395 Closing
+[Wed Jul 15 08:43:02 2026] 127.0.0.1:61126 Accepted
+[Wed Jul 15 08:43:04 2026] 127.0.0.1:55467 [204]: OPTIONS /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:43:04 2026] 127.0.0.1:55467 Closing
+[Wed Jul 15 08:43:04 2026] 127.0.0.1:58825 Accepted
+[Wed Jul 15 08:43:05 2026] 127.0.0.1:61126 [204]: OPTIONS /api/frontend/lms/staff/modules
+[Wed Jul 15 08:43:05 2026] 127.0.0.1:61126 Closing
+[Wed Jul 15 08:43:05 2026] 127.0.0.1:55716 Accepted
+[Wed Jul 15 08:43:07 2026] 127.0.0.1:58825 [200]: GET /api/frontend/lms/staff/me
+[Wed Jul 15 08:43:07 2026] 127.0.0.1:58825 Closing
+[Wed Jul 15 08:43:07 2026] 127.0.0.1:55166 Accepted
+[Wed Jul 15 08:43:10 2026] 127.0.0.1:55716 [200]: GET /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:43:10 2026] 127.0.0.1:55716 Closing
+[Wed Jul 15 08:43:10 2026] 127.0.0.1:56420 Accepted
+[Wed Jul 15 08:43:12 2026] 127.0.0.1:55166 [200]: GET /api/frontend/lms/staff/modules
+[Wed Jul 15 08:43:12 2026] 127.0.0.1:55166 Closing
+[Wed Jul 15 08:43:12 2026] 127.0.0.1:65235 Accepted
+[Wed Jul 15 08:43:15 2026] 127.0.0.1:56420 [200]: GET /api/frontend/lms/staff/me
+[Wed Jul 15 08:43:15 2026] 127.0.0.1:56420 Closing
+[Wed Jul 15 08:43:15 2026] 127.0.0.1:58569 Accepted
+[Wed Jul 15 08:43:17 2026] 127.0.0.1:65235 [200]: GET /api/frontend/lms/staff/chats/unread
+[Wed Jul 15 08:43:17 2026] 127.0.0.1:65235 Closing
+[Wed Jul 15 08:43:17 2026] 127.0.0.1:51685 Accepted
+[Wed Jul 15 08:43:19 2026] 127.0.0.1:58569 [204]: OPTIONS /api/frontend/lms/staff/courses
+[Wed Jul 15 08:43:19 2026] 127.0.0.1:58569 Closing
+[Wed Jul 15 08:43:19 2026] 127.0.0.1:54826 Accepted
+[Wed Jul 15 08:43:20 2026] 127.0.0.1:51685 [200]: GET /api/frontend/lms/staff/modules
+[Wed Jul 15 08:43:20 2026] 127.0.0.1:51685 Closing
+[Wed Jul 15 08:43:20 2026] 127.0.0.1:55219 Accepted
+[Wed Jul 15 08:43:20 2026] 127.0.0.1:54826 [200]: GET /storage/profile-photos/1V9sxomd0pABtBkvQsMmYEsNRJNm7zQcmr2FB3wh.jpg
+[Wed Jul 15 08:43:20 2026] 127.0.0.1:60983 Accepted

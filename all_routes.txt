@@ -1,0 +1,212 @@
+
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37m/[39m[38;2;108;114;128m ................................. public.index › Botble\Theme\Http\Controllers\PublicController@getIndex[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37m_debugbar/assets/javascript[39m[38;2;108;114;128m .................. debugbar.assets.js › Barryvdh\Debugbar › AssetController@js[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37m_debugbar/assets/stylesheets[39m[38;2;108;114;128m ............... debugbar.assets.css › Barryvdh\Debugbar › AssetController@css[39m
+  [31mDELETE[39m    [37m_debugbar/cache/[39m[33m{key}[39m[37m/[39m[33m{tags?}[39m[38;2;108;114;128m ......... debugbar.cache.delete › Barryvdh\Debugbar › CacheController@delete[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37m_debugbar/clockwork/[39m[33m{id}[39m[38;2;108;114;128m ........ debugbar.clockwork › Barryvdh\Debugbar › OpenHandlerController@clockwork[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37m_debugbar/open[39m[38;2;108;114;128m ................... debugbar.openhandler › Barryvdh\Debugbar › OpenHandlerController@handle[39m
+  [33mPOST[39m      [37m_debugbar/queries/explain[39m[38;2;108;114;128m ....... debugbar.queries.explain › Barryvdh\Debugbar › QueriesController@explain[39m
+  [33mPOST[39m      [37m_ignition/execute-solution[39m[38;2;108;114;128m . ignition.executeSolution › Spatie\LaravelIgnition › ExecuteSolutionController[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37m_ignition/health-check[39m[38;2;108;114;128m ............. ignition.healthCheck › Spatie\LaravelIgnition › HealthCheckController[39m
+  [33mPOST[39m      [37m_ignition/update-config[39m[38;2;108;114;128m .......... ignition.updateConfig › Spatie\LaravelIgnition › UpdateConfigController[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin[39m[38;2;108;114;128m ............... dashboard.index › Botble\Dashboard\Http\Controllers\DashboardController@getDashboard[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/core-icons[39m[38;2;108;114;128m ...................... core-icons › Botble\Base\Http\Controllers\CoreIconController@index[39m
+  [33mPOST[39m      [37madmin/data-synchronize/upload[39m[38;2;108;114;128m data-synchronize.upload › Botble\DataSynchronize › UploadController@__invoke[39m
+  [33mPOST[39m      [37madmin/get-started/save[39m[38;2;108;114;128m ... get-started.save › Botble\GetStarted\Http\Controllers\GetStartedController@save[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/login[39m[38;2;108;114;128m ................ access.login › Botble\ACL\Http\Controllers\Auth\LoginController@showLoginForm[39m
+  [33mPOST[39m      [37madmin/login[39m[38;2;108;114;128m ................... access.login.post › Botble\ACL\Http\Controllers\Auth\LoginController@login[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/logout[39m[38;2;108;114;128m ..................... access.logout › Botble\ACL\Http\Controllers\Auth\LoginController@logout[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/media[39m[38;2;108;114;128m ......................... media.index › Botble\Media\Http\Controllers\MediaController@getMedia[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/media/breadcrumbs[39m[38;2;108;114;128m . media.breadcrumbs › Botble\Media\Http\Controllers\MediaController@getBreadcrumbs[39m
+  [33mPOST[39m      [37madmin/media/download[39m[38;2;108;114;128m ............. media.download › Botble\Media\Http\Controllers\MediaController@download[39m
+  [33mPOST[39m      [37madmin/media/files/download-url[39m[38;2;108;114;128m media.download_url › Botble\Media\Http\Controllers\MediaFileController@pos…[39m
+  [33mPOST[39m      [37madmin/media/files/upload[39m[38;2;108;114;128m media.files.upload › Botble\Media\Http\Controllers\MediaFileController@postUpload[39m
+  [33mPOST[39m      [37madmin/media/files/upload-from-editor[39m[38;2;108;114;128m media.files.upload.from.editor › Botble\Media\Http\Controllers\Media…[39m
+  [33mPOST[39m      [37madmin/media/folders/create[39m[38;2;108;114;128m media.folders.create › Botble\Media\Http\Controllers\MediaFolderController@sto…[39m
+  [33mPOST[39m      [37madmin/media/global-actions[39m[38;2;108;114;128m media.global_actions › Botble\Media\Http\Controllers\MediaController@postGloba…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/media/list[39m[38;2;108;114;128m ...................... media.list › Botble\Media\Http\Controllers\MediaController@getList[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/media/popup[39m[38;2;108;114;128m ................... media.popup › Botble\Media\Http\Controllers\MediaController@getPopup[39m
+  [33mPOST[39m      [37madmin/membership/authorize[39m[38;2;108;114;128m membership.authorize › Botble\Base\Http\Controllers\SystemController@postAutho…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/menu-items-count[39m[38;2;108;114;128m menu-items-count › Botble\Base\Http\Controllers\SystemController@getMenuItemsCount[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[33mPOST[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m [37madmin/menus[39m[38;2;108;114;128m .......................... menus.index › Botble\Menu\Http\Controllers\MenuController@index[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/menus/ajax/get-node[39m[38;2;108;114;128m ........... menus.get-node › Botble\Menu\Http\Controllers\MenuController@getNode[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/menus/create[39m[38;2;108;114;128m ..................... menus.create › Botble\Menu\Http\Controllers\MenuController@create[39m
+  [33mPOST[39m      [37madmin/menus/create[39m[38;2;108;114;128m ....................... menus.store › Botble\Menu\Http\Controllers\MenuController@store[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/menus/edit/[39m[33m{menu}[39m[38;2;108;114;128m .................... menus.edit › Botble\Menu\Http\Controllers\MenuController@edit[39m
+  [33mPOST[39m      [37madmin/menus/edit/[39m[33m{menu}[39m[38;2;108;114;128m ................ menus.update › Botble\Menu\Http\Controllers\MenuController@update[39m
+  [31mDELETE[39m    [37madmin/menus/[39m[33m{menu}[39m[38;2;108;114;128m ................... menus.destroy › Botble\Menu\Http\Controllers\MenuController@destroy[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/notifications[39m[38;2;108;114;128m ...... notifications.index › Botble\Base\Http\Controllers\NotificationController@index[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/notifications/count-unread[39m[38;2;108;114;128m notifications.count-unread › Botble\Base\Http\Controllers\NotificationCo…[39m
+  [31mDELETE[39m    [37madmin/notifications/destroy-all-notification[39m[38;2;108;114;128m notifications.destroy-all-notification › Botble\Base\Http\Co…[39m
+  [33mPUT[39m       [37madmin/notifications/read-all-notification[39m[38;2;108;114;128m notifications.read-all-notification › Botble\Base\Http\Controll…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/notifications/read-notification/[39m[33m{id}[39m[38;2;108;114;128m notifications.read-notification › Botble\Base\Http\Controllers…[39m
+  [31mDELETE[39m    [37madmin/notifications/[39m[33m{id}[39m[38;2;108;114;128m notifications.destroy › Botble\Base\Http\Controllers\NotificationController@dest…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[33mPOST[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m [37madmin/pages[39m[38;2;108;114;128m .......................... pages.index › Botble\Page\Http\Controllers\PageController@index[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/pages/create[39m[38;2;108;114;128m ..................... pages.create › Botble\Page\Http\Controllers\PageController@create[39m
+  [33mPOST[39m      [37madmin/pages/create[39m[38;2;108;114;128m ....................... pages.store › Botble\Page\Http\Controllers\PageController@store[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/pages/edit/[39m[33m{page}[39m[38;2;108;114;128m .................... pages.edit › Botble\Page\Http\Controllers\PageController@edit[39m
+  [33mPOST[39m      [37madmin/pages/edit/[39m[33m{page}[39m[38;2;108;114;128m ................ pages.update › Botble\Page\Http\Controllers\PageController@update[39m
+  [31mDELETE[39m    [37madmin/pages/[39m[33m{page}[39m[38;2;108;114;128m ................... pages.destroy › Botble\Page\Http\Controllers\PageController@destroy[39m
+  [33mPOST[39m      [37madmin/password/email[39m[38;2;108;114;128m access.password.email › Botble\ACL\Http\Controllers\Auth\ForgotPasswordController@se…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/password/reset[39m[38;2;108;114;128m access.password.request › Botble\ACL\Http\Controllers\Auth\ForgotPasswordController@…[39m
+  [33mPOST[39m      [37madmin/password/reset[39m[38;2;108;114;128m access.password.reset.post › Botble\ACL\Http\Controllers\Auth\ResetPasswordControlle…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/password/reset/[39m[33m{token}[39m[38;2;108;114;128m access.password.reset › Botble\ACL\Http\Controllers\Auth\ResetPasswordContro…[39m
+  [31mANY[39m       [37madmin/plugins[39m[38;2;108;114;128m .................................................... Illuminate\Routing › RedirectController[39m
+  [33mPOST[39m      [37madmin/plugins/check-requirement[39m[38;2;108;114;128m plugins.check-requirement › Botble\PluginManagement\Http\Controllers\Plug…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/plugins/installed[39m[38;2;108;114;128m plugins.index › Botble\PluginManagement\Http\Controllers\PluginManagementControll…[39m
+  [33mPUT[39m       [37madmin/plugins/status[39m[38;2;108;114;128m plugins.change.status › Botble\PluginManagement\Http\Controllers\PluginManagementCon…[39m
+  [31mDELETE[39m    [37madmin/plugins/[39m[33m{plugin}[39m[38;2;108;114;128m plugins.remove › Botble\PluginManagement\Http\Controllers\PluginManagementControll…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/search[39m[38;2;108;114;128m ................. core.global-search › Botble\Base\Http\Controllers\SearchController@__invoke[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings[39m[38;2;108;114;128m .............. settings.index › Botble\Setting\Http\Controllers\HomeSettingController@index[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/admin-appearance[39m[38;2;108;114;128m settings.admin-appearance › Botble\Setting\Http\Controllers\AdminAppearan…[39m
+  [33mPUT[39m       [37madmin/settings/admin-appearance[39m[38;2;108;114;128m settings.admin-appearance.update › Botble\Setting\Http\Controllers\AdminA…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/api[39m[38;2;108;114;128m ........................................ api.settings › Botble\Api › ApiController@edit[39m
+  [33mPUT[39m       [37madmin/settings/api[39m[38;2;108;114;128m ............................... api.settings.update › Botble\Api › ApiController@update[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/api/device-tokens-stats[39m[38;2;108;114;128m api.device-tokens-stats › Botble\Api › ApiController@getDeviceToke…[39m
+  [33mPOST[39m      [37madmin/settings/api/remove-service-account[39m[38;2;108;114;128m api.remove-service-account › Botble\Api › ApiController@removeS…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[33mPOST[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m [37madmin/settings/api/sanctum-token[39m[38;2;108;114;128m . api.sanctum-token.index › Botble\Api › SanctumTokenController@index[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/api/sanctum-token/create[39m[38;2;108;114;128m api.sanctum-token.create › Botble\Api › SanctumTokenController@cr…[39m
+  [33mPOST[39m      [37madmin/settings/api/sanctum-token/create[39m[38;2;108;114;128m api.sanctum-token.store › Botble\Api › SanctumTokenController@sto…[39m
+  [31mDELETE[39m    [37madmin/settings/api/sanctum-token/[39m[33m{sanctum_token}[39m[38;2;108;114;128m api.sanctum-token.destroy › Botble\Api › SanctumTokenCon…[39m
+  [33mPOST[39m      [37madmin/settings/api/send-notification[39m[38;2;108;114;128m . api.send-notification › Botble\Api › ApiController@sendNotification[39m
+  [33mPOST[39m      [37madmin/settings/api/upload-service-account[39m[38;2;108;114;128m api.upload-service-account › Botble\Api › ApiController@uploadS…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/cache[39m[38;2;108;114;128m ........ settings.cache › Botble\Setting\Http\Controllers\CacheSettingController@edit[39m
+  [33mPUT[39m       [37madmin/settings/cache/cache[39m[38;2;108;114;128m settings.cache.update › Botble\Setting\Http\Controllers\CacheSettingController…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/datatables[39m[38;2;108;114;128m settings.datatables › Botble\Setting\Http\Controllers\DataTableSettingControlle…[39m
+  [33mPUT[39m       [37madmin/settings/datatables[39m[38;2;108;114;128m settings.datatables.update › Botble\Setting\Http\Controllers\DataTableSettingCo…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/email[39m[38;2;108;114;128m ........ settings.email › Botble\Setting\Http\Controllers\EmailSettingController@edit[39m
+  [33mPUT[39m       [37madmin/settings/email[39m[38;2;108;114;128m settings.email.update › Botble\Setting\Http\Controllers\EmailSettingController@update[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/email/rules[39m[38;2;108;114;128m settings.email.rules › Botble\Setting\Http\Controllers\EmailRuleSettingControl…[39m
+  [33mPUT[39m       [37madmin/settings/email/rules[39m[38;2;108;114;128m settings.rules.update › Botble\Setting\Http\Controllers\EmailRuleSettingContro…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/email/templates[39m[38;2;108;114;128m settings.email.template › Botble\Setting\Http\Controllers\EmailTemplateSet…[39m
+  [33mPUT[39m       [37madmin/settings/email/templates[39m[38;2;108;114;128m settings.email.template.update-settings › Botble\Setting\Http\Controllers\…[39m
+  [33mPUT[39m       [37madmin/settings/email/templates/[39m[33m{type}[39m[37m/[39m[33m{module}[39m[37m/[39m[33m{template}[39m[38;2;108;114;128m settings.email.template.update › Botble\Setting…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/email/templates/[39m[33m{type}[39m[37m/[39m[33m{module}[39m[37m/[39m[33m{template}[39m[37m/edit[39m[38;2;108;114;128m settings.email.template.edit › Botble\Sett…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/email/templates/[39m[33m{type}[39m[37m/[39m[33m{module}[39m[37m/[39m[33m{template}[39m[37m/iframe[39m[38;2;108;114;128m settings.email.template.iframe › Botble\…[39m
+  [33mPOST[39m[38;2;108;114;128m|[39m[34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m [37madmin/settings/email/templates/[39m[33m{type}[39m[37m/[39m[33m{module}[39m[37m/[39m[33m{template}[39m[37m/preview[39m[38;2;108;114;128m settings.email.template.preview › B…[39m
+  [33mPOST[39m      [37madmin/settings/email/templates/[39m[33m{type}[39m[37m/[39m[33m{module}[39m[37m/[39m[33m{template}[39m[37m/restore[39m[38;2;108;114;128m settings.email.template.restore › Botbl…[39m
+  [33mPOST[39m      [37madmin/settings/email/templates/[39m[33m{type}[39m[37m/[39m[33m{module}[39m[37m/[39m[33m{template}[39m[37m/status[39m[38;2;108;114;128m settings.email.template.status.update › …[39m
+  [33mPOST[39m      [37madmin/settings/email/test/send[39m[38;2;108;114;128m settings.email.test.send › Botble\Setting\Http\Controllers\EmailTestContro…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/general[39m[38;2;108;114;128m .. settings.general › Botble\Setting\Http\Controllers\GeneralSettingController@edit[39m
+  [33mPUT[39m       [37madmin/settings/general[39m[38;2;108;114;128m settings.general.update › Botble\Setting\Http\Controllers\GeneralSettingController…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/media[39m[38;2;108;114;128m ........ settings.media › Botble\Setting\Http\Controllers\MediaSettingController@edit[39m
+  [33mPUT[39m       [37madmin/settings/media[39m[38;2;108;114;128m settings.media.update › Botble\Setting\Http\Controllers\MediaSettingController@update[39m
+  [33mPOST[39m      [37madmin/settings/media/generate-thumbnails[39m[38;2;108;114;128m settings.media.generate-thumbnails › Botble\Setting\Http\Control…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/optimize[39m[38;2;108;114;128m optimize.settings › Botble\Optimize\Http\Controllers\Settings\OptimizeSettingCont…[39m
+  [33mPUT[39m       [37madmin/settings/optimize[39m[38;2;108;114;128m optimize.settings.update › Botble\Optimize\Http\Controllers\Settings\OptimizeSett…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/options[39m[38;2;108;114;128m .... settings.options › Botble\Setting\Http\Controllers\HomeSettingController@index[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/permalink[39m[38;2;108;114;128m ................ slug.settings › Botble\Slug\Http\Controllers\SlugController@edit[39m
+  [33mPUT[39m       [37madmin/settings/permalink[39m[38;2;108;114;128m ....... slug.settings.update › Botble\Slug\Http\Controllers\SlugController@update[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/settings/website-tracking[39m[38;2;108;114;128m settings.website-tracking › Botble\Theme\Http\Controllers\WebsiteTracking…[39m
+  [33mPUT[39m       [37madmin/settings/website-tracking[39m[38;2;108;114;128m settings.website-tracking.update › Botble\Theme\Http\Controllers\WebsiteT…[39m
+  [33mPOST[39m      [37madmin/short-codes/ajax-get-admin-config/[39m[33m{key}[39m[38;2;108;114;128m short-codes.ajax-get-admin-config › Botble\Shortcode\Http\C…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/system[39m[38;2;108;114;128m ....................... system.index › Botble\Base\Http\Controllers\SystemController@getIndex[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/system/cache[39m[38;2;108;114;128m ........... system.cache › Botble\Base\Http\Controllers\CacheManagementController@index[39m
+  [33mPOST[39m      [37madmin/system/cache/clear[39m[38;2;108;114;128m system.cache.clear › Botble\Base\Http\Controllers\CacheManagementController@dest…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/system/cleanup[39m[38;2;108;114;128m ........... system.cleanup › Botble\Base\Http\Controllers\SystemController@getCleanup[39m
+  [33mPOST[39m      [37madmin/system/cleanup[39m[38;2;108;114;128m ... system.cleanup.process › Botble\Base\Http\Controllers\SystemController@getCleanup[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/system/cronjob[39m[38;2;108;114;128m ........ system.cronjob › Botble\Base\Http\Controllers\CronjobSettingController@index[39m
+  [33mPOST[39m      [37madmin/system/debug-mode/turn-off[39m[38;2;108;114;128m system.debug-mode.turn-off › Botble\Base\Http\Controllers\DebugModeContr…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[33mPOST[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m [37madmin/system/info[39m[38;2;108;114;128m ....... system.info › Botble\Base\Http\Controllers\SystemInformationController@index[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/system/info/get-addition-data[39m[38;2;108;114;128m system.info.get-addition-data › Botble\Base\Http\Controllers\SystemIn…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[33mPOST[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m [37madmin/system/roles[39m[38;2;108;114;128m .................... roles.index › Botble\ACL\Http\Controllers\RoleController@index[39m
+  [33mPOST[39m      [37madmin/system/roles/assign[39m[38;2;108;114;128m ..... roles.assign › Botble\ACL\Http\Controllers\RoleController@postAssignMember[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/system/roles/create[39m[38;2;108;114;128m ............... roles.create › Botble\ACL\Http\Controllers\RoleController@create[39m
+  [33mPOST[39m      [37madmin/system/roles/create[39m[38;2;108;114;128m ................. roles.store › Botble\ACL\Http\Controllers\RoleController@store[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/system/roles/duplicate/[39m[33m{role}[39m[38;2;108;114;128m roles.duplicate › Botble\ACL\Http\Controllers\RoleController@getDupli…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/system/roles/edit/[39m[33m{role}[39m[38;2;108;114;128m .............. roles.edit › Botble\ACL\Http\Controllers\RoleController@edit[39m
+  [33mPOST[39m      [37madmin/system/roles/edit/[39m[33m{role}[39m[38;2;108;114;128m .......... roles.update › Botble\ACL\Http\Controllers\RoleController@update[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/system/roles/json[39m[38;2;108;114;128m ............. roles.list.json › Botble\ACL\Http\Controllers\RoleController@getJson[39m
+  [31mDELETE[39m    [37madmin/system/roles/[39m[33m{role}[39m[38;2;108;114;128m ............. roles.destroy › Botble\ACL\Http\Controllers\RoleController@destroy[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/system/updater[39m[38;2;108;114;128m ........... system.updater › Botble\Base\Http\Controllers\SystemController@getUpdater[39m
+  [33mPOST[39m      [37madmin/system/updater[39m[38;2;108;114;128m ..... system.updater.post › Botble\Base\Http\Controllers\SystemController@postUpdater[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[33mPOST[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m [37madmin/system/users[39m[38;2;108;114;128m .................... users.index › Botble\ACL\Http\Controllers\UserController@index[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/system/users/create[39m[38;2;108;114;128m ............... users.create › Botble\ACL\Http\Controllers\UserController@create[39m
+  [33mPOST[39m      [37madmin/system/users/create[39m[38;2;108;114;128m ................. users.store › Botble\ACL\Http\Controllers\UserController@store[39m
+  [33mPOST[39m      [37madmin/system/users/delete-profile-image/[39m[33m{user}[39m[38;2;108;114;128m users.profile.image.destroy › Botble\ACL\Http\Controllers\…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/system/users/make-super/[39m[33m{user}[39m[38;2;108;114;128m users.make-super › Botble\ACL\Http\Controllers\UserController@makeSu…[39m
+  [33mPOST[39m      [37madmin/system/users/modify-profile-image/[39m[33m{user}[39m[38;2;108;114;128m users.profile.image › Botble\ACL\Http\Controllers\UserCont…[39m
+  [33mPUT[39m       [37madmin/system/users/password/[39m[33m{user}[39m[38;2;108;114;128m users.change-password › Botble\ACL\Http\Controllers\UserController@pos…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/system/users/profile/[39m[33m{user}[39m[38;2;108;114;128m users.profile.view › Botble\ACL\Http\Controllers\UserController@getUser…[39m
+  [33mPUT[39m       [37madmin/system/users/profile/[39m[33m{user}[39m[38;2;108;114;128m users.update-profile › Botble\ACL\Http\Controllers\UserController@postU…[39m
+  [33mPUT[39m       [37madmin/system/users/profile/[39m[33m{user}[39m[37m/preferences[39m[38;2;108;114;128m users.update-preferences › Botble\ACL\Http\Controllers\User…[39m
+  [33mPATCH[39m     [37madmin/system/users/profile/[39m[33m{user}[39m[37m/preferences[39m[38;2;108;114;128m users. › Botble\ACL\Http\Controllers\UserController@patchUp…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/system/users/remove-super/[39m[33m{user}[39m[38;2;108;114;128m users.remove-super › Botble\ACL\Http\Controllers\UserController@re…[39m
+  [31mDELETE[39m    [37madmin/system/users/[39m[33m{user}[39m[38;2;108;114;128m ............. users.destroy › Botble\ACL\Http\Controllers\UserController@destroy[39m
+  [33mPOST[39m      [37madmin/tables/bulk-actions[39m[38;2;108;114;128m table.bulk-action.dispatch › Botble\Table\Http\Controllers\TableBulkActionContr…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/tables/bulk-changes/data[39m[38;2;108;114;128m table.bulk-change.data › Botble\Table\Http\Controllers\TableBulkChangeCont…[39m
+  [33mPOST[39m      [37madmin/tables/bulk-changes/save[39m[38;2;108;114;128m table.bulk-change.save › Botble\Table\Http\Controllers\TableBulkChangeCont…[39m
+  [33mPUT[39m       [37madmin/tables/columns-visibility[39m[38;2;108;114;128m table.update-columns-visibility › Botble\Table\Http\Controllers\TableColu…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/tables/filters[39m[38;2;108;114;128m ... table.filter.input › Botble\Table\Http\Controllers\TableFilterController@__invoke[39m
+  [33mPOST[39m      [37madmin/theme/active[39m[38;2;108;114;128m ........ theme.active › Botble\Theme\Http\Controllers\ThemeController@postActivateTheme[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/theme/all[39m[38;2;108;114;128m ........................ theme.index › Botble\Theme\Http\Controllers\ThemeController@index[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/theme/custom-css[39m[38;2;108;114;128m ..... theme.custom-css › Botble\Theme\Http\Controllers\ThemeController@getCustomCss[39m
+  [33mPOST[39m      [37madmin/theme/custom-css[39m[38;2;108;114;128m theme.custom-css.post › Botble\Theme\Http\Controllers\ThemeController@postCustomCss[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/theme/custom-html[39m[38;2;108;114;128m .. theme.custom-html › Botble\Theme\Http\Controllers\ThemeController@getCustomHtml[39m
+  [33mPOST[39m      [37madmin/theme/custom-html[39m[38;2;108;114;128m theme.custom-html.post › Botble\Theme\Http\Controllers\ThemeController@postCustom…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/theme/custom-js[39m[38;2;108;114;128m ........ theme.custom-js › Botble\Theme\Http\Controllers\ThemeController@getCustomJs[39m
+  [33mPOST[39m      [37madmin/theme/custom-js[39m[38;2;108;114;128m .. theme.custom-js.post › Botble\Theme\Http\Controllers\ThemeController@postCustomJs[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/theme/options/[39m[33m{id?}[39m[38;2;108;114;128m ....... theme.options › Botble\Theme\Http\Controllers\ThemeController@getOptions[39m
+  [33mPOST[39m      [37madmin/theme/options/[39m[33m{id?}[39m[38;2;108;114;128m .. theme.options.post › Botble\Theme\Http\Controllers\ThemeController@postUpdate[39m
+  [33mPOST[39m      [37madmin/theme/remove[39m[38;2;108;114;128m .......... theme.remove › Botble\Theme\Http\Controllers\ThemeController@postRemoveTheme[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/theme/robots-txt[39m[38;2;108;114;128m ..... theme.robots-txt › Botble\Theme\Http\Controllers\ThemeController@getRobotsTxt[39m
+  [33mPOST[39m      [37madmin/theme/robots-txt[39m[38;2;108;114;128m theme.robots-txt.post › Botble\Theme\Http\Controllers\ThemeController@postRobotsTxt[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/toggle-theme-mode[39m[38;2;108;114;128m toggle-theme-mode › Botble\Base\Http\Controllers\ToggleThemeModeController@__invo…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/tools/data-synchronize[39m[38;2;108;114;128m tools.data-synchronize › Botble\DataSynchronize › DataSynchronizeController@…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/widgets[39m[38;2;108;114;128m ...................... widgets.index › Botble\Widget\Http\Controllers\WidgetController@index[39m
+  [31mDELETE[39m    [37madmin/widgets/delete[39m[38;2;108;114;128m ........... widgets.destroy › Botble\Widget\Http\Controllers\WidgetController@destroy[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/widgets/hide[39m[38;2;108;114;128m dashboard.hide_widget › Botble\Dashboard\Http\Controllers\DashboardController@getHideW…[39m
+  [33mPOST[39m      [37madmin/widgets/hides[39m[38;2;108;114;128m dashboard.hide_widgets › Botble\Dashboard\Http\Controllers\DashboardController@postHi…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37madmin/widgets/load-widget[39m[38;2;108;114;128m ..................... Botble\Widget\Http\Controllers\WidgetController@showWidget[39m
+  [33mPOST[39m      [37madmin/widgets/order[39m[38;2;108;114;128m dashboard.update_widget_order › Botble\Dashboard\Http\Controllers\DashboardController…[39m
+  [33mPOST[39m      [37madmin/widgets/save-widgets-to-sidebar[39m[38;2;108;114;128m widgets.save_widgets_sidebar › Botble\Widget\Http\Controllers\Widge…[39m
+  [33mPOST[39m      [37madmin/widgets/setting-item[39m[38;2;108;114;128m dashboard.edit_widget_setting_item › Botble\Dashboard\Http\Controllers\Dashboa…[39m
+  [33mPOST[39m      [37majax/render-ui-blocks[39m[38;2;108;114;128m public.ajax.render-ui-block › Botble\Shortcode\Http\Controllers\ShortcodeController…[39m
+  [33mPOST[39m      [37majax/slug/create[39m[38;2;108;114;128m ......................... slug.create › Botble\Slug\Http\Controllers\SlugController@store[39m
+  [33mPOST[39m      [37mapi/v1/device-tokens[39m[38;2;108;114;128m ............................................ Botble\Api › DeviceTokenController@store[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37mapi/v1/device-tokens[39m[38;2;108;114;128m ............................................ Botble\Api › DeviceTokenController@index[39m
+  [31mDELETE[39m    [37mapi/v1/device-tokens/by-token[39m[38;2;108;114;128m .......................... Botble\Api › DeviceTokenController@destroyByToken[39m
+  [33mPUT[39m       [37mapi/v1/device-tokens/[39m[33m{id}[39m[38;2;108;114;128m ...................................... Botble\Api › DeviceTokenController@update[39m
+  [31mDELETE[39m    [37mapi/v1/device-tokens/[39m[33m{id}[39m[38;2;108;114;128m ..................................... Botble\Api › DeviceTokenController@destroy[39m
+  [33mPOST[39m      [37mapi/v1/device-tokens/[39m[33m{id}[39m[37m/deactivate[39m[38;2;108;114;128m ....................... Botble\Api › DeviceTokenController@deactivate[39m
+  [33mPOST[39m      [37mapi/v1/email/check[39m[38;2;108;114;128m ...................................... Botble\Api › AuthenticationController@checkEmail[39m
+  [33mPOST[39m      [37mapi/v1/login[39m[38;2;108;114;128m ................................................. Botble\Api › AuthenticationController@login[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37mapi/v1/logout[39m[38;2;108;114;128m ............................................... Botble\Api › AuthenticationController@logout[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37mapi/v1/me[39m[38;2;108;114;128m ...................................................... Botble\Api › ProfileController@getProfile[39m
+  [33mPUT[39m       [37mapi/v1/me[39m[38;2;108;114;128m ................................................... Botble\Api › ProfileController@updateProfile[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37mapi/v1/notifications[39m[38;2;108;114;128m ........................................... Botble\Api › NotificationController@index[39m
+  [33mPOST[39m      [37mapi/v1/notifications/mark-all-read[39m[38;2;108;114;128m ..................... Botble\Api › NotificationController@markAllAsRead[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37mapi/v1/notifications/stats[39m[38;2;108;114;128m .................................. Botble\Api › NotificationController@getStats[39m
+  [31mDELETE[39m    [37mapi/v1/notifications/[39m[33m{id}[39m[38;2;108;114;128m .................................... Botble\Api › NotificationController@destroy[39m
+  [33mPOST[39m      [37mapi/v1/notifications/[39m[33m{id}[39m[37m/clicked[39m[38;2;108;114;128m ...................... Botble\Api › NotificationController@markAsClicked[39m
+  [33mPOST[39m      [37mapi/v1/notifications/[39m[33m{id}[39m[37m/read[39m[38;2;108;114;128m ............................ Botble\Api › NotificationController@markAsRead[39m
+  [33mPOST[39m      [37mapi/v1/password/forgot[39m[38;2;108;114;128m .......................... Botble\Api › ForgotPasswordController@sendResetLinkEmail[39m
+  [33mPOST[39m      [37mapi/v1/register[39m[38;2;108;114;128m ........................................... Botble\Api › AuthenticationController@register[39m
+  [33mPOST[39m      [37mapi/v1/resend-email-verification[39m[38;2;108;114;128m .............................. Botble\Api › VerificationController@resend[39m
+  [33mPOST[39m      [37mapi/v1/resend-verify-account-email[39m[38;2;108;114;128m ............................ Botble\Api › VerificationController@resend[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37mapi/v1/settings[39m[38;2;108;114;128m ............................................... Botble\Api › ProfileController@getSettings[39m
+  [33mPUT[39m       [37mapi/v1/settings[39m[38;2;108;114;128m ............................................ Botble\Api › ProfileController@updateSettings[39m
+  [33mPOST[39m      [37mapi/v1/update/avatar[39m[38;2;108;114;128m ......................................... Botble\Api › ProfileController@updateAvatar[39m
+  [33mPUT[39m       [37mapi/v1/update/password[39m[38;2;108;114;128m ..................................... Botble\Api › ProfileController@updatePassword[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[33mPOST[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m [37minstall/accounts[39m[38;2;108;114;128m installers.accounts.index › Botble\Installer\Http\Controllers\AccountController@index[39m
+  [33mPOST[39m      [37minstall/accounts/create[39m[38;2;108;114;128m installers.accounts.store › Botble\Installer\Http\Controllers\AccountController@s…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[33mPOST[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m [37minstall/environments[39m[38;2;108;114;128m installers.environments.index › Botble\Installer\Http\Controllers\EnvironmentCon…[39m
+  [33mPOST[39m      [37minstall/environments/create[39m[38;2;108;114;128m installers.environments.store › Botble\Installer\Http\Controllers\Environment…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37minstall/final[39m[38;2;108;114;128m ................. installers.final › Botble\Installer\Http\Controllers\FinalController@index[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[33mPOST[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m [37minstall/requirements[39m[38;2;108;114;128m installers.requirements.index › Botble\Installer\Http\Controllers\RequirementCon…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37minstall/themes[39m[38;2;108;114;128m ......... installers.themes.index › Botble\Installer\Http\Controllers\ThemeController@index[39m
+  [33mPOST[39m      [37minstall/themes[39m[38;2;108;114;128m ......... installers.themes.store › Botble\Installer\Http\Controllers\ThemeController@store[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37minstall/welcome[39m[38;2;108;114;128m ........... installers.welcome › Botble\Installer\Http\Controllers\InstallController@index[39m
+  [33mPOST[39m      [37minstall/welcome/next[39m[38;2;108;114;128m .. installers.welcome.next › Botble\Installer\Http\Controllers\InstallController@next[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37mmedia/files/[39m[33m{hash}[39m[37m/[39m[33m{id}[39m[38;2;108;114;128m .... media.indirect.url › Botble\Media\Http\Controllers\PublicMediaController@show[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37msanctum/csrf-cookie[39m[38;2;108;114;128m .................... sanctum.csrf-cookie › Laravel\Sanctum › CsrfCookieController@show[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37msitemap.xml[39m[38;2;108;114;128m ................... public.sitemap › Botble\Theme\Http\Controllers\PublicController@getSiteMap[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37mstorage/[39m[33m{path}[39m[38;2;108;114;128m storage.local › vendor/laravel/framework/src/Illuminate/Filesystem/FilesystemServiceProvid…[39m
+  [33mPUT[39m       [37mstorage/[39m[33m{path}[39m[38;2;108;114;128m storage.local.upload › vendor/laravel/framework/src/Illuminate/Filesystem/FilesystemServic…[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [37mup[39m[38;2;108;114;128m ........... vendor/laravel/framework/src/Illuminate/Foundation/Configuration/ApplicationBuilder.php:219[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [33m{key}[39m[37m.[39m[33m{extension}[39m[38;2;108;114;128m .. public.sitemap.index › Botble\Theme\Http\Controllers\PublicController@getSiteMapIndex[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [33m{prefix}[39m[37m/[39m[33m{slug?}[39m[38;2;108;114;128m ........................ Botble\Theme\Http\Controllers\PublicController@getViewWithPrefix[39m
+  [34mGET[39m[38;2;108;114;128m|[39m[38;2;108;114;128mHEAD[39m  [33m{slug?}[39m[38;2;108;114;128m ........................... public.single › Botble\Theme\Http\Controllers\PublicController@getView[39m
+
+                                                                                                  [34;1mShowing [208] routes[39;22m
+
