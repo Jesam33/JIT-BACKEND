@@ -14,5 +14,11 @@ class AgentCommission extends Model
     protected $casts = [
         'course_price' => 'decimal:2',
         'commission_amount' => 'decimal:2',
+        'paid_at' => 'datetime',
     ];
+
+    public function agent()
+    {
+        return $this->belongsTo(Agent::class);
+    }
 }

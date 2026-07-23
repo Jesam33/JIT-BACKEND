@@ -223,7 +223,7 @@ class StudentAuthController extends BaseLmsController
         $token = $this->createPasswordResetToken('student', $student->email);
         $link = $this->buildResetLink('student', $student->email, $token);
 
-        Mail::to($student->email)->send(new LmsPasswordResetMail($student->email, $link));
+        Mail::to($student->email)->send(new LmsPasswordResetMail($student->first_name, 'Student Portal', $link));
 
         return response()->json(['message' => 'If that email exists, a reset link has been sent.']);
     }

@@ -73,6 +73,7 @@ class StaffClassroomController extends BaseLmsController
         ]);
 
         $validated['teacher_id'] = $session->user_id;
+        $this->maybeFillPasscode($validated);
 
         $classroom = LmsClassroom::query()->create($validated);
 
@@ -105,6 +106,7 @@ class StaffClassroomController extends BaseLmsController
             'session_thumbnail_url' => ['nullable', 'string', 'max:2048'],
         ]);
 
+        $this->maybeFillPasscode($validated);
         $classroom->update($validated);
 
         return response()->json($classroom);

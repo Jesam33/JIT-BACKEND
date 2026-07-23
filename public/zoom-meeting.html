@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Zoom Meeting</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #0f0f13; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+    #loading { display: flex; align-items: center; justify-content: center; height: 100vh; color: #e4e4e7; font-size: 16px; flex-direction: column; gap: 18px; }
+    #loading .spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.08); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading .sub { font-size: 13px; color: rgba(255,255,255,0.45); }
+    #error { display: none; align-items: center; justify-content: center; height: 100vh; color: #fca5a5; font-size: 15px; flex-direction: column; gap: 12px; padding: 24px; text-align: center; }
+    #error .icon { font-size: 32px; }
+    #error .retry { margin-top: 8px; padding: 10px 24px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.15); background: transparent; color: #e4e4e7; font-size: 14px; cursor: pointer; }
+    #error .retry:hover { background: rgba(255,255,255,0.06); }
+    #zoom-container { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="error">
+    <div class="icon">!</div>
+    <div id="error-msg">Could not join the meeting.</div>
+    <button class="retry" onclick="location.reload()">Try Again</button>
+  </div>
+  <div id="zoom-container">
+    <div id="loading">
+      <div class="spinner"></div>
+      <span>Joining meeting...</span>
+      <div class="sub">Connecting to Zoom</div>
+    </div>
+  </div>
+
+  <script src="https://source.zoom.us/zoom-meetingsdk/6.2.0/lib/js/zoom-meetingsdk.js"></script>
+  <script>
+    var params = new URLSearchParams(window.location.search);
+    var signature = params.get('signature');
+    var sdkKey = params.get('sdkKey');
+    var meetingNumber = params.get('meetingNumber');
+    var passcode = params.get('passcode') || '';
+    var userName = params.get('userName') || 'Student';
+    var userEmail = params.get('userEmail') || '';
+
+    function postToParent(type, detail) {
+      try {
+        window.parent.postMessage({ type: type, detail: detail }, '*');
+      } catch (e) {}
+    }
+
+    function showError(msg) {
+      document.getElementById('zoom-container').style.display = 'none';
+      document.getElementById('error').style.display = 'flex';
+      document.getElementById('error-msg').textContent = msg || 'Could not join the meeting.';
+      postToParent('zoom-error', msg);
+    }
+
+    var meetingNumberParsed = parseInt(String(meetingNumber).replace(/\s+/g, ''), 10);
+
+    if (!signature || !sdkKey || !meetingNumberParsed || isNaN(meetingNumberParsed)) {
+      showError('Missing or invalid meeting parameters');
+    } else {
+      try {
+        ZoomMtg.setZoomJSLib('https://source.zoom.us/zoom-meetingsdk/6.2.0/lib', '/av');
+        ZoomMtg.preLoadWasm();
+        ZoomMtg.prepareJssdk();
+
+        ZoomMtg.init({
+          leaveUrl: 'about:blank',
+          isSupportAV: true,
+          success: function () {
+            var loadEl = document.getElementById('loading');
+            if (loadEl) loadEl.remove();
+            ZoomMtg.join({
+              meetingNumber: meetingNumberParsed,
+              userName: userName,
+              signature: signature,
+              sdkKey: sdkKey,
+              passcode: passcode,
+              success: function () {
+                postToParent('zoom-joined');
+              },
+              error: function (err) {
+                var msg = typeof err === 'string' ? err : (err && err.message ? err.message : 'Failed to join meeting');
+                showError(msg);
+              }
+            });
+          },
+          error: function (err) {
+            var msg = typeof err === 'string' ? err : (err && err.message ? err.message : 'Failed to initialize Zoom');
+            showError(msg);
+          }
+        });
+      } catch (err) {
+        showError(err && err.message ? err.message : 'Unexpected error');
+      }
+    }
+
+    window.addEventListener('beforeunload', function () {
+      postToParent('zoom-leave');
+    });
+  </script>
+</body>
+</html>

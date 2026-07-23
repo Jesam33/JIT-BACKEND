@@ -39,7 +39,7 @@ class PaystackService
         return $client;
     }
 
-    public function initializeTransaction(string $email, float $amount, string $reference, array $metadata = []): array
+    public function initializeTransaction(string $email, float $amount, string $reference, array $metadata = [], ?string $callbackUrl = null): array
     {
         $client = $this->client();
 
@@ -47,7 +47,9 @@ class PaystackService
             return ['status' => false, 'message' => 'Payment gateway not configured.'];
         }
 
-        $callbackUrl = rtrim((string) env('FRONTEND_URL', 'http://127.0.0.1:3000'), '/') . '/institute/verify?reference=' . $reference;
+        if ($callbackUrl === null) {
+            $callbackUrl = rtrim((string) env('FRONTEND_URL', 'http://127.0.0.1:3000'), '/') . '/institute/verify?reference=' . $reference;
+        }
 
         $response = $client->post($this->baseUrl . '/transaction/initialize', [
             'email' => $email,

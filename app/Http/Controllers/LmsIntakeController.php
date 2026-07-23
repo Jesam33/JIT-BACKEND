@@ -100,6 +100,7 @@ class LmsIntakeController extends Controller
             'whatsapp' => ['required', 'string', 'max:40'],
             'course_id' => ['required', 'integer', 'exists:lms_courses,id'],
             'learning_mode' => ['required', 'in:live,pre_recorded'],
+            'referral_code' => ['nullable', 'string', 'max:20'],
         ]);
 
         $course = LmsCourse::query()->findOrFail($validated['course_id']);
@@ -109,6 +110,18 @@ class LmsIntakeController extends Controller
                 'message' => 'This course is full. Please join the waitlist.',
                 'is_full' => true,
             ], 422);
+        }
+
+        $referredByAgentId = null;
+        $price = (float) $course->price;
+        if (! empty($validated['referral_code'])) {
+            $agent = \App\Models\Agent::where('referral_code', $validated['referral_code'])
+                ->where('status', 'approved')
+                ->first();
+            if ($agent) {
+                $referredByAgentId = $agent->id;
+                $price = round($price * 0.95, 2);
+            }
         }
 
         $registration = TrainingRegistration::query()->create([
@@ -122,8 +135,9 @@ class LmsIntakeController extends Controller
             'course_id' => $course->id,
             'course_name' => $course->title,
             'learning_mode' => $validated['learning_mode'],
-            'course_price' => $course->price,
+            'course_price' => $price,
             'status' => 'pending',
+            'referred_by_agent_id' => $referredByAgentId,
         ]);
 
         return response()->json([
@@ -131,7 +145,7 @@ class LmsIntakeController extends Controller
             'registration_id' => $registration->id,
             'course' => [
                 'title' => $course->title,
-                'price' => (float) $course->price,
+                'price' => $price,
             ],
         ], 201);
     }
@@ -163,6 +177,14 @@ class LmsIntakeController extends Controller
                 return $this->handleZeroPayment($registration);
             }
 
+            $frontendUrl = rtrim((string) env('FRONTEND_URL', 'http://127.0.0.1:3000'), '/');
+
+            if ($registration->registered_by_agent_id || $registration->referred_by_agent_id) {
+                $callbackUrl = $frontendUrl . '/lms/agent/verify?reference=' . $reference;
+            } else {
+                $callbackUrl = $frontendUrl . '/institute/verify?reference=' . $reference;
+            }
+
             $response = $paystack->initializeTransaction(
                 $registration->email,
                 (float) $registration->course_price,
@@ -170,7 +192,8 @@ class LmsIntakeController extends Controller
                 [
                     'registration_id' => $registration->id,
                     'course_name' => $registration->course_name,
-                ]
+                ],
+                $callbackUrl
             );
 
             Payment::query()->create([
@@ -265,14 +288,17 @@ class LmsIntakeController extends Controller
     {
         $token = Str::random(80);
 
-        $student = LmsStudent::query()->create([
-            'first_name' => $registration->first_name,
-            'last_name' => $registration->last_name,
-            'email' => $registration->email,
-            'selected_course_id' => $registration->course_id,
-            'learning_mode' => $registration->learning_mode,
-            'onboarding_completed' => false,
-        ]);
+        $student = LmsStudent::query()->updateOrCreate(
+            ['email' => $registration->email],
+            [
+                'first_name' => $registration->first_name,
+                'last_name' => $registration->last_name,
+                'selected_course_id' => $registration->course_id,
+                'learning_mode' => $registration->learning_mode,
+                'onboarding_completed' => false,
+                'referred_by_agent_id' => $registration->referred_by_agent_id ?? $registration->registered_by_agent_id,
+            ]
+        );
 
         $setupToken = Str::random(64);
 
@@ -293,6 +319,17 @@ class LmsIntakeController extends Controller
                 'commission_amount' => round($fullPrice * 0.10, 2),
                 'status' => 'pending',
                 'type' => 'referral',
+                'notes' => "Student: {$registration->first_name} {$registration->last_name}, Course: {$registration->course_name}",
+            ]);
+        } elseif ($registration->registered_by_agent_id) {
+            $fullPrice = (float) $registration->course_price;
+            AgentCommission::create([
+                'agent_id' => $registration->registered_by_agent_id,
+                'enrollment_id' => null,
+                'course_price' => round($fullPrice, 2),
+                'commission_amount' => round($fullPrice * 0.10, 2),
+                'status' => 'pending',
+                'type' => 'direct',
                 'notes' => "Student: {$registration->first_name} {$registration->last_name}, Course: {$registration->course_name}",
             ]);
         }
@@ -337,6 +374,7 @@ class LmsIntakeController extends Controller
                 'selected_course_id' => $registration->course_id,
                 'learning_mode' => $registration->learning_mode,
                 'onboarding_completed' => false,
+                'referred_by_agent_id' => $registration->referred_by_agent_id ?? $registration->registered_by_agent_id,
             ]
         );
 
@@ -351,6 +389,17 @@ class LmsIntakeController extends Controller
                 'commission_amount' => round($fullPrice * 0.10, 2),
                 'status' => 'pending',
                 'type' => 'referral',
+                'notes' => "Student: {$registration->first_name} {$registration->last_name}, Course: {$registration->course_name}",
+            ]);
+        } elseif ($registration->registered_by_agent_id) {
+            $fullPrice = (float) $registration->course_price;
+            AgentCommission::create([
+                'agent_id' => $registration->registered_by_agent_id,
+                'enrollment_id' => null,
+                'course_price' => round($fullPrice, 2),
+                'commission_amount' => round($fullPrice * 0.10, 2),
+                'status' => 'pending',
+                'type' => 'direct',
                 'notes' => "Student: {$registration->first_name} {$registration->last_name}, Course: {$registration->course_name}",
             ]);
         }

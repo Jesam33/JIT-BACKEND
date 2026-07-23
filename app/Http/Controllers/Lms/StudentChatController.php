@@ -107,6 +107,30 @@ class StudentChatController extends BaseLmsController
         ]);
     }
 
+    public function markGroupRead(Request $request): JsonResponse
+    {
+        $this->ensureLmsEnabled();
+        $session = $this->sessionFromRequest($request, 'student');
+        if (! $session) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+        [$track, $groupChat] = $this->ensureStudentTrackContext($session->user_id);
+        $this->markGroupAsRead($session->user_id, $groupChat->id);
+        return response()->json(['ok' => true]);
+    }
+
+    public function markDmRead(Request $request): JsonResponse
+    {
+        $this->ensureLmsEnabled();
+        $session = $this->sessionFromRequest($request, 'student');
+        if (! $session) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+        [$track, $groupChat, $dmThread] = $this->ensureStudentTrackContext($session->user_id);
+        $this->markDmAsRead($session->user_id, $dmThread->id);
+        return response()->json(['ok' => true]);
+    }
+
     public function messages(Request $request): JsonResponse
     {
         $this->ensureLmsEnabled();

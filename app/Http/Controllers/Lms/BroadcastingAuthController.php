@@ -109,7 +109,7 @@ class BroadcastingAuthController extends Controller
             if (! $thread) return false;
 
             if ($user instanceof LmsTeacher) {
-                return (int) $thread->teacher_id === $user->id;
+                return (int) ($thread->instructor_id ?? $thread->teacher_id) === $user->id;
             }
 
             return (int) $thread->student_id === $user->id;

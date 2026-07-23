@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Lms;
 
 use App\Mail\AgentApplicationApprovedMail;
+use App\Mail\AgentWithdrawalRequestedMail;
+use App\Mail\AgentApplicationAcknowledgedMail;
 use App\Mail\AgentApplicationSubmittedMail;
+use App\Mail\LmsPasswordResetMail;
 use App\Models\Agent;
 use App\Models\AgentCommission;
 use App\Models\AgentNotification;
@@ -82,7 +85,7 @@ class AgentController extends BaseLmsController
                     . '/agents';
                 Mail::to($adminEmail)->send(new AgentApplicationSubmittedMail($agent, $adminUrl));
             }
-            Mail::to($agent->email)->send(new \App\Mail\AgentApplicationSubmittedMail($agent, ''));
+            Mail::to($agent->email)->send(new \App\Mail\AgentApplicationAcknowledgedMail($agent));
         }
 
         return response()->json(['message' => 'Application submitted successfully. You will receive an email once reviewed.']);
@@ -120,6 +123,36 @@ class AgentController extends BaseLmsController
         return response()->json($this->agentOrFail($request));
     }
 
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $agent = $this->agentOrFail($request);
+
+        $validated = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'phone' => ['sometimes', 'string', 'max:40'],
+            'home_address' => ['sometimes', 'string'],
+            'bank_name' => ['sometimes', 'string', 'max:255'],
+            'account_number' => ['sometimes', 'string', 'max:20'],
+            'account_name' => ['sometimes', 'string', 'max:255'],
+        ]);
+
+        $agent->update($validated);
+
+        return response()->json(['message' => 'Profile updated.', 'agent' => $agent]);
+    }
+
+    public function uploadAvatar(Request $request): JsonResponse
+    {
+        $agent = $this->agentOrFail($request);
+
+        $request->validate(['file' => ['required', 'image', 'max:2048']]);
+
+        $path = $request->file('file')->store('profile-photos', 'public');
+        $agent->update(['avatar' => asset('storage/' . $path)]);
+
+        return response()->json(['url' => $agent->avatar]);
+    }
+
     // --- Dashboard ---
 
     public function dashboard(Request $request): JsonResponse
@@ -128,9 +161,25 @@ class AgentController extends BaseLmsController
 
         $totalReferred = LmsStudent::where('referred_by_agent_id', $agent->id)->count();
         $totalEnrollments = AgentCommission::where('agent_id', $agent->id)->count();
-        $totalCommission = AgentCommission::where('agent_id', $agent->id)->sum('commission_amount');
-        $pendingCommission = AgentCommission::where('agent_id', $agent->id)->where('status', 'pending')->sum('commission_amount');
-        $paidCommission = AgentCommission::where('agent_id', $agent->id)->where('status', 'paid')->sum('commission_amount');
+
+        $totalEarned = AgentCommission::where('agent_id', $agent->id)
+            ->where('type', '!=', 'withdrawal')
+            ->sum('commission_amount');
+
+        $pendingCommission = AgentCommission::where('agent_id', $agent->id)
+            ->where('status', 'pending')
+            ->where('type', '!=', 'withdrawal')
+            ->sum('commission_amount');
+
+        $pendingWithdrawalAmount = AgentCommission::where('agent_id', $agent->id)
+            ->where('status', 'withdrawal_requested')
+            ->where('type', 'withdrawal')
+            ->sum('commission_amount');
+
+        $paidCommission = abs(AgentCommission::where('agent_id', $agent->id)
+            ->where('type', 'withdrawal')
+            ->where('status', 'paid')
+            ->sum('commission_amount'));
 
         $recentReferrals = LmsStudent::where('referred_by_agent_id', $agent->id)
             ->with('enrollments.course')
@@ -145,15 +194,31 @@ class AgentController extends BaseLmsController
                 'enrolled_at' => $s->enrollments->first()?->created_at?->toIso8601String(),
             ]);
 
+        $recentTransactions = AgentCommission::where('agent_id', $agent->id)
+            ->latest()
+            ->take(20)
+            ->get()
+            ->map(fn($c) => [
+                'id' => $c->id,
+                'amount' => (float) $c->commission_amount,
+                'type' => $c->type,
+                'status' => $c->status,
+                'notes' => $c->notes,
+                'created_at' => $c->created_at->toIso8601String(),
+            ]);
+
         return response()->json([
             'total_referred' => $totalReferred,
             'total_enrollments' => $totalEnrollments,
-            'total_commission' => (float) $totalCommission,
+            'total_earned' => (float) $totalEarned,
             'pending_commission' => (float) $pendingCommission,
+            'pending_withdrawal' => (float) abs($pendingWithdrawalAmount),
             'paid_commission' => (float) $paidCommission,
-            'balance' => (float) ($totalCommission - $paidCommission),
+            'balance' => (float) ($totalEarned - abs($pendingWithdrawalAmount) - $paidCommission),
             'referral_code' => $agent->referral_code,
+            'has_bank_details' => !empty($agent->bank_name) && !empty($agent->account_number) && !empty($agent->account_name),
             'recent_referrals' => $recentReferrals,
+            'recent_transactions' => $recentTransactions,
         ]);
     }
 
@@ -166,62 +231,54 @@ class AgentController extends BaseLmsController
         $validated = $request->validate([
             'first_name' => 'required|string|max:120',
             'last_name' => 'required|string|max:120',
+            'date_of_birth' => 'required|date',
+            'qualification_level' => 'required|string|max:255',
             'email' => 'required|email|max:255',
-            'phone' => 'required|string|max:40',
+            'phone_number' => 'required|string|max:40',
+            'whatsapp' => 'required|string|max:40',
             'course_id' => 'required|integer|exists:lms_courses,id',
+            'learning_mode' => 'required|in:live,pre_recorded',
         ]);
 
         $course = LmsCourse::findOrFail($validated['course_id']);
-        $coursePrice = (float) ($course->price ?? 0);
 
-        DB::beginTransaction();
-        try {
-            $student = LmsStudent::firstOrCreate(
-                ['email' => $validated['email']],
-                [
-                    'first_name' => $validated['first_name'],
-                    'last_name' => $validated['last_name'],
-                    'phone' => $validated['phone'],
-                    'referred_by_agent_id' => $agent->id,
-                ]
-            );
-
-            $track = LmsTrack::where('course_id', $course->id)
-                ->where('status', 'active')
-                ->first();
-
-            if ($track) {
-                LmsEnrollment::firstOrCreate([
-                    'student_id' => $student->id,
-                    'track_id' => $track->id,
-                ]);
-            }
-
-            AgentCommission::create([
-                'agent_id' => $agent->id,
-                'enrollment_id' => null,
-                'course_price' => $coursePrice,
-                'commission_amount' => round($coursePrice * 0.10, 2),
-                'status' => 'pending',
-                'type' => 'direct',
-            ]);
-
-            AgentNotification::create([
-                'agent_id' => $agent->id,
-                'type' => 'student_registered',
-                'title' => 'Student Registered',
-                'body' => "You registered {$student->first_name} {$student->last_name} for {$course->title}.",
-                'reference_type' => 'student',
-                'reference_id' => $student->id,
-            ]);
-
-            DB::commit();
-
-            return response()->json(['message' => 'Student registered successfully.', 'student' => $student]);
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return response()->json(['message' => 'Failed to register student.'], 500);
+        if ($course->isFull()) {
+            return response()->json(['message' => 'This course is full.', 'is_full' => true], 422);
         }
+
+        $registration = \App\Models\TrainingRegistration::create([
+            'first_name' => $validated['first_name'],
+            'last_name' => $validated['last_name'],
+            'date_of_birth' => $validated['date_of_birth'],
+            'qualification_level' => $validated['qualification_level'],
+            'email' => $validated['email'],
+            'phone_number' => $validated['phone_number'],
+            'whatsapp' => $validated['whatsapp'],
+            'course_id' => $course->id,
+            'course_name' => $course->title,
+            'learning_mode' => $validated['learning_mode'],
+            'course_price' => (float) $course->price,
+            'status' => 'pending',
+            'registered_by_agent_id' => $agent->id,
+        ]);
+
+        AgentNotification::create([
+            'agent_id' => $agent->id,
+            'type' => 'student_registered',
+            'title' => 'Student Registered',
+            'body' => "Registration created for {$registration->first_name} {$registration->last_name} — {$course->title}.",
+            'reference_type' => 'registration',
+            'reference_id' => $registration->id,
+        ]);
+
+        return response()->json([
+            'message' => 'Registration created. Proceed to payment.',
+            'registration_id' => $registration->id,
+            'course' => [
+                'title' => $course->title,
+                'price' => (float) $course->price,
+            ],
+        ], 201);
     }
 
     // --- Available Courses for Agent ---
@@ -242,6 +299,46 @@ class AgentController extends BaseLmsController
         $items = AgentCommission::where('agent_id', $agent->id)
             ->latest()
             ->paginate(20);
+
+        return response()->json($items);
+    }
+
+    public function registrations(Request $request): JsonResponse
+    {
+        $agent = $this->agentOrFail($request);
+
+        $registrations = \App\Models\TrainingRegistration::where(function ($q) use ($agent) {
+            $q->where('registered_by_agent_id', $agent->id)
+              ->orWhere('referred_by_agent_id', $agent->id);
+        })
+        ->with('course')
+        ->latest()
+        ->paginate(50);
+
+        $items = $registrations->through(function ($r) use ($agent) {
+            $payment = \App\Models\Payment::where('registration_id', $r->id)->first();
+            $commission = \App\Models\AgentCommission::where('agent_id', $agent->id)
+                ->where('enrollment_id', $r->id)
+                ->first();
+            $student = \App\Models\LmsStudent::where('training_registration_id', $r->id)->first();
+            $enrollment = $student ? \App\Models\LmsEnrollment::where('student_id', $student->id)->first() : null;
+
+            return [
+                'id' => $r->id,
+                'name' => $r->first_name . ' ' . $r->last_name,
+                'email' => $r->email,
+                'phone' => $r->phone_number,
+                'course' => $r->course?->title ?? $r->course_name,
+                'type' => $r->registered_by_agent_id === $agent->id ? 'direct' : 'referral',
+                'status' => $r->status,
+                'enrolled' => $student && $enrollment,
+                'student_id' => $student?->id,
+                'payment_status' => $payment?->status ?? 'none',
+                'commission' => $commission ? (float) $commission->commission_amount : 0,
+                'commission_status' => $commission?->status ?? null,
+                'created_at' => $r->created_at->toIso8601String(),
+            ];
+        });
 
         return response()->json($items);
     }
@@ -270,10 +367,6 @@ class AgentController extends BaseLmsController
             return response()->json(['message' => 'No pending commissions to withdraw.'], 400);
         }
 
-        AgentCommission::where('agent_id', $agent->id)
-            ->where('status', 'pending')
-            ->update(['status' => 'withdrawal_requested']);
-
         AgentCommission::create([
             'agent_id' => $agent->id,
             'enrollment_id' => null,
@@ -284,7 +377,26 @@ class AgentController extends BaseLmsController
             'notes' => "Withdrawal request for ₦" . number_format($pendingCommission, 2),
         ]);
 
-        return response()->json(['message' => 'Withdrawal requested. You will be contacted for payout.']);
+        $this->sendWithdrawalEmail($agent, $pendingCommission);
+
+        return response()->json(['message' => 'Withdrawal requested. The admin will process your payout.']);
+    }
+
+    private function sendWithdrawalEmail(\App\Models\Agent $agent, float $amount): void
+    {
+        $adminEmail = env('TRAINING_ADMIN_EMAIL');
+        if (!$adminEmail) return;
+
+        $adminUrl = rtrim(env('APP_URL', 'http://127.0.0.1:8000'), '/')
+            . '/' . trim(env('ADMIN_DIR', 'admin'), '/')
+            . '/lms/agents/withdrawals';
+
+        try {
+            \Illuminate\Support\Facades\Mail::to($adminEmail)
+                ->send(new \App\Mail\AgentWithdrawalRequestedMail($agent, $amount, $adminUrl));
+        } catch (\Throwable $e) {
+            // silently log — email must not break the withdrawal
+        }
     }
 
     // --- Notifications ---
@@ -377,4 +489,53 @@ class AgentController extends BaseLmsController
 
         return response()->json(['message' => 'Agent rejected.']);
     }
+
+    // --- Password Reset ---
+
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $agent = Agent::where('email', $validated['email'])->first();
+
+        if (!$agent) {
+            return response()->json(['message' => 'If that email exists, a reset link has been sent.']);
+        }
+
+        $token = $this->createPasswordResetToken('agent', $agent->email);
+        $link = $this->buildResetLink('agent', $agent->email, $token);
+
+        \Illuminate\Support\Facades\Mail::to($agent->email)->send(new LmsPasswordResetMail($agent->name, 'Agent Portal', $link));
+
+        return response()->json(['message' => 'If that email exists, a reset link has been sent.']);
+    }
+
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => 'required|email',
+            'token' => 'required|string',
+            'password' => 'required|string|min:8',
+        ]);
+
+        if (!$this->isValidResetToken('agent', $validated['email'], $validated['token'])) {
+            return response()->json(['message' => 'Invalid or expired reset token.'], 422);
+        }
+
+        $agent = Agent::where('email', $validated['email'])->first();
+
+        if (!$agent) {
+            return response()->json(['message' => 'Invalid or expired reset token.'], 422);
+        }
+
+        $agent->update(['password' => bcrypt($validated['password'])]);
+
+        $this->consumeResetToken('agent', $validated['email'], $validated['token']);
+
+        return response()->json(['message' => 'Password reset successfully.']);
+    }
+
+
 }

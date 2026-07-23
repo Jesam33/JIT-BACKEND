@@ -45,7 +45,7 @@ resources/docs
 /storage/installed
 
 /lang/*
-!/lang/en
+!/lang/enlike tj
 
 /log
 

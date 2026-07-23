@@ -197,7 +197,7 @@ class StaffAuthController extends BaseLmsController
         $token = $this->createPasswordResetToken('staff', $teacher->email);
         $link = $this->buildResetLink('staff', $teacher->email, $token);
 
-        Mail::to($teacher->email)->send(new LmsPasswordResetMail($teacher->email, $link));
+        Mail::to($teacher->email)->send(new LmsPasswordResetMail($teacher->name, 'Staff Portal', $link));
 
         return response()->json(['message' => 'If that email exists, a reset link has been sent.']);
     }

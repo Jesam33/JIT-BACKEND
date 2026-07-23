@@ -158,7 +158,7 @@ class StaffModuleController extends BaseLmsController
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
-            'type' => 'required|in:slides,pdf,video,link,text,code,file',
+            'type' => 'required|in:slides,pdf,video,link,text,code,file,doc',
             'content_url' => 'nullable|string',
             'content_body' => 'nullable|string',
             'sort_order' => 'nullable|integer',
@@ -185,7 +185,7 @@ class StaffModuleController extends BaseLmsController
 
         $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
-            'type' => 'sometimes|in:slides,pdf,video,link,text,code,file',
+            'type' => 'sometimes|in:slides,pdf,video,link,text,code,file,doc',
             'content_url' => 'nullable|string',
             'content_body' => 'nullable|string',
             'sort_order' => 'nullable|integer',
@@ -290,6 +290,7 @@ class StaffModuleController extends BaseLmsController
 
         $validated['module_id'] = $moduleId;
         $validated['teacher_id'] = $teacher->id;
+        $this->maybeFillPasscode($validated);
 
         $class = LmsScheduledClass::create($validated);
 
@@ -351,6 +352,7 @@ class StaffModuleController extends BaseLmsController
             'status' => 'sometimes|in:scheduled,ongoing,completed,cancelled',
         ]);
 
+        $this->maybeFillPasscode($validated);
         $class->update($validated);
 
         return response()->json($class->load('module.course'));

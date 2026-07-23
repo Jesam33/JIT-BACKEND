@@ -629,13 +629,23 @@ class AdminController extends BaseLmsController
         $this->ensureSuperAdmin($request);
 
         $agent = \App\Models\Agent::query()->findOrFail($id);
-        $agent->update(['status' => 'approved', 'approved_at' => now()]);
+
+        $password = \Illuminate\Support\Str::random(12);
+        $agent->update([
+            'status' => 'approved',
+            'approved_at' => now(),
+            'password' => bcrypt($password),
+        ]);
 
         if (filter_var(env('TRAINING_EMAIL_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
             $baseUrl = rtrim(env('LMS_BASE_URL', 'http://127.0.0.1:3000'), '/');
             try {
                 \Illuminate\Support\Facades\Mail::to($agent->email)
-                    ->send(new \App\Mail\AgentApplicationApprovedMail($agent, $baseUrl . '/lms/agent/login'));
+                    ->send(new \App\Mail\AgentApplicationApprovedMail(
+                        $agent,
+                        $baseUrl . '/lms/agent/login?email=' . urlencode($agent->email),
+                        $password
+                    ));
             } catch (\Throwable $e) {
                 // log
             }
@@ -660,5 +670,60 @@ class AdminController extends BaseLmsController
         }
 
         return redirect()->back()->with('status', 'Agent rejected.');
+    }
+
+    public function deleteAgent(Request $request, int $id)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $agent = \App\Models\Agent::query()->findOrFail($id);
+
+        $agent->sessions()->delete();
+        $agent->notifications()->delete();
+        $agent->commissions()->delete();
+        $agent->delete();
+
+        return redirect()->back()->with('status', 'Agent deleted successfully.');
+    }
+
+    public function withdrawalRequestsPage(Request $request)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $withdrawals = \App\Models\AgentCommission::query()
+            ->where('type', 'withdrawal')
+            ->where('status', 'withdrawal_requested')
+            ->with('agent')
+            ->orderByDesc('id')
+            ->paginate(50);
+
+        $paid = \App\Models\AgentCommission::query()
+            ->where('type', 'withdrawal')
+            ->where('status', 'paid')
+            ->with('agent')
+            ->orderByDesc('id')
+            ->paginate(50, ['*'], 'paid-page');
+
+        $shell = $this->adminShellData();
+
+        return view('admin.lms.agent-withdrawals', array_merge($shell, [
+            'withdrawals' => $withdrawals,
+            'paid' => $paid,
+        ]));
+    }
+
+    public function payCommissions(Request $request, int $agentId)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        \App\Models\AgentCommission::where('agent_id', $agentId)
+            ->where('type', 'withdrawal')
+            ->whereIn('status', ['withdrawal_requested'])
+            ->update(['status' => 'paid', 'paid_at' => now()]);
+
+        return redirect()->back()->with('status', 'Withdrawal marked as paid.');
     }
 }

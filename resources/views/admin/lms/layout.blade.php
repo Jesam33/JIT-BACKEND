@@ -398,6 +398,14 @@
                         <span>&rsaquo;</span>
                     </a>
 
+                    <a href="{{ route('admin.lms.agents.withdrawals') }}" class="nav-item {{ ($activeLmsPage ?? '') === 'agent-withdrawals' ? 'active' : '' }}">
+                        <div class="nav-left">
+                            <div class="nav-icon">$</div>
+                            <span>Withdrawal Requests</span>
+                        </div>
+                        <span>&rsaquo;</span>
+                    </a>
+
                     <div class="nav-section">Staff Operations</div>
 
                     <a href="{{ route('lms.teachers.create') }}" class="nav-item {{ ($activeLmsPage ?? '') === 'teachers' ? 'active' : '' }}">

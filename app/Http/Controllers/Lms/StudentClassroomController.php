@@ -81,16 +81,20 @@ class StudentClassroomController extends BaseLmsController
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $classroom = LmsClassroom::query()->find($id);
+        $classType = $request->input('class_type', 'classroom');
+        $classroom = null;
         $scheduled = null;
 
-        if (! $classroom) {
+        if ($classType === 'scheduled') {
             $scheduled = LmsScheduledClass::query()->findOrFail($id);
             if (! $scheduled->meeting_id) {
                 return response()->json(['message' => 'No meeting ID configured for this class.'], 400);
             }
-        } elseif (! $classroom->meeting_id) {
-            return response()->json(['message' => 'No meeting ID configured for this classroom.'], 400);
+        } else {
+            $classroom = LmsClassroom::query()->findOrFail($id);
+            if (! $classroom->meeting_id) {
+                return response()->json(['message' => 'No meeting ID configured for this classroom.'], 400);
+            }
         }
 
         $sdkKey = config('services.zoom.sdk_key');
@@ -128,6 +132,19 @@ class StudentClassroomController extends BaseLmsController
         }
 
         $passcode = $classroom ? $classroom->meeting_password : ($scheduled->meeting_password ?? '');
+
+        if (empty($passcode)) {
+            $meetingUrl = $classroom ? $classroom->meeting_url : ($scheduled->meeting_url ?? '');
+            if ($meetingUrl) {
+                $parsed = parse_url($meetingUrl);
+                if ($parsed && ! empty($parsed['query'])) {
+                    parse_str($parsed['query'], $query);
+                    if (! empty($query['pwd'])) {
+                        $passcode = $query['pwd'];
+                    }
+                }
+            }
+        }
 
         return response()->json([
             'signature' => $signature,

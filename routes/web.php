@@ -49,5 +49,8 @@ Route::middleware('auth')->prefix(env('ADMIN_DIR', 'admin'))->group(function ():
 	Route::get('/lms/agents', [AdminController::class, 'agentsPage'])->name('admin.lms.agents.index');
 	Route::post('/lms/agents/{id}/approve', [AdminController::class, 'approveAgent'])->name('admin.lms.agents.approve');
 	Route::post('/lms/agents/{id}/reject', [AdminController::class, 'rejectAgent'])->name('admin.lms.agents.reject');
+	Route::post('/lms/agents/{id}/delete', [AdminController::class, 'deleteAgent'])->name('admin.lms.agents.delete');
+	Route::get('/lms/agents/withdrawals', [AdminController::class, 'withdrawalRequestsPage'])->name('admin.lms.agents.withdrawals');
+	Route::post('/lms/agents/{agentId}/pay', [AdminController::class, 'payCommissions'])->name('admin.lms.agents.pay');
 	Route::get('/lms', [AdminController::class, 'index'])->name('admin.lms.index');
 });

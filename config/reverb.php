@@ -13,6 +13,7 @@ return [
             'hostname' => env('REVERB_HOST'),
             'options' => [
                 'tls' => [],
+                'timeout' => false,
             ],
             'max_request_size' => env('REVERB_MAX_REQUEST_SIZE', 10_000),
             'scaling' => [

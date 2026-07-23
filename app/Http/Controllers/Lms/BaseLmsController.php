@@ -174,9 +174,43 @@ abstract class BaseLmsController extends Controller
     protected function buildResetLink(string $role, string $email, string $token): string
     {
         $baseUrl = rtrim((string) env('LMS_BASE_URL', 'http://127.0.0.1:3000'), '/');
-        $path = $role === 'staff' ? '/lms/staff/reset-password' : '/lms/reset-password';
+        $path = match ($role) {
+            'staff' => '/lms/staff/reset-password',
+            'agent' => '/lms/agent/reset-password',
+            default => '/lms/reset-password',
+        };
 
         return $baseUrl . $path . '?email=' . urlencode($email) . '&token=' . urlencode($token);
+    }
+
+    protected function extractPasscodeFromUrl(?string $url): ?string
+    {
+        if (! $url) {
+            return null;
+        }
+
+        $parsed = parse_url($url);
+
+        if ($parsed && ! empty($parsed['query'])) {
+            parse_str($parsed['query'], $query);
+
+            if (! empty($query['pwd'])) {
+                return $query['pwd'];
+            }
+        }
+
+        return null;
+    }
+
+    protected function maybeFillPasscode(array &$data): void
+    {
+        if (empty($data['meeting_password']) && ! empty($data['meeting_url'])) {
+            $extracted = $this->extractPasscodeFromUrl($data['meeting_url']);
+
+            if ($extracted) {
+                $data['meeting_password'] = $extracted;
+            }
+        }
     }
 
     protected function adminShellData(): array

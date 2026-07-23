@@ -85,6 +85,8 @@ Route::get('/api/frontend/lms/chats/dm/messages', [StudentChatController::class,
 Route::post('/api/frontend/lms/chats/dm/messages', [StudentChatController::class, 'sendDmMessage']);
 Route::post('/api/frontend/lms/chats/dm/messages/{id}/delete', [StudentChatController::class, 'deleteDmMessage']);
 Route::put('/api/frontend/lms/chats/dm/messages/{id}', [StudentChatController::class, 'editDmMessage']);
+Route::post('/api/frontend/lms/chats/group/read', [StudentChatController::class, 'markGroupRead']);
+Route::post('/api/frontend/lms/chats/dm/read', [StudentChatController::class, 'markDmRead']);
 Route::get('/api/frontend/lms/chats/unread', [StudentChatController::class, 'unreadCount']);
 
 // Staff Auth
@@ -195,12 +197,17 @@ Route::post('/api/frontend/lms/admin/batches/{id}/announcements', [AdminControll
 // Agent routes
 Route::post('/api/frontend/lms/agents/apply', [AgentController::class, 'apply']);
 Route::post('/api/frontend/lms/agents/login', [AgentController::class, 'login']);
+Route::post('/api/frontend/lms/agents/forgot-password', [AgentController::class, 'forgotPassword']);
+Route::post('/api/frontend/lms/agents/reset-password', [AgentController::class, 'resetPassword']);
 Route::get('/api/frontend/lms/agents/courses', [AgentController::class, 'courses']);
 
 Route::get('/api/frontend/lms/agents/me', [AgentController::class, 'me']);
+Route::put('/api/frontend/lms/agents/profile', [AgentController::class, 'updateProfile']);
+Route::post('/api/frontend/lms/agents/avatar', [AgentController::class, 'uploadAvatar']);
 Route::get('/api/frontend/lms/agents/dashboard', [AgentController::class, 'dashboard']);
 Route::post('/api/frontend/lms/agents/register-student', [AgentController::class, 'registerStudent']);
 Route::get('/api/frontend/lms/agents/commissions', [AgentController::class, 'commissions']);
+Route::get('/api/frontend/lms/agents/registrations', [AgentController::class, 'registrations']);
 Route::get('/api/frontend/lms/agents/withdrawals', [AgentController::class, 'withdrawalHistory']);
 Route::post('/api/frontend/lms/agents/withdrawals/request', [AgentController::class, 'requestWithdrawal']);
 Route::get('/api/frontend/lms/agents/notifications', [AgentController::class, 'notifications']);
