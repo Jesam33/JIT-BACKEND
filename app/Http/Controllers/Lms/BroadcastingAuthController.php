@@ -55,15 +55,13 @@ class BroadcastingAuthController extends Controller
         }
 
         $pusher = new Pusher(
-            config('broadcasting.connections.reverb.key'),
-            config('broadcasting.connections.reverb.secret'),
-            config('broadcasting.connections.reverb.app_id'),
-            [
-                'host' => config('broadcasting.connections.reverb.options.host'),
-                'port' => config('broadcasting.connections.reverb.options.port'),
-                'scheme' => config('broadcasting.connections.reverb.options.scheme'),
-                'useTLS' => config('broadcasting.connections.reverb.options.useTLS'),
-            ]
+            config('broadcasting.connections.pusher.key'),
+            config('broadcasting.connections.pusher.secret'),
+            config('broadcasting.connections.pusher.app_id'),
+            array_merge(
+                config('broadcasting.connections.pusher.options', []),
+                ['useTLS' => true]
+            )
         );
 
         if (str_starts_with($channel, 'presence-')) {
