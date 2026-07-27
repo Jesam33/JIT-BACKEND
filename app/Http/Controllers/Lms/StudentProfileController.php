@@ -51,6 +51,7 @@ class StudentProfileController extends BaseLmsController
         }
 
         return response()->json([
+            'id' => $student->id,
             'first_name' => $student->first_name,
             'last_name' => $student->last_name,
             'email' => $student->email,
