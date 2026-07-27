@@ -174,7 +174,7 @@ class Avatar
 
         $this->createShape();
 
-        if (extension_loaded('imagick') || app()->isLocal()) {
+        if (true) {
             $this->image->text(
                 $this->make($this->name, $this->chars, $this->uppercase, $this->ascii),
                 (int) ($this->width / 2),
