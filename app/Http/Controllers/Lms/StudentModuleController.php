@@ -9,12 +9,20 @@ use Illuminate\Http\Request;
 
 class StudentModuleController extends BaseLmsController
 {
-    private function moduleHasPastClass(LmsModule $module): bool
+    /**
+     * Return the ids (as a flipped set for O(1) lookup) of the given modules
+     * that already have at least one delivered (past, non-cancelled) class —
+     * one query instead of an exists() per module.
+     */
+    private function taughtModuleIds(\Illuminate\Support\Collection $moduleIds): \Illuminate\Support\Collection
     {
-        return $module->scheduledClasses()
+        return LmsScheduledClass::query()
+            ->whereIn('module_id', $moduleIds)
             ->where('starts_at', '<', now())
             ->where('status', '!=', 'cancelled')
-            ->exists();
+            ->distinct()
+            ->pluck('module_id')
+            ->flip();
     }
 
     public function index(Request $request): JsonResponse
@@ -37,6 +45,8 @@ class StudentModuleController extends BaseLmsController
             ->orderBy('sort_order')
             ->get();
 
+        $taughtModuleIds = $this->taughtModuleIds($allModules->pluck('id'));
+
         $modules = [];
         $previousTaught = true;
 
@@ -44,7 +54,7 @@ class StudentModuleController extends BaseLmsController
             if (! $previousTaught) break;
 
             $modules[] = $module;
-            $previousTaught = $this->moduleHasPastClass($module);
+            $previousTaught = $taughtModuleIds->has($module->id);
         }
 
         return response()->json($modules);
@@ -63,9 +73,13 @@ class StudentModuleController extends BaseLmsController
             ->orderBy('sort_order')
             ->get();
 
-        foreach ($prevModules as $prev) {
-            if (! $this->moduleHasPastClass($prev)) {
-                return response()->json(['message' => 'Previous module not yet taught.'], 403);
+        if ($prevModules->isNotEmpty()) {
+            $taughtModuleIds = $this->taughtModuleIds($prevModules->pluck('id'));
+
+            foreach ($prevModules as $prev) {
+                if (! $taughtModuleIds->has($prev->id)) {
+                    return response()->json(['message' => 'Previous module not yet taught.'], 403);
+                }
             }
         }
 

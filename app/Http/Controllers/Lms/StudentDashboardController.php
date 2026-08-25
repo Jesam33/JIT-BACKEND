@@ -182,12 +182,19 @@ class StudentDashboardController extends BaseLmsController
         $tasks = LmsTask::query()
             ->where('course_id', $courseId)
             ->orderByDesc('created_at')
+            ->get();
+
+        // Batch-load this student's submissions once (keyed by task) instead of a
+        // query per task in the map below.
+        $taskSubmissions = LmsTaskSubmission::query()
+            ->where('student_id', $studentId)
+            ->whereIn('task_id', $tasks->pluck('id'))
             ->get()
-            ->map(function (LmsTask $task) use ($studentId) {
-                $submission = LmsTaskSubmission::query()
-                    ->where('task_id', $task->id)
-                    ->where('student_id', $studentId)
-                    ->first();
+            ->keyBy('task_id');
+
+        $tasks = $tasks
+            ->map(function (LmsTask $task) use ($taskSubmissions) {
+                $submission = $taskSubmissions->get($task->id);
 
                 return [
                     'id' => $task->id,
@@ -206,6 +213,7 @@ class StudentDashboardController extends BaseLmsController
         $notifications = LmsNotification::query()
             ->where('student_id', $studentId)
             ->orderByDesc('created_at')
+            ->limit(50)
             ->get()
             ->map(fn ($n) => [
                 'id' => $n->id,
@@ -259,12 +267,18 @@ class StudentDashboardController extends BaseLmsController
         $tasks = LmsTask::query()
             ->where('course_id', $courseId)
             ->orderByDesc('created_at')
+            ->get();
+
+        // Batch-load submissions once (keyed by task) rather than per-task.
+        $taskSubmissions = LmsTaskSubmission::query()
+            ->where('student_id', $session->user_id)
+            ->whereIn('task_id', $tasks->pluck('id'))
             ->get()
-            ->map(function (LmsTask $task) use ($session) {
-                $submission = LmsTaskSubmission::query()
-                    ->where('task_id', $task->id)
-                    ->where('student_id', $session->user_id)
-                    ->first();
+            ->keyBy('task_id');
+
+        $tasks = $tasks
+            ->map(function (LmsTask $task) use ($taskSubmissions) {
+                $submission = $taskSubmissions->get($task->id);
 
                 return [
                     'id' => $task->id,
@@ -396,6 +410,7 @@ class StudentDashboardController extends BaseLmsController
         $notifications = LmsNotification::query()
             ->where('student_id', $session->user_id)
             ->orderByDesc('created_at')
+            ->limit(100)
             ->get()
             ->map(fn ($n) => [
                 'id' => $n->id,

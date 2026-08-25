@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Lms;
 
 use App\Models\BatchAnnouncement;
+use App\Models\Batch;
 use App\Models\LmsAttendance;
 use App\Models\LmsAttendanceRecord;
 use App\Models\LmsCertificate;
@@ -17,6 +18,7 @@ use App\Models\LmsTeacher;
 use App\Models\LmsTrack;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class StaffPortalController extends BaseLmsController
 {
@@ -42,6 +44,32 @@ class StaffPortalController extends BaseLmsController
             ->pluck('course_id')
             ->filter()
             ->toArray();
+    }
+
+    /**
+     * Announcements are keyed on Batch, but owner-provisioned cohorts are
+     * LmsTracks that never create one — so the "cohort" dropdown comes back
+     * empty and there's nothing to announce to. This lazily backfills a Batch
+     * per track that lacks one (named after the cohort) and pins track.batch_id,
+     * making the dropdown populate and announcements postable with no schema
+     * change. Idempotent: a second call finds no null batch_ids and no-ops.
+     */
+    private function ensureTrackBatches(array $trackIds): void
+    {
+        if (empty($trackIds)) return;
+
+        $tracks = LmsTrack::query()
+            ->whereIn('id', $trackIds)
+            ->whereNull('batch_id')
+            ->get();
+
+        foreach ($tracks as $track) {
+            $batch = Batch::query()->create([
+                'name' => $track->name ?: ('Cohort #' . $track->id),
+            ]);
+            $track->batch_id = $batch->id;
+            $track->save();
+        }
     }
 
     // ─── Students ─────────────────────────────────────────────
@@ -91,6 +119,7 @@ class StaffPortalController extends BaseLmsController
         if (! $teacher) return response()->json(['message' => 'Unauthorized'], 401);
 
         $trackIds = $this->getTrackIds($teacher);
+        $this->ensureTrackBatches($trackIds);
 
         $tracks = LmsTrack::query()
             ->whereIn('id', $trackIds)
@@ -178,7 +207,11 @@ class StaffPortalController extends BaseLmsController
         $teacher = $this->getTeacher($request);
         if (! $teacher) return response()->json(['message' => 'Unauthorized'], 401);
 
-        $material = LmsMaterial::query()->findOrFail($id);
+        // Scope to the teacher's own courses so one staffer can't delete another
+        // instructor's material by guessing an id (matches the list query above).
+        $material = LmsMaterial::query()
+            ->whereIn('course_id', $this->getCourseIds($teacher))
+            ->findOrFail($id);
         $material->delete();
 
         return response()->json(['message' => 'Material deleted.']);
@@ -274,8 +307,21 @@ class StaffPortalController extends BaseLmsController
         $teacher = $this->getTeacher($request);
         if (! $teacher) return response()->json(['message' => 'Unauthorized'], 401);
 
+        // Backfill batches for this teacher's cohorts, then only allow posting to
+        // a batch that belongs to one of them — a staffer can't announce into
+        // another instructor's (or another tenant's) cohort by guessing an id.
+        $trackIds = $this->getTrackIds($teacher);
+        $this->ensureTrackBatches($trackIds);
+        $allowedBatchIds = LmsTrack::query()
+            ->whereIn('id', $trackIds)
+            ->pluck('batch_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
         $validated = $request->validate([
-            'batch_id' => ['required', 'integer', 'exists:batches,id'],
+            'batch_id' => ['required', 'integer', Rule::in($allowedBatchIds)],
             'title' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string', 'max:10000'],
         ]);
@@ -296,7 +342,20 @@ class StaffPortalController extends BaseLmsController
         $teacher = $this->getTeacher($request);
         if (! $teacher) return response()->json(['message' => 'Unauthorized'], 401);
 
-        $announcement = BatchAnnouncement::query()->findOrFail($id);
+        // BatchAnnouncement is not TenantAware, so scope the delete to this
+        // teacher's own cohorts' batches — otherwise any staffer could delete any
+        // announcement in any tenant by guessing an id (mirrors createAnnouncement).
+        $allowedBatchIds = LmsTrack::query()
+            ->whereIn('id', $this->getTrackIds($teacher))
+            ->pluck('batch_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $announcement = BatchAnnouncement::query()
+            ->whereIn('batch_id', $allowedBatchIds)
+            ->findOrFail($id);
         $announcement->delete();
 
         return response()->json(['message' => 'Announcement deleted.']);

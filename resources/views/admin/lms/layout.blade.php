@@ -415,6 +415,14 @@
                         </div>
                         <span>&rsaquo;</span>
                     </a>
+
+                    <a href="{{ route('admin.lms.institutes.index') }}" class="nav-item {{ ($activeLmsPage ?? '') === 'institutes' ? 'active' : '' }}">
+                        <div class="nav-left">
+                            <div class="nav-icon">🏢</div>
+                            <span>Registered Institutes</span>
+                        </div>
+                        <span>{{ $tenantCount ?? 0 }}</span>
+                    </a>
                 </div>
 
                     <div class="sidebar-footer">
@@ -443,5 +451,6 @@
             </main>
         </div>
     </div>
+    @stack('scripts')
 </body>
 </html>

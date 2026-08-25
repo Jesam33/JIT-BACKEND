@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\TenantAware;
 
 class LmsEnrollment extends Model
 {
     use HasFactory;
+    use TenantAware;
 
     protected $fillable = [
         'student_id',

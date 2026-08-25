@@ -234,7 +234,7 @@ class TrainingRegistrationController extends Controller
         $signupUrl = trim((string) env('LMS_SIGNUP_URL', ''));
 
         if (! $signupUrl) {
-            $baseUrl = rtrim((string) env('LMS_BASE_URL', 'http://127.0.0.1:3000'), '/');
+            $baseUrl = config('saas.frontend_url');
             $signupUrl = str_ends_with($baseUrl, '/lms') ? $baseUrl . '/signup' : $baseUrl . '/lms/signup';
         }
 

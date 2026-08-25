@@ -19,6 +19,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use App\Models\Tenant;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use App\Notifications\OnboardingCompleted;
 
 class AdminController extends BaseLmsController
 {
@@ -369,6 +374,100 @@ class AdminController extends BaseLmsController
             'batchesList' => $batchesList,
             'tracksList' => $tracksList,
         ]));
+    }
+
+    public function institutesPage(Request $request)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $tenants = Tenant::query()->orderByDesc('created_at')->get()->map(function (Tenant $t) {
+            $ownerRow = DB::table('tenant_admins')->where('tenant_id', $t->id)->first();
+            $owner = $ownerRow ? User::find($ownerRow->user_id) : null;
+
+            return [
+                'id' => $t->id,
+                'name' => $t->name,
+                'slug' => $t->slug,
+                'status' => $t->status,
+                'owner_email' => $owner?->email,
+                'created_at' => $t->created_at,
+            ];
+        });
+
+        return view('admin.lms.institutes.index', array_merge($this->adminShellData(), [
+            'tenantsList' => $tenants,
+            'tenantCount' => $tenants->count(),
+        ]));
+    }
+
+    public function deleteInstitute(Request $request, int $id)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $tenant = Tenant::query()->findOrFail($id);
+        // before deleting tenant, clean up related owner links and invitations
+        $ownerRow = DB::table('tenant_admins')->where('tenant_id', $tenant->id)->first();
+        if ($ownerRow && isset($ownerRow->user_id)) {
+            $userId = $ownerRow->user_id;
+            // remove tenant_admins link for this tenant
+            DB::table('tenant_admins')->where('tenant_id', $tenant->id)->delete();
+
+            // remove any owner invitations for this tenant (table may not exist in older installs)
+            if (Schema::hasTable('owner_invitations')) {
+                DB::table('owner_invitations')->where('tenant_id', $tenant->id)->delete();
+            }
+
+            // if this user is not attached to any other tenant, delete the user record as well
+            $stillLinked = DB::table('tenant_admins')->where('user_id', $userId)->exists();
+            if (! $stillLinked) {
+                try {
+                    \App\Models\User::where('id', $userId)->delete();
+                } catch (\Throwable $e) {
+                    logger()->warning('Failed deleting owner user during tenant delete', ['err' => $e->getMessage()]);
+                }
+            }
+        }
+
+        // perform delete (hard delete) — consider soft delete if required
+        $tenant->delete();
+
+        if ($request->expectsJson() || $request->wantsJson()) {
+            return response()->json(['message' => 'Institute deleted.']);
+        }
+
+        return redirect()->back()->with('status', 'Institute deleted.');
+    }
+
+    public function resendInstituteOnboarding(Request $request, int $id)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $tenant = Tenant::query()->findOrFail($id);
+        $ownerRow = DB::table('tenant_admins')->where('tenant_id', $tenant->id)->first();
+        $owner = $ownerRow ? User::find($ownerRow->user_id) : null;
+
+        if (! $owner) {
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json(['message' => 'No tenant owner found.'], 404);
+            }
+            return redirect()->back()->with('error', 'No tenant owner found for this institute.');
+        }
+
+        try {
+            $owner->notify(new OnboardingCompleted($tenant));
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json(['message' => 'Onboarding notification resent.']);
+            }
+            return redirect()->back()->with('status', 'Onboarding notification resent to ' . $owner->email);
+        } catch (\Throwable $e) {
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json(['message' => 'Failed to send notification', 'err' => $e->getMessage()], 500);
+            }
+            return redirect()->back()->with('error', 'Failed to send notification: ' . $e->getMessage());
+        }
     }
 
     public function createTrack(Request $request)

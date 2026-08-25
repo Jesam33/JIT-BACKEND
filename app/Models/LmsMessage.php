@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\TenantAware;
 
 class LmsMessage extends Model
 {
     use HasFactory;
+    use TenantAware;
 
     protected $fillable = [
         'chat_type',
@@ -17,6 +19,7 @@ class LmsMessage extends Model
         'content',
         'attachment_url',
         'deleted_at',
+        'reply_to_id',
         'from_role',
         'from_id',
         'to_role',
@@ -37,5 +40,19 @@ class LmsMessage extends Model
     public function student(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(LmsStudent::class, 'sender_id');
+    }
+
+    /**
+     * The message this one is replying to (nullable). Self-referential; the
+     * quoted preview in the UI is built from this relation's content + sender.
+     */
+    public function replyTo(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(LmsMessage::class, 'reply_to_id');
+    }
+
+    public function reactions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(LmsMessageReaction::class, 'message_id');
     }
 }

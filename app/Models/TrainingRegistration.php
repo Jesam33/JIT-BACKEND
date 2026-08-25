@@ -5,10 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Traits\TenantAware;
 
 class TrainingRegistration extends Model
 {
     use HasFactory;
+    use TenantAware;
 
     protected $fillable = [
         'first_name',

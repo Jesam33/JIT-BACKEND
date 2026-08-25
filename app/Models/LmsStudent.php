@@ -4,10 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Scopes\TenantScope;
+use App\Traits\TenantAware;
 
 class LmsStudent extends Model
 {
     use HasFactory;
+    use TenantAware;
 
     protected $fillable = [
         'training_registration_id',
@@ -40,6 +43,60 @@ class LmsStudent extends Model
         'notify_announcements' => 'boolean',
         'onboarding_completed' => 'boolean',
     ];
+
+    protected static function booted(): void
+    {
+        // Every student needs a stable @handle for chat mentions. SaaS students
+        // are provisioned via updateOrCreate() without one, which broke the
+        // @mention dropdown, insertion and notification chain (all keyed on the
+        // username). Fill it on create — this runs AFTER TenantAware has stamped
+        // tenant_id, so the handle is only made unique WITHIN the institute.
+        static::creating(function (self $student): void {
+            if (empty($student->username)) {
+                $student->username = static::generateUsername($student);
+            }
+        });
+    }
+
+    /**
+     * Build a dotless, per-tenant-unique @handle from the student's name (falling
+     * back to the email local-part). Dotless so it is a single \w+ token: the
+     * mention parser, the inline renderer and the notification lookup all key on
+     * \w+, so "@ada.bloom" would only ever match "ada" — "adabloom" is safe.
+     */
+    protected static function generateUsername(self $student): string
+    {
+        $first = preg_replace('/[^a-z0-9]/i', '', (string) $student->first_name);
+        $last = preg_replace('/[^a-z0-9]/i', '', (string) $student->last_name);
+        $base = strtolower($first . $last);
+
+        if ($base === '') {
+            $base = strtolower((string) preg_replace('/[^a-z0-9]/i', '', (string) strtok((string) $student->email, '@')));
+        }
+        if ($base === '') {
+            $base = 'user';
+        }
+
+        $tenantId = $student->tenant_id;
+        $candidate = $base;
+        $n = 1;
+
+        while (
+            static::withoutGlobalScope(TenantScope::class)
+                ->when(
+                    $tenantId,
+                    fn ($q) => $q->where('tenant_id', $tenantId),
+                    fn ($q) => $q->whereNull('tenant_id')
+                )
+                ->where('username', $candidate)
+                ->exists()
+        ) {
+            $candidate = $base . $n;
+            $n++;
+        }
+
+        return $candidate;
+    }
 
     public function taskSubmissions(): \Illuminate\Database\Eloquent\Relations\HasMany
     {

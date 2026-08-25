@@ -6,6 +6,8 @@ use App\Models\LmsAttendance;
 use App\Models\LmsAttendanceEvent;
 use App\Models\LmsAttendanceRecord;
 use App\Models\LmsClassroom;
+use App\Models\LmsScheduledClass;
+use App\Models\LmsTeacher;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -43,6 +45,7 @@ class StaffClassroomController extends BaseLmsController
         }
 
         $classroom = LmsClassroom::query()
+            ->where('teacher_id', $session->user_id)
             ->with(['course:id,title', 'teacher:id,name'])
             ->findOrFail($id);
 
@@ -90,7 +93,9 @@ class StaffClassroomController extends BaseLmsController
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $classroom = LmsClassroom::query()->findOrFail($id);
+        $classroom = LmsClassroom::query()
+            ->where('teacher_id', $session->user_id)
+            ->findOrFail($id);
 
         $validated = $request->validate([
             'course_id' => ['nullable', 'integer', 'exists:lms_courses,id'],
@@ -129,5 +134,60 @@ class StaffClassroomController extends BaseLmsController
         $classroom->delete();
 
         return response()->json(['message' => 'Classroom deleted.']);
+    }
+
+    /**
+     * Mint a MODERATOR 8x8 JaaS token so the instructor can host the live class.
+     * Handles both live-class models via a `class_type` param (mirrors the student
+     * endpoint). Returns everything the embed/new-tab launcher needs; 503 when JaaS
+     * credentials are not configured yet (graceful degradation, no broken button).
+     */
+    public function meetingToken(Request $request, int $id): JsonResponse
+    {
+        $this->ensureLmsEnabled();
+
+        $session = $this->sessionFromRequest($request, 'staff');
+
+        if (! $session) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $cfg = $this->jitsiConfig();
+
+        if (! $cfg) {
+            return response()->json(['message' => 'Live classes are not configured yet.'], 503);
+        }
+
+        $classType = $request->input('class_type', 'classroom');
+
+        if ($classType === 'scheduled') {
+            $model = LmsScheduledClass::query()
+                ->where('teacher_id', $session->user_id)
+                ->findOrFail($id);
+            $room = $this->ensureRoom($model, 'scheduled');
+        } else {
+            $model = LmsClassroom::query()
+                ->where('teacher_id', $session->user_id)
+                ->findOrFail($id);
+            $room = $this->ensureRoom($model, 'classroom');
+        }
+
+        $teacher = LmsTeacher::query()->find($session->user_id);
+        $userName = $teacher?->name ?: 'Instructor';
+
+        $jwt = $this->mintJaasToken($cfg, $room, [
+            'id' => 'teacher-' . $session->user_id,
+            'name' => $userName,
+            'email' => $teacher?->email ?? '',
+        ], true);
+
+        return response()->json([
+            'room' => $room,
+            'jwt' => $jwt,
+            'domain' => $cfg['domain'],
+            'app_id' => $cfg['appId'],
+            'user_name' => $userName,
+            'moderator' => true,
+        ]);
     }
 }

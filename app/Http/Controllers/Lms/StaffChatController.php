@@ -13,6 +13,7 @@ use App\Models\LmsTeacher;
 use App\Models\LmsTrack;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class StaffChatController extends BaseLmsController
 {
@@ -41,7 +42,7 @@ class StaffChatController extends BaseLmsController
             ->whereIn('chat_id', $groupChatIds)
             ->whereNull('deleted_at')
             ->orderBy('created_at')
-            ->with(['teacher', 'student'])
+            ->with(['teacher', 'student', 'replyTo.teacher', 'replyTo.student', 'reactions'])
             ->get()
             ->map(fn ($m) => [
                 'id' => $m->id,
@@ -51,6 +52,9 @@ class StaffChatController extends BaseLmsController
                 'sender_id' => $m->sender_id,
                 'sender_name' => $m->sender_role === 'teacher' ? ($m->teacher?->name ?? 'Teacher') : ($m->student ? trim($m->student->first_name . ' ' . $m->student->last_name) : 'Student'),
                 'attachment_url' => $m->attachment_url,
+                'reply_to_id' => $m->reply_to_id,
+                'reply_to' => $this->replyToPayload($m),
+                'reactions' => $this->reactionsPayload($m, 'teacher', (int) $teacher->id),
                 'edited_at' => $m->edited_at?->toIso8601String(),
                 'created_at' => $m->created_at->toIso8601String(),
             ]);
@@ -70,29 +74,32 @@ class StaffChatController extends BaseLmsController
 
         $teacher = LmsTeacher::query()->findOrFail($session->user_id);
 
-        $track = \App\Models\LmsTrack::query()->where('instructor_id', $teacher->id)->first();
+        $track = LmsTrack::query()->where('instructor_id', $teacher->id)->first();
 
         if (! $track) {
             return response()->json([]);
         }
 
+        // Students in the track this teacher's group chat belongs to. No self-
+        // filter here: this list is students only (the teacher is the viewer), and
+        // the old reject() compared a student id to the teacher's session id, which
+        // could wrongly drop a student whose id happened to equal the teacher's.
         $students = LmsEnrollment::query()
             ->where('track_id', $track->id)
             ->with('student')
             ->get()
             ->pluck('student')
             ->filter()
-            ->reject(fn ($s) => (int) $s->id === $session->user_id)
+            ->unique('id')
             ->map(fn ($s) => [
                 'id' => $s->id,
                 'name' => trim($s->first_name . ' ' . $s->last_name),
                 'username' => $s->username,
                 'role' => 'student',
-            ]);
+            ])
+            ->values();
 
-        $users = $students->values();
-
-        return response()->json($users);
+        return response()->json($students);
     }
 
     public function sendGroupMessage(Request $request): JsonResponse
@@ -121,28 +128,54 @@ class StaffChatController extends BaseLmsController
         $validated = $request->validate([
             'content' => ['nullable', 'string', 'max:5000'],
             'attachment_url' => ['nullable', 'string', 'max:2048'],
+            'reply_to_id' => ['nullable', 'integer'],
         ]);
 
         $content = $validated['content'] ?? '';
 
         if ($content) {
-            preg_match_all('/@(\w+)/u', $content, $matches);
-            foreach ($matches[1] as $mentionedUsername) {
-                if (strtolower($mentionedUsername) === 'tutor') {
+            // Notify @mentioned students. Match on the username OR the full name so
+            // it works whether the sender picked from the dropdown (inserts the
+            // @username) or typed the person's name — and regardless of whether the
+            // student's username was ever set. Scoped to this track's roster.
+            $enrolledStudents = LmsEnrollment::query()
+                ->where('track_id', $track->id)
+                ->with('student')
+                ->get()
+                ->pluck('student')
+                ->filter()
+                ->unique('id');
+
+            $haystack = mb_strtolower($content);
+            $notified = [];
+
+            foreach ($enrolledStudents as $student) {
+                if (isset($notified[$student->id])) {
                     continue;
                 }
-                $student = \App\Models\LmsStudent::query()
-                    ->where('username', $mentionedUsername)
-                    ->first();
-                if ($student) {
-                    LmsNotification::query()->create([
-                        'student_id' => $student->id,
-                        'type' => 'mention',
-                        'title' => 'You were mentioned',
-                        'body' => $teacher->name . ' mentioned you: ' . $content,
-                        'reference_type' => 'group_chat',
-                        'reference_id' => $groupChat->id,
-                    ]);
+
+                $handles = [];
+                if (! empty($student->username)) {
+                    $handles[] = mb_strtolower($student->username);
+                }
+                $fullName = trim(mb_strtolower(($student->first_name ?? '') . ' ' . ($student->last_name ?? '')));
+                if ($fullName !== '') {
+                    $handles[] = $fullName;
+                }
+
+                foreach ($handles as $handle) {
+                    if (str_contains($haystack, '@' . $handle)) {
+                        LmsNotification::query()->create([
+                            'student_id' => $student->id,
+                            'type' => 'mention',
+                            'title' => 'You were mentioned',
+                            'body' => $teacher->name . ' mentioned you: ' . $content,
+                            'reference_type' => 'group_chat',
+                            'reference_id' => $groupChat->id,
+                        ]);
+                        $notified[$student->id] = true;
+                        break;
+                    }
                 }
             }
         }
@@ -154,7 +187,10 @@ class StaffChatController extends BaseLmsController
             'sender_id' => $session->user_id,
             'content' => $content,
             'attachment_url' => $validated['attachment_url'] ?? null,
+            'reply_to_id' => $this->resolveReplyToId($validated['reply_to_id'] ?? null, 'group', $groupChat->id),
         ]);
+
+        $message->load(['replyTo.teacher', 'replyTo.student']);
 
         try {
             MessageSent::dispatch('group', $groupChat->id, [
@@ -165,6 +201,9 @@ class StaffChatController extends BaseLmsController
                 'sender_id' => $message->sender_id,
                 'sender_name' => $teacher->name,
                 'attachment_url' => $message->attachment_url,
+                'reply_to_id' => $message->reply_to_id,
+                'reply_to' => $this->replyToPayload($message),
+                'reactions' => [],
                 'created_at' => $message->created_at->toIso8601String(),
             ]);
         } catch (\Throwable) {}
@@ -177,6 +216,9 @@ class StaffChatController extends BaseLmsController
             'sender_id' => $message->sender_id,
             'sender_name' => $teacher->name,
             'attachment_url' => $message->attachment_url,
+            'reply_to_id' => $message->reply_to_id,
+            'reply_to' => $this->replyToPayload($message),
+            'reactions' => [],
             'created_at' => $message->created_at->toIso8601String(),
         ], 201);
     }
@@ -247,16 +289,49 @@ class StaffChatController extends BaseLmsController
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        $teacherId = $session->user_id;
+
+        // Roster of everyone the teacher can DM = students enrolled in any of the
+        // teacher's tracks. Previously the DM tab listed only threads that already
+        // had a message, so staff had no way to *start* a conversation and saw an
+        // empty "No DM threads yet" panel. Ensure a thread exists for each enrolled
+        // student so the whole cohort shows up and is immediately messageable.
+        $trackIds = LmsTrack::query()
+            ->where('instructor_id', $teacherId)
+            ->pluck('id');
+
+        $trackByStudent = [];
+        foreach (LmsEnrollment::query()->whereIn('track_id', $trackIds)->get(['student_id', 'track_id']) as $enrollment) {
+            if (! isset($trackByStudent[$enrollment->student_id])) {
+                $trackByStudent[$enrollment->student_id] = $enrollment->track_id;
+            }
+        }
+
+        $existingStudentIds = LmsDmThread::query()
+            ->where('instructor_id', $teacherId)
+            ->pluck('student_id')
+            ->all();
+
+        foreach (array_diff(array_keys($trackByStudent), $existingStudentIds) as $studentId) {
+            LmsDmThread::query()->firstOrCreate([
+                'student_id' => $studentId,
+                'instructor_id' => $teacherId,
+                'track_id' => $trackByStudent[$studentId],
+            ]);
+        }
+
         $threads = LmsDmThread::query()
-            ->where('instructor_id', $session->user_id)
+            ->where('instructor_id', $teacherId)
             ->with(['student', 'messages' => function ($q) {
-                $q->orderBy('created_at')->limit(100);
+                $q->orderBy('created_at')->limit(100)
+                  ->with(['replyTo.teacher', 'replyTo.student', 'reactions']);
             }])
             ->get()
             ->map(fn ($thread) => [
                 'thread_id' => $thread->id,
                 'student' => [
-                    'name' => $thread->student?->first_name . ' ' . $thread->student?->last_name,
+                    'id' => $thread->student?->id,
+                    'name' => trim(($thread->student?->first_name ?? '') . ' ' . ($thread->student?->last_name ?? '')),
                     'email' => $thread->student?->email,
                     'profile_photo_url' => $thread->student?->profile_photo_url,
                 ],
@@ -267,10 +342,17 @@ class StaffChatController extends BaseLmsController
                     'sender_id' => $m->sender_id,
                     'from_role' => $m->sender_role,
                     'attachment_url' => $m->attachment_url,
+                    'reply_to_id' => $m->reply_to_id,
+                    'reply_to' => $this->replyToPayload($m),
+                    'reactions' => $this->reactionsPayload($m, 'teacher', (int) $teacherId),
                     'edited_at' => $m->edited_at?->toIso8601String(),
                     'created_at' => $m->created_at->toIso8601String(),
                 ]),
-            ]);
+            ])
+            // Drop threads whose student row is gone (e.g. removed from the
+            // institute) so the roster never shows a blank, unusable entry.
+            ->filter(fn ($t) => $t['student']['id'] !== null)
+            ->values();
 
         return response()->json($threads);
     }
@@ -289,6 +371,7 @@ class StaffChatController extends BaseLmsController
             'dm_thread_id' => ['required', 'integer', 'exists:lms_dm_threads,id'],
             'content' => ['nullable', 'string', 'max:5000'],
             'attachment_url' => ['nullable', 'string', 'max:2048'],
+            'reply_to_id' => ['nullable', 'integer'],
         ]);
 
         $teacher = \App\Models\LmsTeacher::query()->findOrFail($session->user_id);
@@ -300,7 +383,10 @@ class StaffChatController extends BaseLmsController
             'sender_id' => $session->user_id,
             'content' => $validated['content'] ?? '',
             'attachment_url' => $validated['attachment_url'] ?? null,
+            'reply_to_id' => $this->resolveReplyToId($validated['reply_to_id'] ?? null, 'dm', (int) $validated['dm_thread_id']),
         ]);
+
+        $message->load(['replyTo.teacher', 'replyTo.student']);
 
         try {
             MessageSent::dispatch('dm', $validated['dm_thread_id'], [
@@ -310,6 +396,9 @@ class StaffChatController extends BaseLmsController
                 'sender_id' => $message->sender_id,
                 'sender_name' => $teacher->name,
                 'attachment_url' => $message->attachment_url,
+                'reply_to_id' => $message->reply_to_id,
+                'reply_to' => $this->replyToPayload($message),
+                'reactions' => [],
                 'created_at' => $message->created_at->toIso8601String(),
             ]);
         } catch (\Throwable) {}
@@ -321,6 +410,9 @@ class StaffChatController extends BaseLmsController
             'sender_id' => $message->sender_id,
             'from_role' => $message->sender_role,
             'attachment_url' => $message->attachment_url,
+            'reply_to_id' => $message->reply_to_id,
+            'reply_to' => $this->replyToPayload($message),
+            'reactions' => [],
             'created_at' => $message->created_at->toIso8601String(),
         ], 201);
     }
@@ -462,6 +554,56 @@ class StaffChatController extends BaseLmsController
             'unread_notifications' => $unreadNotifs,
             'unread_group' => $unreadGroup,
             'unread_dm' => $unreadDm,
+        ]);
+    }
+
+    /**
+     * Add or remove the teacher's reaction (one emoji) on a message in a chat
+     * they own — a group chat of one of their tracks, or a DM thread where they
+     * are the instructor. Returns the message's full re-aggregated reactions.
+     */
+    public function toggleReaction(Request $request, int $id): JsonResponse
+    {
+        $this->ensureLmsEnabled();
+
+        $session = $this->sessionFromRequest($request, 'staff');
+
+        if (! $session) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'emoji' => ['required', 'string', Rule::in($this->allowedReactionEmojis())],
+        ]);
+
+        $teacher = LmsTeacher::query()->findOrFail($session->user_id);
+
+        $message = LmsMessage::query()->whereNull('deleted_at')->findOrFail($id);
+
+        if ($message->chat_type === 'group') {
+            $trackIds = LmsTrack::query()->where('instructor_id', $teacher->id)->pluck('id');
+            $reachable = LmsGroupChat::query()
+                ->whereIn('track_id', $trackIds)
+                ->where('id', $message->chat_id)
+                ->exists();
+        } elseif ($message->chat_type === 'dm') {
+            $reachable = LmsDmThread::query()
+                ->where('id', $message->chat_id)
+                ->where('instructor_id', $teacher->id)
+                ->exists();
+        } else {
+            $reachable = false;
+        }
+
+        if (! $reachable) {
+            return response()->json(['message' => 'Not allowed.'], 403);
+        }
+
+        $reactions = $this->toggleMessageReaction($message, 'teacher', (int) $teacher->id, $validated['emoji']);
+
+        return response()->json([
+            'message_id' => $message->id,
+            'reactions' => $reactions,
         ]);
     }
 }

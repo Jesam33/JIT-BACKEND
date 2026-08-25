@@ -14,6 +14,9 @@ class Kernel extends ConsoleKernel
      */
     protected $commands = [
         \App\Console\Commands\CalculateLmsAttendance::class,
+        \App\Console\Commands\SetTenant::class,
+        \App\Console\Commands\AssignDefaultTenant::class,
+        \App\Console\Commands\ResendOnboarding::class,
     ];
 
     /**

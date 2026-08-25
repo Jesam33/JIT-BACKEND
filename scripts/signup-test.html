@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Signup test</title>
+  <style>body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}.card{max-width:640px;margin:40px auto;padding:20px;border:1px solid #eee;border-radius:8px}label{display:block;margin-top:12px}input,button{padding:8px;width:100%;box-sizing:border-box}</style>
+</head>
+<body>
+  <div class="card">
+    <h2>Signup test (click to submit)</h2>
+    <label>First name<input id="first" value="Test"></label>
+    <label>Last name<input id="last" value="Owner"></label>
+    <label>Email<input id="email" value="test+onboard@example.com"></label>
+    <label>Tenant name<input id="tenantName" value="Test Tenant"></label>
+    <label>Subdomain<input id="subdomain" value="test-tenant"></label>
+    <label>Password<input id="password" value="secret123" type="password"></label>
+    <label>Plan (slug)<input id="plan" value="free"></label>
+    <button id="submit">Submit signup</button>
+
+    <h3>Result</h3>
+    <pre id="result">(no request yet)</pre>
+  </div>
+
+  <script>
+    const btn = document.getElementById('submit');
+    const out = document.getElementById('result');
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      out.textContent = 'Sending...';
+      const payload = {
+        owner: {
+          first_name: document.getElementById('first').value,
+          last_name: document.getElementById('last').value,
+          email: document.getElementById('email').value,
+          password: document.getElementById('password').value
+        },
+        tenant: {
+          name: document.getElementById('tenantName').value,
+          subdomain: document.getElementById('subdomain').value
+        },
+        plan: document.getElementById('plan').value
+      };
+
+      try {
+        const res = await fetch('http://127.0.0.1:8000/api/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          credentials: 'omit'
+        });
+        const text = await res.text();
+        out.textContent = `HTTP ${res.status}\n` + text;
+      } catch (err) {
+        out.textContent = 'Error: ' + err.message;
+      }
+      btn.disabled = false;
+    });
+  </script>
+</body>
+</html>

@@ -12,6 +12,7 @@ class LmsPasswordReset extends Model
     protected $fillable = [
         'role',
         'email',
+        'tenant_id',
         'token_hash',
         'expires_at',
         'used_at',

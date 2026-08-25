@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="C:\Users\USER\Downloads\Compressed\jorsastech.com\jorsastech.com\phpunit.xml" tests="1" assertions="4" errors="0" failures="0" skipped="0" time="19.788704">
+    <testsuite name="Feature" tests="1" assertions="4" errors="0" failures="0" skipped="0" time="19.788704">
+      <testsuite name="Tests\Feature\SignupOnboardingTest" file="C:\Users\USER\Downloads\Compressed\jorsastech.com\jorsastech.com\tests\Feature\SignupOnboardingTest.php" tests="1" assertions="4" errors="0" failures="0" skipped="0" time="19.788704">
+        <testcase name="test_signup_creates_tenant_and_runs_onboarding" file="C:\Users\USER\Downloads\Compressed\jorsastech.com\jorsastech.com\tests\Feature\SignupOnboardingTest.php" line="12" class="Tests\Feature\SignupOnboardingTest" classname="Tests.Feature.SignupOnboardingTest" assertions="4" time="19.788704"/>
+      </testsuite>
+    </testsuite>
+  </testsuite>
+</testsuites>

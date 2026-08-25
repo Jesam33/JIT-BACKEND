@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\TenantAware;
 
 class AgentCommission extends Model
 {
+    use TenantAware;
     protected $fillable = [
         'agent_id', 'enrollment_id', 'course_price',
         'commission_amount', 'status', 'type', 'notes',

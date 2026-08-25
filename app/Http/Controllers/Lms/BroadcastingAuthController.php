@@ -9,6 +9,8 @@ use App\Models\LmsSession;
 use App\Models\LmsStudent;
 use App\Models\LmsTeacher;
 use App\Models\LmsTrack;
+use App\Models\Tenant;
+use App\Scopes\TenantScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -30,13 +32,25 @@ class BroadcastingAuthController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        // The token is the authoritative identity, so look it up unscoped, then
+        // bind the session's tenant. This constrains every channel-entity check
+        // below to that organisation — a user can only authorize channels within
+        // their own tenant, and a cross-tenant channel id resolves to null → 403.
         $session = LmsSession::query()
+            ->withoutGlobalScope(TenantScope::class)
             ->where('token', $token)
             ->where('expires_at', '>', now())
             ->first();
 
         if (! $session) {
             return response()->json(['message' => 'Invalid or expired token'], 401);
+        }
+
+        if ($session->tenant_id) {
+            $tenant = Tenant::find($session->tenant_id);
+            if ($tenant) {
+                app()->instance('currentTenant', $tenant);
+            }
         }
 
         if ($session->role === 'staff') {

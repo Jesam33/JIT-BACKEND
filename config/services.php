@@ -35,11 +35,13 @@ return [
         ],
     ],
 
-    'zoom' => [
-        'sdk_key' => env('ZOOM_SDK_KEY'),
-        'sdk_secret' => env('ZOOM_SDK_SECRET'),
-        'api_key' => env('ZOOM_API_KEY'),
-        'api_secret' => env('ZOOM_API_SECRET'),
+    'jitsi' => [
+        // 8x8 JaaS (managed Jitsi). App ID is the "magic cookie"; api_key_id is the JWT `kid`;
+        // private_key is the RS256 PEM (may be stored base64-encoded on one line in .env).
+        'app_id' => env('JITSI_APP_ID'),
+        'api_key_id' => env('JITSI_API_KEY_ID'),
+        'private_key' => env('JITSI_PRIVATE_KEY'),
+        'domain' => env('JITSI_DOMAIN', '8x8.vc'),
     ],
 
 ];

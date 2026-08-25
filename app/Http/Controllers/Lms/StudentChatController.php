@@ -14,6 +14,7 @@ use App\Models\LmsNotification;
 use App\Models\LmsTeacher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class StudentChatController extends BaseLmsController
 {
@@ -231,9 +232,12 @@ class StudentChatController extends BaseLmsController
             ->where('chat_type', 'group')
             ->where('chat_id', $groupChat->id)
             ->whereNull('deleted_at')
-            ->orderBy('created_at')
-            ->with(['teacher', 'student'])
+            ->with(['teacher', 'student', 'replyTo.teacher', 'replyTo.student', 'reactions'])
+            ->orderByDesc('created_at')
+            ->limit(200)
             ->get()
+            ->reverse()
+            ->values()
             ->map(fn ($m) => [
                 'id' => $m->id,
                 'chat_id' => $m->chat_id,
@@ -242,6 +246,9 @@ class StudentChatController extends BaseLmsController
                 'sender_id' => $m->sender_id,
                 'sender_name' => $m->sender_role === 'teacher' ? ($m->teacher?->name ?? 'Teacher') : ($m->student ? trim($m->student->first_name . ' ' . $m->student->last_name) : 'Student'),
                 'attachment_url' => $m->attachment_url,
+                'reply_to_id' => $m->reply_to_id,
+                'reply_to' => $this->replyToPayload($m),
+                'reactions' => $this->reactionsPayload($m, 'student', $session->user_id),
                 'edited_at' => $m->edited_at?->toIso8601String(),
                 'created_at' => $m->created_at->toIso8601String(),
             ]);
@@ -301,6 +308,7 @@ class StudentChatController extends BaseLmsController
         $validated = $request->validate([
             'content' => ['nullable', 'string', 'max:5000'],
             'attachment_url' => ['nullable', 'string', 'max:2048'],
+            'reply_to_id' => ['nullable', 'integer'],
         ]);
 
         $content = $validated['content'] ?? '';
@@ -329,6 +337,8 @@ class StudentChatController extends BaseLmsController
 
         $student = \App\Models\LmsStudent::query()->findOrFail($session->user_id);
 
+        $replyToId = $this->resolveReplyToId($validated['reply_to_id'] ?? null, 'group', $groupChat->id);
+
         $message = LmsMessage::query()->create([
             'chat_type' => 'group',
             'chat_id' => $groupChat->id,
@@ -336,7 +346,10 @@ class StudentChatController extends BaseLmsController
             'sender_id' => $session->user_id,
             'content' => $content,
             'attachment_url' => $validated['attachment_url'] ?? null,
+            'reply_to_id' => $replyToId,
         ]);
+
+        $message->load(['replyTo.teacher', 'replyTo.student']);
 
         $studentName = trim($student->first_name . ' ' . $student->last_name);
 
@@ -349,6 +362,9 @@ class StudentChatController extends BaseLmsController
                 'sender_id' => $message->sender_id,
                 'sender_name' => $studentName,
                 'attachment_url' => $message->attachment_url,
+                'reply_to_id' => $message->reply_to_id,
+                'reply_to' => $this->replyToPayload($message),
+                'reactions' => [],
                 'created_at' => $message->created_at->toIso8601String(),
             ]);
         } catch (\Throwable) {}
@@ -361,6 +377,9 @@ class StudentChatController extends BaseLmsController
             'sender_id' => $message->sender_id,
             'sender_name' => $studentName,
             'attachment_url' => $message->attachment_url,
+            'reply_to_id' => $message->reply_to_id,
+            'reply_to' => $this->replyToPayload($message),
+            'reactions' => [],
             'created_at' => $message->created_at->toIso8601String(),
         ], 201);
     }
@@ -382,8 +401,12 @@ class StudentChatController extends BaseLmsController
         $messages = LmsMessage::query()
             ->where('chat_type', 'dm')
             ->where('chat_id', $dmThread->id)
-            ->orderBy('created_at')
+            ->with(['replyTo.teacher', 'replyTo.student', 'reactions'])
+            ->orderByDesc('created_at')
+            ->limit(200)
             ->get()
+            ->reverse()
+            ->values()
             ->map(fn ($m) => [
                 'id' => $m->id,
                 'content' => $m->content,
@@ -391,6 +414,9 @@ class StudentChatController extends BaseLmsController
                 'sender_id' => $m->sender_id,
                 'from_role' => $m->sender_role,
                 'attachment_url' => $m->attachment_url,
+                'reply_to_id' => $m->reply_to_id,
+                'reply_to' => $this->replyToPayload($m),
+                'reactions' => $this->reactionsPayload($m, 'student', $session->user_id),
                 'edited_at' => $m->edited_at?->toIso8601String(),
                 'created_at' => $m->created_at->toIso8601String(),
             ]);
@@ -415,9 +441,12 @@ class StudentChatController extends BaseLmsController
         $validated = $request->validate([
             'content' => ['nullable', 'string', 'max:5000'],
             'attachment_url' => ['nullable', 'string', 'max:2048'],
+            'reply_to_id' => ['nullable', 'integer'],
         ]);
 
         $student = \App\Models\LmsStudent::query()->findOrFail($session->user_id);
+
+        $replyToId = $this->resolveReplyToId($validated['reply_to_id'] ?? null, 'dm', $dmThread->id);
 
         $message = LmsMessage::query()->create([
             'chat_type' => 'dm',
@@ -426,7 +455,10 @@ class StudentChatController extends BaseLmsController
             'sender_id' => $session->user_id,
             'content' => $validated['content'] ?? '',
             'attachment_url' => $validated['attachment_url'] ?? null,
+            'reply_to_id' => $replyToId,
         ]);
+
+        $message->load(['replyTo.teacher', 'replyTo.student']);
 
         $studentName = trim($student->first_name . ' ' . $student->last_name);
 
@@ -438,6 +470,9 @@ class StudentChatController extends BaseLmsController
                 'sender_id' => $message->sender_id,
                 'sender_name' => $studentName,
                 'attachment_url' => $message->attachment_url,
+                'reply_to_id' => $message->reply_to_id,
+                'reply_to' => $this->replyToPayload($message),
+                'reactions' => [],
                 'created_at' => $message->created_at->toIso8601String(),
             ]);
         } catch (\Throwable) {}
@@ -450,6 +485,9 @@ class StudentChatController extends BaseLmsController
             'from_role' => $message->sender_role,
             'sender_name' => $studentName,
             'attachment_url' => $message->attachment_url,
+            'reply_to_id' => $message->reply_to_id,
+            'reply_to' => $this->replyToPayload($message),
+            'reactions' => [],
             'created_at' => $message->created_at->toIso8601String(),
         ], 201);
     }
@@ -571,6 +609,44 @@ class StudentChatController extends BaseLmsController
             'attachment_url' => $message->attachment_url,
             'edited_at' => $message->edited_at->toIso8601String(),
             'created_at' => $message->created_at->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * Add or remove the student's reaction (one emoji) on a message they can
+     * see — a message in their track's group chat or their instructor DM.
+     * Returns the message's full re-aggregated reaction list.
+     */
+    public function toggleReaction(Request $request, int $id): JsonResponse
+    {
+        $this->ensureLmsEnabled();
+
+        $session = $this->sessionFromRequest($request, 'student');
+
+        if (! $session) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'emoji' => ['required', 'string', Rule::in($this->allowedReactionEmojis())],
+        ]);
+
+        [$track, $groupChat, $dmThread] = $this->ensureStudentTrackContext($session->user_id);
+
+        $message = LmsMessage::query()->whereNull('deleted_at')->findOrFail($id);
+
+        $reachable = ($message->chat_type === 'group' && (int) $message->chat_id === (int) $groupChat->id)
+            || ($message->chat_type === 'dm' && (int) $message->chat_id === (int) $dmThread->id);
+
+        if (! $reachable) {
+            return response()->json(['message' => 'Not allowed.'], 403);
+        }
+
+        $reactions = $this->toggleMessageReaction($message, 'student', (int) $session->user_id, $validated['emoji']);
+
+        return response()->json([
+            'message_id' => $message->id,
+            'reactions' => $reactions,
         ]);
     }
 }

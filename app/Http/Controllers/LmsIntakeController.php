@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Lms\BaseLmsController;
 use App\Mail\PaymentConfirmationMail;
 use App\Models\Agent;
 use App\Models\AgentCommission;
@@ -13,7 +14,9 @@ use App\Models\LmsSession;
 use App\Models\LmsStudent;
 use App\Models\LmsTrack;
 use App\Models\Payment;
+use App\Models\Tenant;
 use App\Models\TrainingRegistration;
+use App\Scopes\TenantScope;
 use App\Services\PaystackService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,12 +25,48 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-class LmsIntakeController extends Controller
+class LmsIntakeController extends BaseLmsController
 {
     private function ensureIntakeEnabled(): void
     {
         if (! filter_var(env('TRAINING_FEATURE_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
             throw new NotFoundHttpException();
+        }
+    }
+
+    /**
+     * The currently-bound institute's Paystack subaccount code, or null. When
+     * present, course fees are split to the institute's own bank; when absent
+     * (primary institute, or one that hasn't connected a payout account yet),
+     * the transaction settles to the platform account exactly as before.
+     */
+    private function tenantSubaccountCode(): ?string
+    {
+        $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
+
+        if (! $tenant) {
+            return null;
+        }
+
+        $code = data_get($tenant->settings, 'paystack.subaccount_code');
+
+        return is_string($code) && $code !== '' ? $code : null;
+    }
+
+    /**
+     * Bind currentTenant from a resolved record's tenant_id. Payment
+     * verification and the Paystack webhook arrive with no tenant header (and
+     * the webhook has no session at all), so the payment row — found by its
+     * globally-unique reference — is the authoritative proof of the tenant.
+     */
+    protected function bindTenantFromModel($model): void
+    {
+        $tenantId = $model->tenant_id ?? null;
+        if ($tenantId) {
+            $tenant = Tenant::find($tenantId);
+            if ($tenant) {
+                app()->instance('currentTenant', $tenant);
+            }
         }
     }
 
@@ -101,7 +140,22 @@ class LmsIntakeController extends Controller
             'course_id' => ['required', 'integer', 'exists:lms_courses,id'],
             'learning_mode' => ['required', 'in:live,pre_recorded'],
             'referral_code' => ['nullable', 'string', 'max:20'],
+            'institute_slug' => ['nullable', 'string', 'max:255'],
         ]);
+
+        // A student registering from an institute's public storefront
+        // (/i/{slug}) sends its slug explicitly. Bind that tenant as
+        // authoritative BEFORE the course lookup and create, so the course
+        // resolves within the institute and the registration row is stamped
+        // with the right tenant_id. On a path-based storefront the browser's
+        // X-Tenant-Slug header falls back to the primary tenant, so it cannot
+        // be trusted here; an explicit slug overrides it.
+        if (! empty($validated['institute_slug'])) {
+            $tenant = Tenant::query()->where('slug', $validated['institute_slug'])->first();
+            if ($tenant) {
+                app()->instance('currentTenant', $tenant);
+            }
+        }
 
         $course = LmsCourse::query()->findOrFail($validated['course_id']);
 
@@ -158,7 +212,17 @@ class LmsIntakeController extends Controller
             'registration_id' => ['required', 'integer', 'exists:training_registrations,id'],
         ]);
 
-        $registration = TrainingRegistration::query()->findOrFail($validated['registration_id']);
+        $registration = TrainingRegistration::query()
+            ->withoutGlobalScope(TenantScope::class)
+            ->findOrFail($validated['registration_id']);
+
+        // The registration row (stamped when it was created) is the source of
+        // truth for the tenant here. This call can arrive carrying the primary
+        // tenant's header from a /i/{slug} storefront, so bind from the row
+        // instead — the Payment created below (and, on the free path, the
+        // LmsStudent / commission rows) are then stamped for the right
+        // institute. Mirrors the verify/webhook binding.
+        $this->bindTenantFromModel($registration);
 
         if ($registration->status !== 'pending') {
             return response()->json(['message' => 'Payment already processed for this registration.'], 422);
@@ -182,7 +246,18 @@ class LmsIntakeController extends Controller
             if ($registration->registered_by_agent_id || $registration->referred_by_agent_id) {
                 $callbackUrl = $frontendUrl . '/lms/agent/verify?reference=' . $reference;
             } else {
-                $callbackUrl = $frontendUrl . '/institute/verify?reference=' . $reference;
+                // A registration stamped with a NON-primary institute came from
+                // that institute's /i/{slug} storefront (register() bound the
+                // tenant from institute_slug; bindTenantFromModel above re-bound
+                // it here). Keep the Paystack callback inside that branded
+                // mini-site so the "Verifying Payment" page and its nav stay on
+                // the institute's site instead of bouncing to the JIT apex page.
+                $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
+                if ($tenant && $tenant->slug && $tenant->slug !== config('saas.primary_slug', 'jorsas')) {
+                    $callbackUrl = $frontendUrl . '/i/' . $tenant->slug . '/verify?reference=' . $reference;
+                } else {
+                    $callbackUrl = $frontendUrl . '/institute/verify?reference=' . $reference;
+                }
             }
 
             $response = $paystack->initializeTransaction(
@@ -193,7 +268,11 @@ class LmsIntakeController extends Controller
                     'registration_id' => $registration->id,
                     'course_name' => $registration->course_name,
                 ],
-                $callbackUrl
+                $callbackUrl,
+                // Settle course fees to the institute's own Paystack subaccount
+                // (its bank) when it has configured one; primary/unconfigured
+                // institutes fall back to the platform account, as before.
+                $this->tenantSubaccountCode()
             );
 
             Payment::query()->create([
@@ -227,7 +306,10 @@ class LmsIntakeController extends Controller
             'reference' => ['required', 'string'],
         ]);
 
-        $payment = Payment::query()->where('reference', $validated['reference'])->first();
+        $payment = Payment::query()
+            ->withoutGlobalScope(TenantScope::class)
+            ->where('reference', $validated['reference'])
+            ->first();
 
         if (! $payment) {
             return response()->json(['message' => 'Payment reference not found.'], 404);
@@ -274,7 +356,10 @@ class LmsIntakeController extends Controller
 
         if ($event === 'charge.success') {
             $reference = $request->input('data.reference');
-            $payment = Payment::query()->where('reference', $reference)->first();
+            $payment = Payment::query()
+                ->withoutGlobalScope(TenantScope::class)
+                ->where('reference', $reference)
+                ->first();
 
             if ($payment && $payment->status !== 'success') {
                 $this->completePayment($payment);
@@ -299,6 +384,21 @@ class LmsIntakeController extends Controller
                 'referred_by_agent_id' => $registration->referred_by_agent_id ?? $registration->registered_by_agent_id,
             ]
         );
+
+        // Bridge to staff visibility: enroll into the course's active track now
+        // (if one exists) so the assigned instructor sees the student without
+        // waiting for password setup. Best-effort only: this convenience must
+        // never abort the registration/approval + setup email below (a throw
+        // here once surfaced to students as a false "Payment Issue").
+        try {
+            $this->enrollStudentIntoCourseTrack($student->id, $registration->course_id);
+        } catch (\Throwable $e) {
+            Log::warning('Enroll-into-track bridge failed (zero-payment); continuing', [
+                'student_id' => $student->id,
+                'course_id' => $registration->course_id,
+                'err' => $e->getMessage(),
+            ]);
+        }
 
         $setupToken = Str::random(64);
 
@@ -353,6 +453,11 @@ class LmsIntakeController extends Controller
 
     private function completePayment(Payment $payment): JsonResponse
     {
+        // The payment (found by its globally-unique reference) is the source of
+        // truth for the tenant here — verify/webhook may run with no header, so
+        // bind it before touching any TenantAware relation or create below.
+        $this->bindTenantFromModel($payment);
+
         $registration = $payment->registration;
 
         if (! $registration) {
@@ -377,6 +482,26 @@ class LmsIntakeController extends Controller
                 'referred_by_agent_id' => $registration->referred_by_agent_id ?? $registration->registered_by_agent_id,
             ]
         );
+
+        // Bridge to staff visibility: enroll the paid student into the course's
+        // active track now (if one exists), so the assigned instructor sees them
+        // immediately rather than only after the student sets a password.
+        // Best-effort only: a hiccup here must never abort payment confirmation
+        // or the setup email below. This exact call (an undefined method at the
+        // time) once threw AFTER the payment was marked paid, so the student was
+        // charged but got no access email and saw a false "Payment Issue".
+        try {
+            $paidStudent = LmsStudent::query()->where('email', $registration->email)->first();
+            if ($paidStudent) {
+                $this->enrollStudentIntoCourseTrack($paidStudent->id, $registration->course_id);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Enroll-into-track bridge failed (paid); continuing', [
+                'email' => $registration->email,
+                'course_id' => $registration->course_id,
+                'err' => $e->getMessage(),
+            ]);
+        }
 
         LmsCourse::query()->where('id', $registration->course_id)->increment('registered_count');
 
@@ -519,7 +644,7 @@ class LmsIntakeController extends Controller
         return redirect()->back()->with('status', $result['message']);
     }
 
-    private function ensureSuperAdmin(Request $request): void
+    protected function ensureSuperAdmin(Request $request): void
     {
         $user = $request->user();
         $isSuperUser = $user && method_exists($user, 'isSuperUser') && $user->isSuperUser();
@@ -529,7 +654,7 @@ class LmsIntakeController extends Controller
 
     private function sendSetupEmail(TrainingRegistration $registration, string $setupToken): void
     {
-        $baseUrl = rtrim((string) env('LMS_BASE_URL', 'http://127.0.0.1:3000'), '/');
+        $baseUrl = config('saas.frontend_url');
         $setupLink = $baseUrl . '/lms/setup-password?token=' . urlencode($setupToken) . '&email=' . urlencode($registration->email);
 
         try {

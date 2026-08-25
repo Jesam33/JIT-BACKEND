@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\TenantAware;
 
 class LmsChatReadState extends Model
 {
+    use TenantAware;
     protected $fillable = [
         'student_id',
         'chat_type',

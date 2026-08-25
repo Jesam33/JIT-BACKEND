@@ -4,9 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Traits\TenantAware;
 
 class LmsModuleContent extends Model
 {
+    use TenantAware;
     protected $fillable = [
         'module_id',
         'title',

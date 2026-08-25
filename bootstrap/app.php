@@ -19,10 +19,21 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->validateCsrfTokens(except: [
             'api/frontend/*',
+            'api/signup',
+            'contact/send',
         ]);
 
         $middleware->group('lms-api', [
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            \App\Http\Middleware\ResolveTenant::class,
+            \App\Http\Middleware\ResolveTenantFromSession::class,
+        ]);
+
+        // Fail-closed gate applied to the tenant-scoped route subset only.
+        $middleware->alias([
+            'tenant.required' => \App\Http\Middleware\RequireTenant::class,
+            'tenant.primary' => \App\Http\Middleware\BindPrimaryTenant::class,
+            'plan.chat' => \App\Http\Middleware\EnsureChatEnabled::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

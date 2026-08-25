@@ -5,9 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Traits\TenantAware;
 
 class LmsScheduledClass extends Model
 {
+    use TenantAware;
     protected $fillable = [
         'module_id',
         'teacher_id',

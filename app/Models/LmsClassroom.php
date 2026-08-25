@@ -5,10 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\TenantAware;
 
 class LmsClassroom extends Model
 {
     use HasFactory;
+    use TenantAware;
 
     protected $fillable = [
         'course_id',

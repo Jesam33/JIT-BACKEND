@@ -16,6 +16,7 @@ use App\Models\LmsEnrollment;
 use App\Models\LmsStudent;
 use App\Models\LmsTrack;
 use App\Models\TrainingRegistration;
+use App\Scopes\TenantScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,13 +27,22 @@ class AgentController extends BaseLmsController
 {
     private function agentOrFail(Request $request): Agent
     {
-        $session = AgentSession::where('token', $request->bearerToken())
+        // The session token is the authoritative proof of identity, so the
+        // lookup must not be tenant-scoped (otherwise a spoofable header would
+        // decide which tenant's sessions we search). We derive the tenant FROM
+        // the session, not the other way around.
+        $session = AgentSession::withoutGlobalScope(TenantScope::class)
+            ->where('token', $request->bearerToken())
             ->where(function ($q) { $q->whereNull('expires_at')->orWhere('expires_at', '>', now()); })
             ->first();
 
         if (!$session) abort(401, 'Unauthorized');
 
-        $agent = Agent::find($session->agent_id);
+        // Bind the agent's organisation so every downstream TenantAware query in
+        // the request scopes to it.
+        $this->bindTenantFromModel($session);
+
+        $agent = Agent::withoutGlobalScope(TenantScope::class)->find($session->agent_id);
         if (!$agent || $agent->status !== 'approved') abort(403, 'Access denied.');
 
         return $agent;
@@ -64,6 +74,11 @@ class AgentController extends BaseLmsController
         ]);
 
         $password = Str::random(12);
+
+        // Agents are per-tenant. Attribute the application to the requested
+        // organisation (from the tenant header) or, on the bare primary domain,
+        // to JIT. This binds the tenant so Agent::create auto-stamps tenant_id.
+        $this->currentTenantOrPrimary();
 
         $agent = Agent::create([
             'name' => $validated['name'],
@@ -98,7 +113,10 @@ class AgentController extends BaseLmsController
             'password' => 'required|string',
         ]);
 
-        $agent = Agent::where('email', $validated['email'])->first();
+        // Agent emails are globally unique (unique:agents,email), so the login
+        // lookup is unambiguous without a tenant scope — and the agent's own
+        // tenant_id is the authoritative organisation for the session.
+        $agent = Agent::withoutGlobalScope(TenantScope::class)->where('email', $validated['email'])->first();
 
         if (!$agent || !password_verify($validated['password'], $agent->password ?? '')) {
             return response()->json(['message' => 'Invalid credentials.'], 401);
@@ -107,6 +125,9 @@ class AgentController extends BaseLmsController
         if ($agent->status !== 'approved') {
             return response()->json(['message' => 'Your account is not yet approved.'], 403);
         }
+
+        // Stamp the session with the agent's organisation.
+        $this->bindTenantFromModel($agent);
 
         $token = Str::random(80);
         AgentSession::create([
@@ -315,13 +336,24 @@ class AgentController extends BaseLmsController
         ->latest()
         ->paginate(50);
 
-        $items = $registrations->through(function ($r) use ($agent) {
-            $payment = \App\Models\Payment::where('registration_id', $r->id)->first();
-            $commission = \App\Models\AgentCommission::where('agent_id', $agent->id)
-                ->where('enrollment_id', $r->id)
-                ->first();
-            $student = \App\Models\LmsStudent::where('training_registration_id', $r->id)->first();
-            $enrollment = $student ? \App\Models\LmsEnrollment::where('student_id', $student->id)->first() : null;
+        // Batch-load the four related sets for this page once, keyed for O(1)
+        // lookup, instead of running 4 queries per registration inside through().
+        $regIds = collect($registrations->items())->pluck('id');
+        $payments = \App\Models\Payment::whereIn('registration_id', $regIds)
+            ->get()->keyBy('registration_id');
+        $commissions = \App\Models\AgentCommission::where('agent_id', $agent->id)
+            ->whereIn('enrollment_id', $regIds)
+            ->get()->keyBy('enrollment_id');
+        $students = \App\Models\LmsStudent::whereIn('training_registration_id', $regIds)
+            ->get()->keyBy('training_registration_id');
+        $enrollments = \App\Models\LmsEnrollment::whereIn('student_id', $students->pluck('id'))
+            ->get()->keyBy('student_id');
+
+        $items = $registrations->through(function ($r) use ($agent, $payments, $commissions, $students, $enrollments) {
+            $payment = $payments->get($r->id);
+            $commission = $commissions->get($r->id);
+            $student = $students->get($r->id);
+            $enrollment = $student ? $enrollments->get($student->id) : null;
 
             return [
                 'id' => $r->id,
@@ -471,7 +503,7 @@ class AgentController extends BaseLmsController
         ]);
 
         if (filter_var(env('TRAINING_EMAIL_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
-            $baseUrl = rtrim(env('LMS_BASE_URL', 'http://127.0.0.1:3000'), '/');
+            $baseUrl = config('saas.frontend_url');
             try {
                 Mail::to($agent->email)->send(new AgentApplicationApprovedMail($agent, $baseUrl . '/lms/agent/login'));
             } catch (\Throwable $e) {
@@ -498,7 +530,7 @@ class AgentController extends BaseLmsController
             'email' => 'required|email',
         ]);
 
-        $agent = Agent::where('email', $validated['email'])->first();
+        $agent = Agent::withoutGlobalScope(TenantScope::class)->where('email', $validated['email'])->first();
 
         if (!$agent) {
             return response()->json(['message' => 'If that email exists, a reset link has been sent.']);
@@ -524,7 +556,7 @@ class AgentController extends BaseLmsController
             return response()->json(['message' => 'Invalid or expired reset token.'], 422);
         }
 
-        $agent = Agent::where('email', $validated['email'])->first();
+        $agent = Agent::withoutGlobalScope(TenantScope::class)->where('email', $validated['email'])->first();
 
         if (!$agent) {
             return response()->json(['message' => 'Invalid or expired reset token.'], 422);

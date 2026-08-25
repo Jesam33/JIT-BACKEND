@@ -10,6 +10,7 @@ use App\Models\LmsGroupChat;
 use App\Models\LmsSession;
 use App\Models\LmsStudent;
 use App\Models\TrainingRegistration;
+use App\Scopes\TenantScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -25,6 +26,7 @@ class StudentAuthController extends BaseLmsController
         $token = (string) $request->query('token', '');
 
         $registration = TrainingRegistration::query()
+            ->withoutGlobalScope(TenantScope::class)
             ->where('invite_token', $token)
             ->where('status', 'approved')
             ->first();
@@ -64,6 +66,7 @@ class StudentAuthController extends BaseLmsController
         ]);
 
         $registration = TrainingRegistration::query()
+            ->withoutGlobalScope(TenantScope::class)
             ->where('invite_token', $validated['token'])
             ->where('status', 'approved')
             ->first();
@@ -71,6 +74,9 @@ class StudentAuthController extends BaseLmsController
         if (! $registration) {
             return response()->json(['message' => 'Invalid invite token.'], 404);
         }
+
+        // The approved registration is the authoritative proof of the organisation.
+        $this->bindTenantFromModel($registration);
 
         $resolvedCourseId = $validated['course_id'] ?? $registration->course_id;
         $resolvedLearningMode = $validated['learning_mode'] ?? $registration->learning_mode ?? 'live';
@@ -128,6 +134,7 @@ class StudentAuthController extends BaseLmsController
         ]);
 
         $registration = TrainingRegistration::query()
+            ->withoutGlobalScope(TenantScope::class)
             ->where('invite_token', $validated['token'])
             ->where('status', 'approved')
             ->first();
@@ -135,6 +142,9 @@ class StudentAuthController extends BaseLmsController
         if (! $registration) {
             return response()->json(['message' => 'Invalid or expired setup link.'], 404);
         }
+
+        // The approved registration is the authoritative proof of the organisation.
+        $this->bindTenantFromModel($registration);
 
         $student = LmsStudent::query()->updateOrCreate(
             ['email' => $registration->email],
@@ -190,11 +200,16 @@ class StudentAuthController extends BaseLmsController
             'password' => ['required', 'string'],
         ]);
 
-        $student = LmsStudent::query()->where('email', $validated['email'])->first();
+        $student = $this->authenticateStudent($validated['email'], $validated['password']);
 
-        if (! $student || ! Hash::check($validated['password'], $student->password)) {
+        if (! $student) {
             return response()->json(['message' => 'Invalid login credentials.'], 422);
         }
+
+        // Bind the student's own organisation BEFORE minting the session, so the
+        // session row is stamped with the correct tenant_id (via TenantAware) and
+        // every later portal request (me/dashboard) resolves the right tenant.
+        $this->bindTenantFromModel($student);
 
         $token = Str::random(80);
 
@@ -205,7 +220,39 @@ class StudentAuthController extends BaseLmsController
             'expires_at' => now()->addDays(7),
         ]);
 
-        return response()->json(['token' => $token]);
+        return response()->json(['token' => $token, 'tenant' => $this->currentTenantPayload()]);
+    }
+
+    /**
+     * Resolve the student for these credentials. A student's email is unique
+     * only per-tenant (the same person may exist under several institutes), so:
+     *  - when the request carries an explicit institute (subdomain / header /
+     *    ?org=), the global TenantScope already limits the lookup to it;
+     *  - otherwise (bare domain / local dev) search across institutes and
+     *    authenticate whichever same-email account's password matches — newest
+     *    first — so a non-primary student can still log in without a subdomain.
+     */
+    private function authenticateStudent(string $email, string $password): ?LmsStudent
+    {
+        if (app()->bound('requestedTenantSlug')) {
+            $student = LmsStudent::query()->where('email', $email)->first();
+
+            return $student && Hash::check($password, $student->password) ? $student : null;
+        }
+
+        $candidates = LmsStudent::query()
+            ->withoutGlobalScope(TenantScope::class)
+            ->where('email', $email)
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($candidates as $candidate) {
+            if (Hash::check($password, $candidate->password)) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     public function forgotPassword(Request $request): JsonResponse
@@ -214,11 +261,30 @@ class StudentAuthController extends BaseLmsController
 
         $validated = $request->validate(['email' => ['required', 'email']]);
 
-        $student = LmsStudent::query()->where('email', $validated['email'])->first();
+        // Prefer the explicitly-requested institute (mirrors login); otherwise
+        // fall back across institutes so a student on the wrong portal or the
+        // bare domain still gets helped. bindTenantFromModel then stamps the
+        // token — and the emailed link — with the account's OWN institute, so
+        // the reset and the subsequent login both stay on it.
+        $email = $validated['email'];
+
+        $student = app()->bound('requestedTenantSlug')
+            ? LmsStudent::query()->where('email', $email)->first()
+            : null;
+
+        if (! $student) {
+            $student = LmsStudent::query()
+                ->withoutGlobalScope(TenantScope::class)
+                ->where('email', $email)
+                ->orderByDesc('id')
+                ->first();
+        }
 
         if (! $student) {
             return response()->json(['message' => 'If that email exists, a reset link has been sent.']);
         }
+
+        $this->bindTenantFromModel($student);
 
         $token = $this->createPasswordResetToken('student', $student->email);
         $link = $this->buildResetLink('student', $student->email, $token);
@@ -238,11 +304,22 @@ class StudentAuthController extends BaseLmsController
             'password' => ['required', 'string', 'min:8'],
         ]);
 
-        if (! $this->isValidResetToken('student', $validated['email'], $validated['token'])) {
+        // The token row carries the issuing institute; bind it so the account
+        // lookup resolves the right tenant even on the bare domain.
+        $reset = $this->resolveResetToken('student', $validated['email'], $validated['token']);
+
+        if (! $reset) {
             return response()->json(['message' => 'Invalid or expired reset token.'], 422);
         }
 
-        $student = LmsStudent::query()->where('email', $validated['email'])->first();
+        $this->bindTenantFromModel($reset);
+
+        $student = LmsStudent::query()
+            ->withoutGlobalScope(TenantScope::class)
+            ->where('email', $validated['email'])
+            ->when($reset->tenant_id, fn ($q) => $q->where('tenant_id', $reset->tenant_id))
+            ->orderByDesc('id')
+            ->first();
 
         if (! $student) {
             return response()->json(['message' => 'Student not found.'], 404);

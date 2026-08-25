@@ -5,10 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use App\Traits\TenantAware;
+use App\Scopes\TenantScope;
 
 class LmsCourse extends Model
 {
     use HasFactory;
+    use TenantAware;
 
     protected $fillable = [
         'title',
@@ -36,7 +39,25 @@ class LmsCourse extends Model
     {
         static::creating(function (LmsCourse $course): void {
             if (! $course->slug) {
-                $course->slug = Str::slug($course->title);
+                // Slugs are unique PER INSTITUTE (the (tenant_id, slug) index), so
+                // two institutes can each own a clean "aperture-class", and a
+                // repeated title within one institute becomes "aperture-class-2",
+                // "-3", … instead of crashing on the unique key. The TenantAware
+                // creating hook runs first (traits boot before booted()), so
+                // $course->tenant_id is already populated here. Mirrors the backfill
+                // in the 2026_07_10 add-fields migration.
+                $base = Str::slug((string) $course->title) ?: 'course';
+                $slug = $base;
+                $n = 2;
+                while (
+                    static::withoutGlobalScope(TenantScope::class)
+                        ->where('tenant_id', $course->tenant_id)
+                        ->where('slug', $slug)
+                        ->exists()
+                ) {
+                    $slug = $base . '-' . $n++;
+                }
+                $course->slug = $slug;
             }
         });
     }

@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\TenantAware;
 
 class Agent extends Model
 {
+    use TenantAware;
     protected $fillable = [
         'name', 'email', 'phone', 'home_address', 'qualification',
         'custom_answers', 'referral_code', 'status', 'password', 'approved_at',
