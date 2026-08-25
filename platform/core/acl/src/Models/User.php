@@ -122,19 +122,20 @@ class User extends BaseModel implements
     }
 
     protected function avatarUrl(): Attribute
-    {
-        return Attribute::get(function () {
-            if ($this->avatar && $this->avatar->url) {
-                return RvMedia::url($this->avatar->url);
-            }
+{
+    return Attribute::get(function () {
+        // Check if avatar_id exists before trying to use the avatar
+        if ($this->avatar_id && $this->avatar && $this->avatar->url) {
+            return RvMedia::url($this->avatar->url);
+        }
 
-            try {
-                return Avatar::createBase64Image($this->name);
-            } catch (Throwable) {
-                return RvMedia::getDefaultImage();
-            }
-        });
-    }
+        try {
+            return Avatar::createBase64Image($this->name);
+        } catch (Throwable) {
+            return RvMedia::getDefaultImage();
+        }
+    });
+}
 
     public function isSuperUser(): bool
     {
