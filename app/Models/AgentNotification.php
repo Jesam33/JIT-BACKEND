@@ -10,11 +10,12 @@ class AgentNotification extends Model
     use TenantAware;
     protected $fillable = [
         'agent_id', 'type', 'title', 'body',
-        'reference_type', 'reference_id', 'is_read', 'emailed_at',
+        'reference_type', 'reference_id', 'is_read', 'emailed_at', 'email_attempts',
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
         'emailed_at' => 'datetime',
+        'email_attempts' => 'integer',
     ];
 }

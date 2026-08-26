@@ -464,6 +464,29 @@ abstract class BaseLmsController extends Controller
         );
     }
 
+    /**
+     * Notify every student in the CURRENT tenant that a new course is available.
+     * Both course-create paths (owner panel + JIT super-admin) run in a
+     * tenant-bound context, so the LmsStudent query and the LmsNotification
+     * writes are all scoped to that one institute. In-app now; emailed by the
+     * lms:send-notification-emails sweep.
+     */
+    protected function notifyStudentsOfNewCourse(\App\Models\LmsCourse $course): void
+    {
+        $studentIds = \App\Models\LmsStudent::query()->pluck('id');
+
+        foreach ($studentIds as $studentId) {
+            \App\Models\LmsNotification::create([
+                'student_id' => $studentId,
+                'type' => 'new_course',
+                'title' => 'New course available: ' . $course->title,
+                'body' => 'A new course, "' . $course->title . '", has just been added. Take a look!',
+                'reference_type' => 'course',
+                'reference_id' => $course->id,
+            ]);
+        }
+    }
+
     protected function extractPasscodeFromUrl(?string $url): ?string
     {
         if (! $url) {

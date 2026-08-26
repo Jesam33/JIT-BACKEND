@@ -86,7 +86,38 @@ class StaffModuleController extends BaseLmsController
 
         $module = LmsModule::create($validated);
 
+        // A published module is immediately visible to students — let them know
+        // (in-app now; emailed by the lms:send-notification-emails sweep). Drafts
+        // stay silent until they are published (see update()).
+        if ($module->status === 'published') {
+            $this->notifyStudentsOfModule($module);
+        }
+
         return response()->json($module->load('contents'), 201);
+    }
+
+    /**
+     * Notify every student enrolled in this module's course that new curriculum
+     * is available. Mirrors the scheduleClass() fan-out; TenantAware stamps the
+     * tenant_id on each notification.
+     */
+    private function notifyStudentsOfModule(LmsModule $module): void
+    {
+        $studentIds = \App\Models\LmsEnrollment::query()
+            ->whereHas('track', fn ($q) => $q->where('course_id', $module->course_id))
+            ->pluck('student_id')
+            ->unique();
+
+        foreach ($studentIds as $studentId) {
+            \App\Models\LmsNotification::create([
+                'student_id' => $studentId,
+                'type' => 'new_module',
+                'title' => 'New module: ' . $module->title,
+                'body' => 'A new module "' . $module->title . '" is now available in your course.',
+                'reference_type' => 'module',
+                'reference_id' => $module->id,
+            ]);
+        }
     }
 
     public function show(Request $request, int $id): JsonResponse
@@ -124,7 +155,15 @@ class StaffModuleController extends BaseLmsController
             'status' => 'nullable|in:draft,published',
         ]);
 
+        $wasPublished = $module->status === 'published';
+
         $module->update($validated);
+
+        // Notify students when a module is published for the first time (a
+        // draft->published transition), not on every edit of a live module.
+        if (! $wasPublished && $module->status === 'published') {
+            $this->notifyStudentsOfModule($module);
+        }
 
         return response()->json($module->load('contents'));
     }

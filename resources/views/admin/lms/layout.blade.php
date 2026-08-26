@@ -423,6 +423,16 @@
                         </div>
                         <span>{{ $tenantCount ?? 0 }}</span>
                     </a>
+
+                    <div class="nav-section">Platform</div>
+
+                    <a href="{{ route('admin.lms.announcements.index') }}" class="nav-item {{ ($activeLmsPage ?? '') === 'announcements' ? 'active' : '' }}">
+                        <div class="nav-left">
+                            <div class="nav-icon">📣</div>
+                            <span>Announcements</span>
+                        </div>
+                        <span>&rsaquo;</span>
+                    </a>
                 </div>
 
                     <div class="sidebar-footer">

@@ -20,10 +20,12 @@ class LmsNotification extends Model
         'reference_id',
         'is_read',
         'emailed_at',
+        'email_attempts',
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
         'emailed_at' => 'datetime',
+        'email_attempts' => 'integer',
     ];
 }

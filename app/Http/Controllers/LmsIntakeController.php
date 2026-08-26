@@ -17,6 +17,7 @@ use App\Models\Payment;
 use App\Models\Tenant;
 use App\Models\TrainingRegistration;
 use App\Scopes\TenantScope;
+use App\Services\CurrencyService;
 use App\Services\PaystackService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -141,6 +142,11 @@ class LmsIntakeController extends BaseLmsController
             'learning_mode' => ['required', 'in:live,pre_recorded'],
             'referral_code' => ['nullable', 'string', 'max:20'],
             'institute_slug' => ['nullable', 'string', 'max:255'],
+            // Visitor country hint (ISO alpha-2), forwarded by the storefront so
+            // the charge currency can be resolved server-side. Never trusted for
+            // the AMOUNT (always the course's own price); at most it selects which
+            // supported currency is charged. Absent → charged NGN.
+            'country' => ['nullable', 'string', 'max:2'],
         ]);
 
         // A student registering from an institute's public storefront
@@ -178,6 +184,24 @@ class LmsIntakeController extends BaseLmsController
             }
         }
 
+        // Freeze the CHARGE currency + amount. The referral discount is applied to
+        // the base NGN above; the charge currency is resolved from the visitor's
+        // country: NGN for Nigeria (and — while USD charging is disabled — for
+        // everyone). Only when USD charging is enabled AND the buyer is outside
+        // Nigeria is the NGN amount converted to USD and frozen in USD. If FX is
+        // unavailable at that moment we fall back to charging NGN rather than guess.
+        $currency = app(CurrencyService::class);
+        $chargeCurrency = $currency->chargeCurrencyForCountry($validated['country'] ?? null);
+        $chargeAmount = $price;
+        if ($chargeCurrency !== 'NGN') {
+            $converted = $currency->convert($price, $chargeCurrency);
+            if ($converted !== null && $converted > 0) {
+                $chargeAmount = round($converted, 2);
+            } else {
+                $chargeCurrency = 'NGN';
+            }
+        }
+
         $registration = TrainingRegistration::query()->create([
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
@@ -189,7 +213,8 @@ class LmsIntakeController extends BaseLmsController
             'course_id' => $course->id,
             'course_name' => $course->title,
             'learning_mode' => $validated['learning_mode'],
-            'course_price' => $price,
+            'course_price' => $chargeAmount,
+            'charge_currency' => $chargeCurrency,
             'status' => 'pending',
             'referred_by_agent_id' => $referredByAgentId,
         ]);
@@ -199,7 +224,8 @@ class LmsIntakeController extends BaseLmsController
             'registration_id' => $registration->id,
             'course' => [
                 'title' => $course->title,
-                'price' => $price,
+                'price' => $chargeAmount,
+                'charge_currency' => $chargeCurrency,
             ],
         ], 201);
     }
@@ -226,6 +252,24 @@ class LmsIntakeController extends BaseLmsController
 
         if ($registration->status !== 'pending') {
             return response()->json(['message' => 'Payment already processed for this registration.'], 422);
+        }
+
+        // Unlinked-institute guard (money safety). A non-primary institute that
+        // hasn't linked its payout subaccount yet must not collect course fees
+        // into the PLATFORM account. Block paid checkout until they link a bank;
+        // the storefront reflects this upfront via `purchasable`, so this is the
+        // defense-in-depth path (e.g. a stale page). Free courses (≤ 0) never reach
+        // here, and the primary institute is exempt — it legitimately settles to
+        // the platform account. Mirrors the primary-slug idiom used below at the
+        // callback branch.
+        if ((float) $registration->course_price > 0) {
+            $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
+            $isNonPrimary = $tenant && $tenant->slug && $tenant->slug !== config('saas.primary_slug', 'jorsas');
+            if ($isNonPrimary && ! $this->tenantSubaccountCode()) {
+                return response()->json([
+                    'message' => 'This course isn’t open for purchase yet. The institute is finishing its payment setup.',
+                ], 409);
+            }
         }
 
         if ((float) $registration->course_price <= 0) {
@@ -260,6 +304,10 @@ class LmsIntakeController extends BaseLmsController
                 }
             }
 
+            // The currency this registration was frozen to charge in (NGN unless
+            // USD charging is enabled and the buyer registered from outside Nigeria).
+            $chargeCurrency = strtoupper((string) ($registration->charge_currency ?: 'NGN'));
+
             $response = $paystack->initializeTransaction(
                 $registration->email,
                 (float) $registration->course_price,
@@ -272,14 +320,15 @@ class LmsIntakeController extends BaseLmsController
                 // Settle course fees to the institute's own Paystack subaccount
                 // (its bank) when it has configured one; primary/unconfigured
                 // institutes fall back to the platform account, as before.
-                $this->tenantSubaccountCode()
+                $this->tenantSubaccountCode(),
+                $chargeCurrency
             );
 
             Payment::query()->create([
                 'registration_id' => $registration->id,
                 'reference' => $reference,
                 'amount' => $registration->course_price,
-                'currency' => 'NGN',
+                'currency' => $chargeCurrency,
                 'status' => 'pending',
                 'gateway' => 'paystack',
             ]);
@@ -324,7 +373,7 @@ class LmsIntakeController extends BaseLmsController
             $response = $paystack->verifyTransaction($validated['reference']);
 
             if (($response['data']['status'] ?? '') === 'success') {
-                return $this->completePayment($payment);
+                return $this->completePayment($payment, $response['data'] ?? null);
             }
 
             return response()->json([
@@ -362,7 +411,7 @@ class LmsIntakeController extends BaseLmsController
                 ->first();
 
             if ($payment && $payment->status !== 'success') {
-                $this->completePayment($payment);
+                $this->completePayment($payment, (array) $request->input('data'));
             }
         }
 
@@ -438,7 +487,7 @@ class LmsIntakeController extends BaseLmsController
             'registration_id' => $registration->id,
             'reference' => 'FREE-' . Str::upper(Str::random(16)),
             'amount' => 0,
-            'currency' => 'NGN',
+            'currency' => strtoupper((string) ($registration->charge_currency ?: 'NGN')),
             'status' => 'success',
             'gateway' => 'free',
         ]);
@@ -451,7 +500,7 @@ class LmsIntakeController extends BaseLmsController
         ]);
     }
 
-    private function completePayment(Payment $payment): JsonResponse
+    private function completePayment(Payment $payment, ?array $gatewayData = null): JsonResponse
     {
         // The payment (found by its globally-unique reference) is the source of
         // truth for the tenant here — verify/webhook may run with no header, so
@@ -464,7 +513,46 @@ class LmsIntakeController extends BaseLmsController
             return response()->json(['message' => 'Registration not found.'], 404);
         }
 
-        $payment->update(['status' => 'success']);
+        // Reconciliation: before approving, confirm the gateway actually collected
+        // the amount + currency we expected (Paystack returns amount in minor units
+        // — kobo/cents). A mismatch (tampering, a partial charge, FX drift) is held
+        // for manual review instead of silently granting access. Only runs when the
+        // caller supplied the gateway payload (verify + webhook); a missing payload
+        // preserves the previous behavior.
+        if (is_array($gatewayData) && $gatewayData !== []) {
+            $expectedMinor = (int) round(((float) $payment->amount) * 100);
+            $gotMinor = (int) ($gatewayData['amount'] ?? 0);
+            $expectedCurrency = strtoupper((string) ($payment->currency ?: 'NGN'));
+            $gotCurrency = strtoupper((string) ($gatewayData['currency'] ?? ''));
+
+            $amountMismatch = $gotMinor > 0 && $gotMinor !== $expectedMinor;
+            $currencyMismatch = $gotCurrency !== '' && $gotCurrency !== $expectedCurrency;
+
+            if ($amountMismatch || $currencyMismatch) {
+                Log::warning('Payment reconciliation mismatch; holding for review', [
+                    'reference' => $payment->reference,
+                    'expected_amount_minor' => $expectedMinor,
+                    'got_amount_minor' => $gotMinor,
+                    'expected_currency' => $expectedCurrency,
+                    'got_currency' => $gotCurrency,
+                ]);
+
+                $payment->update([
+                    'status' => 'review',
+                    'gateway_response' => $gatewayData,
+                ]);
+
+                return response()->json([
+                    'message' => 'Payment received but needs manual confirmation. Our team will verify it shortly.',
+                    'status' => 'review',
+                ]);
+            }
+        }
+
+        $payment->update([
+            'status' => 'success',
+            'gateway_response' => is_array($gatewayData) && $gatewayData !== [] ? $gatewayData : $payment->gateway_response,
+        ]);
         $registration->update([
             'status' => 'approved',
             'approved_at' => now(),

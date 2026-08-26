@@ -60,6 +60,10 @@ Route::middleware(['auth', 'tenant.primary'])->prefix(env('ADMIN_DIR', 'admin'))
 	Route::post('/lms/institutes/{id}/delete', [AdminController::class, 'deleteInstitute'])->name('admin.lms.institutes.delete');
 	Route::post('/lms/institutes/{id}/resend', [AdminController::class, 'resendInstituteOnboarding'])->name('admin.lms.institutes.resend');
 
+	// Platform-wide announcements (host → every institute's students/staff/agents)
+	Route::get('/lms/announcements', [AdminController::class, 'platformAnnouncementsPage'])->name('admin.lms.announcements.index');
+	Route::post('/lms/announcements', [AdminController::class, 'createPlatformAnnouncement'])->name('admin.lms.announcements.store');
+
 	// Plans admin
 	Route::get('/plans', [\App\Http\Controllers\Admin\PlanController::class, 'index'])->name('admin.plans.index');
 	Route::post('/plans', [\App\Http\Controllers\Admin\PlanController::class, 'store'])->name('admin.plans.store');

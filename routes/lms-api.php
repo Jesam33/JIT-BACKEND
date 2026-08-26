@@ -213,6 +213,8 @@ Route::middleware('tenant.required')->group(function () {
     // course fees settle to its bank (institute collects, not the platform).
     Route::get('/api/frontend/lms/owner/payment-settings', [OwnerAdminController::class, 'paymentSettings']);
     Route::post('/api/frontend/lms/owner/payment-settings', [OwnerAdminController::class, 'updatePaymentSettings']);
+    // Confirm the account-holder name before linking (Paystack /bank/resolve).
+    Route::post('/api/frontend/lms/owner/resolve-account', [OwnerAdminController::class, 'resolveBankAccount'])->middleware('throttle:30,1');
 
     // Portal-agnostic branding read: student & staff shells theme themselves
     // to match the owner's customization (tenant resolved from their session).

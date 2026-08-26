@@ -39,7 +39,7 @@ class PaystackService
         return $client;
     }
 
-    public function initializeTransaction(string $email, float $amount, string $reference, array $metadata = [], ?string $callbackUrl = null, ?string $subaccount = null): array
+    public function initializeTransaction(string $email, float $amount, string $reference, array $metadata = [], ?string $callbackUrl = null, ?string $subaccount = null, ?string $currency = null): array
     {
         $client = $this->client();
 
@@ -53,21 +53,31 @@ class PaystackService
 
         $payload = [
             'email' => $email,
+            // `*100` is correct for both NGN (kobo) and USD (cents) — Paystack's
+            // smallest-unit convention is the same for the currencies we charge.
             'amount' => (int) round($amount * 100),
             'reference' => $reference,
             'callback_url' => $callbackUrl,
             'metadata' => $metadata,
         ];
 
+        // Charge currency (NGN by default at the call site; USD only once the
+        // platform's Paystack account is USD-enabled). Absent → Paystack uses the
+        // account default (NGN), i.e. today's behavior.
+        if ($currency) {
+            $payload['currency'] = strtoupper($currency);
+        }
+
         // Route the money to the institute's own Paystack subaccount (its bank),
         // so course fees settle to the institute — not the platform. The split
         // (platform commission + who bears the Paystack fee) is defined on the
-        // subaccount at creation. `bearer=subaccount` makes the institute bear
-        // the gateway fee. Absent a subaccount, funds settle to the platform
-        // account as before (unchanged for the primary institute).
+        // subaccount at creation. The fee bearer is a platform config knob
+        // (`saas.paystack_fee_bearer`, default `subaccount` → the institute bears
+        // the gateway fee, unchanged). Absent a subaccount, funds settle to the
+        // platform account as before (unchanged for the primary institute).
         if ($subaccount) {
             $payload['subaccount'] = $subaccount;
-            $payload['bearer'] = 'subaccount';
+            $payload['bearer'] = (string) config('saas.paystack_fee_bearer', 'subaccount');
         }
 
         $response = $client->post($this->baseUrl . '/transaction/initialize', $payload);
@@ -100,10 +110,13 @@ class PaystackService
     }
 
     /**
-     * List Nigerian banks + their Paystack codes, for the institute's payout
-     * bank picker. Returns [] when the gateway isn't configured.
+     * List banks + their Paystack codes, for the institute's payout bank picker.
+     * Defaults to Nigeria: Paystack subaccounts settle only to Nigerian banks, so
+     * Nigeria-only is correct for a Paystack payout — the parameter is future-proofing
+     * for a later multi-country payout provider. Returns [] when the gateway isn't
+     * configured.
      */
-    public function listBanks(): array
+    public function listBanks(string $country = 'nigeria'): array
     {
         $client = $this->client();
 
@@ -111,9 +124,45 @@ class PaystackService
             return [];
         }
 
-        $response = $client->get($this->baseUrl . '/bank', ['country' => 'nigeria', 'perPage' => 100]);
+        $response = $client->get($this->baseUrl . '/bank', ['country' => $country, 'perPage' => 100]);
 
         return $response->json()['data'] ?? [];
+    }
+
+    /**
+     * Resolve a bank account number to its account-holder name via Paystack
+     * (`GET /bank/resolve`), so an owner can confirm the account before linking
+     * their payout subaccount. Returns the raw `data` array (contains
+     * `account_name`, `account_number`) on success, or null on any failure —
+     * unconfigured gateway, an unresolvable account (Paystack 422/400), or a
+     * transport error. Never throws: the owner page must not 500 over a typo.
+     */
+    public function resolveAccount(string $accountNumber, string $bankCode): ?array
+    {
+        $client = $this->client();
+
+        if (! $client) {
+            return null;
+        }
+
+        try {
+            $response = $client->get($this->baseUrl . '/bank/resolve', [
+                'account_number' => $accountNumber,
+                'bank_code' => $bankCode,
+            ]);
+
+            $body = $response->json();
+
+            if (($body['status'] ?? false) && ! empty($body['data'])) {
+                return $body['data'];
+            }
+
+            return null;
+        } catch (\Throwable $e) {
+            // client() uses ->throw(); an invalid account returns 422 and raises
+            // RequestException. Swallow it — the resolve is confirmatory, never blocking.
+            return null;
+        }
     }
 
     public function verifyTransaction(string $reference): array

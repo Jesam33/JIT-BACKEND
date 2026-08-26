@@ -885,6 +885,42 @@ class OwnerAdminController extends BaseLmsController
         ]);
     }
 
+    /**
+     * Resolve a bank account number to its holder name (Paystack /bank/resolve)
+     * so the owner can CONFIRM the account before linking their payout subaccount.
+     * Confirmatory only — it links nothing and never 500s: an unresolvable account
+     * (typo / wrong bank) comes back as {account_name: null} with a soft message,
+     * and a down/unconfigured gateway degrades the same way so linking is never blocked.
+     */
+    public function resolveBankAccount(Request $request): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        $validated = $request->validate([
+            'account_number' => ['required', 'string', 'regex:/^\d{10}$/'],
+            'bank_code' => ['required', 'string', 'max:20'],
+        ]);
+
+        $service = app(PaystackService::class);
+        if (! $service->isConfigured()) {
+            return response()->json([
+                'account_name' => null,
+                'message' => 'The payment gateway is not configured yet.',
+            ]);
+        }
+
+        $data = $service->resolveAccount($validated['account_number'], $validated['bank_code']);
+        $name = is_array($data) ? ($data['account_name'] ?? null) : null;
+
+        return response()->json([
+            'account_name' => $name,
+            'message' => $name ? null : 'Could not resolve this account. Check the account number and the selected bank.',
+        ]);
+    }
+
     // ─── Certificates (institute-issued, admin-only — moved off the staff
     //     portal). Every read/write is tenant-scoped via ownerContext(). ──
 
@@ -1062,6 +1098,8 @@ class OwnerAdminController extends BaseLmsController
             'is_prerecorded_available' => $validated['is_prerecorded_available'] ?? true,
             'is_active' => true,
         ]);
+
+        $this->notifyStudentsOfNewCourse($course);
 
         return response()->json(['course' => $this->coursePayload($course)], 201);
     }

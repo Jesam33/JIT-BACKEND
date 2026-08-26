@@ -13,6 +13,7 @@ use App\Models\LmsSession;
 use App\Models\LmsStudent;
 use App\Models\LmsTeacher;
 use App\Models\LmsTrack;
+use App\Models\PlatformAnnouncement;
 use App\Models\TrainingRegistration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -213,6 +214,8 @@ class AdminController extends BaseLmsController
             'is_prerecorded_available' => $validated['is_prerecorded_available'] ?? true,
             'is_active' => true,
         ]);
+
+        $this->notifyStudentsOfNewCourse($course);
 
         if ($request->expectsJson() || $request->wantsJson()) {
             return response()->json($course, 201);
@@ -623,6 +626,68 @@ class AdminController extends BaseLmsController
 
         return response()->json($announcement, 201);
     }
+
+    /**
+     * Platform announcements — the jorsastech host broadcasts a single message to
+     * everybody (students, staff, agents) across EVERY institute. This page only
+     * enqueues the announcement; the `lms:dispatch-announcements` command fans it
+     * out into per-recipient notifications (which the email sweep then delivers).
+     */
+    public function platformAnnouncementsPage(Request $request)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $announcements = PlatformAnnouncement::query()
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get();
+
+        return view('admin.lms.announcements.index', array_merge($this->adminShellData(), [
+            'activeLmsPage' => 'announcements',
+            'announcements' => $announcements,
+            'audienceOptions' => PlatformAnnouncement::AUDIENCES,
+        ]));
+    }
+
+    public function createPlatformAnnouncement(Request $request)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'body' => ['required', 'string', 'max:5000'],
+            'audiences' => ['required', 'array', 'min:1'],
+            'audiences.*' => ['string', 'in:' . implode(',', PlatformAnnouncement::AUDIENCES)],
+        ]);
+
+        // Normalise to the canonical audience list (dedupe, drop anything unknown).
+        $audiences = array_values(array_intersect(PlatformAnnouncement::AUDIENCES, $validated['audiences']));
+
+        $user = $request->user();
+
+        PlatformAnnouncement::query()->create([
+            'title' => $validated['title'],
+            'body' => $validated['body'],
+            'audiences' => $audiences,
+            'status' => PlatformAnnouncement::STATUS_QUEUED,
+            'created_by' => $user?->getKey(),
+            'created_by_name' => $user?->name ?? $user?->email ?? 'Platform',
+        ]);
+
+        $message = 'Announcement queued for ' . implode(', ', $audiences)
+            . '. It will be delivered to every institute within a minute.';
+
+        if ($request->expectsJson() || $request->wantsJson()) {
+            return response()->json(['message' => $message], 201);
+        }
+
+        return redirect()
+            ->route('admin.lms.announcements.index')
+            ->with('status', $message);
+    }
+
 
     public function enrollStudent(Request $request): JsonResponse
     {

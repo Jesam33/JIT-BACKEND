@@ -24,6 +24,7 @@ class TrainingRegistration extends Model
         'course_name',
         'learning_mode',
         'course_price',
+        'charge_currency',
         'status',
         'approved_by',
         'approved_at',

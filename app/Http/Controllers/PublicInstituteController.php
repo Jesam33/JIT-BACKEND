@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\LmsCourse;
 use App\Models\Tenant;
+use App\Services\CurrencyService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -27,7 +29,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 class PublicInstituteController extends Controller
 {
     /** Storefront for the primary institute (the apex /institute page). */
-    public function primaryShow(): JsonResponse
+    public function primaryShow(Request $request): JsonResponse
     {
         $tenant = Tenant::primary();
 
@@ -42,30 +44,30 @@ class PublicInstituteController extends Controller
             ]);
         }
 
-        return $this->storefrontFor($tenant);
+        return $this->storefrontFor($tenant, $request);
     }
 
     /** Course detail under the primary institute (apex /institute/{course}). */
-    public function primaryCourse(string $courseSlug): JsonResponse
+    public function primaryCourse(Request $request, string $courseSlug): JsonResponse
     {
-        return $this->courseFor(Tenant::primary(), $courseSlug);
+        return $this->courseFor(Tenant::primary(), $courseSlug, $request);
     }
 
     /** Storefront for a specific institute by slug (/i/{slug}). */
-    public function show(string $slug): JsonResponse
+    public function show(Request $request, string $slug): JsonResponse
     {
-        return $this->storefrontFor(Tenant::query()->where('slug', $slug)->first());
+        return $this->storefrontFor(Tenant::query()->where('slug', $slug)->first(), $request);
     }
 
     /** Course detail under a specific institute (/i/{slug}/courses/{course}). */
-    public function course(string $slug, string $courseSlug): JsonResponse
+    public function course(Request $request, string $slug, string $courseSlug): JsonResponse
     {
-        return $this->courseFor(Tenant::query()->where('slug', $slug)->first(), $courseSlug);
+        return $this->courseFor(Tenant::query()->where('slug', $slug)->first(), $courseSlug, $request);
     }
 
     // ─── internals ───────────────────────────────────────────────────
 
-    private function storefrontFor(?Tenant $tenant): JsonResponse
+    private function storefrontFor(?Tenant $tenant, Request $request): JsonResponse
     {
         if (! $tenant) {
             throw new NotFoundHttpException('Institute not found.');
@@ -73,11 +75,13 @@ class PublicInstituteController extends Controller
 
         app()->instance('currentTenant', $tenant);
 
+        $ctx = $this->pricingContext($tenant, $request);
+
         $courses = LmsCourse::query()
             ->where('is_active', true)
             ->orderBy('title')
             ->get()
-            ->map(fn (LmsCourse $course) => $this->courseCard($course))
+            ->map(fn (LmsCourse $course) => $this->serializeCourse($course, $ctx, false))
             ->values();
 
         return response()->json([
@@ -88,7 +92,7 @@ class PublicInstituteController extends Controller
         ]);
     }
 
-    private function courseFor(?Tenant $tenant, string $courseSlug): JsonResponse
+    private function courseFor(?Tenant $tenant, string $courseSlug, Request $request): JsonResponse
     {
         if (! $tenant) {
             throw new NotFoundHttpException('Institute not found.');
@@ -105,35 +109,81 @@ class PublicInstituteController extends Controller
             return response()->json(['message' => 'Course not found.'], 404);
         }
 
+        $ctx = $this->pricingContext($tenant, $request);
+
         return response()->json([
             'institute' => ['name' => $tenant->name, 'slug' => $tenant->slug],
             'branding' => $tenant->brandingArray(),
             'profile' => $tenant->profileArray(),
-            'course' => [
-                'id' => $course->id,
-                'slug' => $course->slug,
-                'title' => $course->title,
-                'description' => $course->description,
-                'requirements' => $course->requirements,
-                'price' => (float) $course->price,
-                'max_students' => $course->max_students,
-                'registered_count' => $course->registered_count,
-                'slots_remaining' => $course->slotsRemaining(),
-                'is_full' => $course->isFull(),
-                'is_live_available' => $course->is_live_available,
-                'is_prerecorded_available' => $course->is_prerecorded_available,
-            ],
+            'course' => $this->serializeCourse($course, $ctx, true),
         ]);
     }
 
-    private function courseCard(LmsCourse $course): array
+    /**
+     * Per-request pricing context, computed once and reused for every course:
+     * the localized DISPLAY currency (from a forwarded country / manual currency
+     * selection) and whether paid courses are purchasable (a non-primary institute
+     * that hasn't linked a payout subaccount yet can't take money — see the
+     * matching backend gate in {@see LmsIntakeController::initializePayment}).
+     *
+     * @return array{fx:CurrencyService,country:?string,forced_currency:?string,charge_currency:string,block_unlinked:bool}
+     */
+    private function pricingContext(Tenant $tenant, Request $request): array
     {
+        // Country is a HINT only (never sets the amount). Forwarded by the Next.js
+        // storefront as ?country= / X-Visitor-Country (Laravel can't see the real
+        // visitor IP — the storefront is server-rendered). A manual currency pick
+        // arrives as ?currency= and overrides the country→currency mapping for display.
+        $country = strtoupper(trim((string) ($request->query('country', $request->header('X-Visitor-Country', ''))))) ?: null;
+        $forced = strtoupper(trim((string) $request->query('currency', ''))) ?: null;
+
+        $isNonPrimary = $tenant->slug && $tenant->slug !== config('saas.primary_slug', 'jorsas');
+        $hasSubaccount = (bool) data_get($tenant->settings, 'paystack.subaccount_code');
+
+        $fx = app(CurrencyService::class);
+
         return [
+            'fx' => $fx,
+            'country' => $country,
+            'forced_currency' => $forced,
+            'charge_currency' => $fx->chargeCurrencyForCountry($country),
+            'block_unlinked' => $isNonPrimary && ! $hasSubaccount,
+        ];
+    }
+
+    /**
+     * Serialize one course for the storefront. `$detail` adds the fields the
+     * course page needs (requirements). The base NGN `price` is always present
+     * (existing clients rely on it); the localized display fields sit alongside
+     * it, and `purchasable` reflects the payout-linked gate.
+     *
+     * @param  array{fx:CurrencyService,country:?string,forced_currency:?string,charge_currency:string,block_unlinked:bool}  $ctx
+     */
+    private function serializeCourse(LmsCourse $course, array $ctx, bool $detail): array
+    {
+        $price = (float) $course->price;
+
+        $display = $ctx['forced_currency']
+            ? $ctx['fx']->displayInCurrency($price, $ctx['forced_currency'])
+            : $ctx['fx']->displayFor($price, $ctx['country']);
+
+        // Free courses always enroll; paid courses are blocked only for a
+        // non-primary institute that hasn't linked a payout account yet.
+        $purchasable = ! ($price > 0 && $ctx['block_unlinked']);
+
+        $payload = [
             'id' => $course->id,
             'slug' => $course->slug,
             'title' => $course->title,
             'description' => $course->description,
-            'price' => (float) $course->price,
+            'price' => $price,
+            'currency' => 'NGN',
+            'display_currency' => $display['currency'],
+            'display_symbol' => $display['symbol'],
+            'price_display' => $display['amount'],
+            'is_base_currency' => $display['is_base'],
+            'charge_currency' => $price > 0 ? $ctx['charge_currency'] : 'NGN',
+            'purchasable' => $purchasable,
             'max_students' => $course->max_students,
             'registered_count' => $course->registered_count,
             'slots_remaining' => $course->slotsRemaining(),
@@ -141,5 +191,11 @@ class PublicInstituteController extends Controller
             'is_live_available' => $course->is_live_available,
             'is_prerecorded_available' => $course->is_prerecorded_available,
         ];
+
+        if ($detail) {
+            $payload['requirements'] = $course->requirements;
+        }
+
+        return $payload;
     }
 }
