@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Lms;
 
 use App\Models\LmsAttendance;
 use App\Models\LmsCourse;
+use App\Models\LmsCourseReview;
 use App\Models\LmsMaterial;
 use App\Models\LmsNotification;
 use App\Models\LmsTeacherNotification;
@@ -225,6 +226,28 @@ class StudentDashboardController extends BaseLmsController
                 'reference_id' => $n->reference_id,
             ]);
 
+        // The student's own rating for their course + the course aggregate, so
+        // the dashboard can render a "Rate this course" control pre-filled with
+        // any existing rating. Null when the student has no resolved course.
+        $rating = null;
+        if ($course) {
+            $agg = LmsCourseReview::query()
+                ->where('course_id', $course->id)
+                ->selectRaw('AVG(rating) AS avg_rating, COUNT(*) AS cnt')
+                ->first();
+            $yours = LmsCourseReview::query()
+                ->where('course_id', $course->id)
+                ->where('student_id', $studentId)
+                ->value('rating');
+
+            $rating = [
+                'course_id' => $course->id,
+                'your_rating' => $yours !== null ? (int) $yours : null,
+                'average' => round((float) ($agg->avg_rating ?? 0), 1),
+                'count' => (int) ($agg->cnt ?? 0),
+            ];
+        }
+
         return response()->json([
             'profile' => [
                 'first_name' => $student->first_name,
@@ -246,6 +269,7 @@ class StudentDashboardController extends BaseLmsController
             'materials' => $materials,
             'tasks' => $tasks,
             'notifications' => $notifications,
+            'rating' => $rating,
         ]);
     }
 

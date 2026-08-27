@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\LmsCourse;
 use App\Models\Tenant;
 use App\Services\CurrencyService;
+use App\Support\CourseCards;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -80,7 +81,11 @@ class PublicInstituteController extends Controller
         $courses = LmsCourse::query()
             ->where('is_active', true)
             ->orderBy('title')
-            ->get()
+            ->get();
+
+        $ctx['card'] = CourseCards::context($courses->pluck('id')->all(), $tenant->name);
+
+        $serialized = $courses
             ->map(fn (LmsCourse $course) => $this->serializeCourse($course, $ctx, false))
             ->values();
 
@@ -88,7 +93,7 @@ class PublicInstituteController extends Controller
             'institute' => ['name' => $tenant->name, 'slug' => $tenant->slug],
             'branding' => $tenant->brandingArray(),
             'profile' => $tenant->profileArray(),
-            'courses' => $courses,
+            'courses' => $serialized,
         ]);
     }
 
@@ -110,6 +115,7 @@ class PublicInstituteController extends Controller
         }
 
         $ctx = $this->pricingContext($tenant, $request);
+        $ctx['card'] = CourseCards::context([$course->id], $tenant->name);
 
         return response()->json([
             'institute' => ['name' => $tenant->name, 'slug' => $tenant->slug],
@@ -157,7 +163,7 @@ class PublicInstituteController extends Controller
      * (existing clients rely on it); the localized display fields sit alongside
      * it, and `purchasable` reflects the payout-linked gate.
      *
-     * @param  array{fx:CurrencyService,country:?string,forced_currency:?string,charge_currency:string,block_unlinked:bool}  $ctx
+     * @param  array{fx:CurrencyService,country:?string,forced_currency:?string,charge_currency:string,block_unlinked:bool,card?:array}  $ctx
      */
     private function serializeCourse(LmsCourse $course, array $ctx, bool $detail): array
     {
@@ -166,6 +172,20 @@ class PublicInstituteController extends Controller
         $display = $ctx['forced_currency']
             ? $ctx['fx']->displayInCurrency($price, $ctx['forced_currency'])
             : $ctx['fx']->displayFor($price, $ctx['country']);
+
+        // Optional "was" price — the card struck-through renders it ONLY when it
+        // exceeds the current price (the frontend enforces this too). Display uses
+        // the SAME FX path as price_display so both sit in the same currency.
+        $originalPrice = $course->original_price !== null ? (float) $course->original_price : null;
+        $originalPriceDisplay = null;
+        if ($originalPrice !== null) {
+            $od = $ctx['forced_currency']
+                ? $ctx['fx']->displayInCurrency($originalPrice, $ctx['forced_currency'])
+                : $ctx['fx']->displayFor($originalPrice, $ctx['country']);
+            $originalPriceDisplay = $od['amount'];
+        }
+
+        $card = CourseCards::fieldsFor($ctx['card'] ?? [], $course->id);
 
         // Free courses always enroll; paid courses are blocked only for a
         // non-primary institute that hasn't linked a payout account yet.
@@ -184,6 +204,13 @@ class PublicInstituteController extends Controller
             'is_base_currency' => $display['is_base'],
             'charge_currency' => $price > 0 ? $ctx['charge_currency'] : 'NGN',
             'purchasable' => $purchasable,
+            'original_price' => $originalPrice,
+            'original_price_display' => $originalPriceDisplay,
+            'cover_image_url' => $course->cover_image_url,
+            'rating_average' => $card['rating_average'],
+            'rating_count' => $card['rating_count'],
+            'instructor_name' => $card['instructor_name'],
+            'is_bestseller' => $card['is_bestseller'],
             'max_students' => $course->max_students,
             'registered_count' => $course->registered_count,
             'slots_remaining' => $course->slotsRemaining(),

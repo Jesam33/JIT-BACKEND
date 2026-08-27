@@ -19,6 +19,8 @@ class LmsCourse extends Model
         'description',
         'requirements',
         'price',
+        'original_price',
+        'cover_image_path',
         'max_students',
         'registered_count',
         'is_live_available',
@@ -28,6 +30,7 @@ class LmsCourse extends Model
 
     protected $casts = [
         'price' => 'decimal:2',
+        'original_price' => 'decimal:2',
         'max_students' => 'integer',
         'registered_count' => 'integer',
         'is_live_available' => 'boolean',
@@ -84,5 +87,19 @@ class LmsCourse extends Model
     public function tracks(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(LmsTrack::class, 'course_id');
+    }
+
+    public function reviews(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(LmsCourseReview::class, 'course_id');
+    }
+
+    /**
+     * Public URL for the owner-uploaded cover, or null when unset (the frontend
+     * then renders a branded initial placeholder). Same idiom as tenant logos.
+     */
+    public function getCoverImageUrlAttribute(): ?string
+    {
+        return $this->cover_image_path ? asset('storage/' . $this->cover_image_path) : null;
     }
 }

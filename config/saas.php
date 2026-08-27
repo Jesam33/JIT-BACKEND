@@ -90,6 +90,14 @@ return [
     'fx_provider_url' => env('FX_PROVIDER_URL', 'https://open.er-api.com/v6/latest/NGN'),
     'fx_cache_minutes' => (int) env('FX_CACHE_MINUTES', 60),
 
+    // ─── Storefront "Bestseller" badge ─────────────────────────────────
+    // A course earns the teal Bestseller badge only when it is the most-enrolled
+    // ACTIVE course in its institute AND its real enrollment (registered_count)
+    // has cleared this floor. New/low-traction institutes stay below the floor
+    // and show no badge — the badge is never fabricated. Set to 0 to badge the
+    // top course regardless of volume (still requires ≥1 enrollment to be "top").
+    'bestseller_min_enrollments' => (int) env('BESTSELLER_MIN_ENROLLMENTS', 10),
+
     // Define available plans and prices (NGN assumed for Paystack amounts)
     'plans' => [
         'free' => [

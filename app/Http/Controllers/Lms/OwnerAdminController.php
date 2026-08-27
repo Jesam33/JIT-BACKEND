@@ -16,6 +16,7 @@ use App\Models\Tenant;
 use App\Models\TrainingRegistration;
 use App\Models\User;
 use App\Services\PaystackService;
+use App\Support\CourseCards;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -438,10 +439,15 @@ class OwnerAdminController extends BaseLmsController
         $courses = LmsCourse::query()
             ->withCount(['students', 'tracks'])
             ->latest('id')
-            ->get(['id', 'title', 'slug', 'description', 'requirements', 'price', 'max_students', 'registered_count', 'is_live_available', 'is_prerecorded_available', 'is_active'])
-            ->map(fn (LmsCourse $c) => $this->coursePayload($c));
+            ->get(['id', 'title', 'slug', 'description', 'requirements', 'price', 'original_price', 'cover_image_path', 'max_students', 'registered_count', 'is_live_available', 'is_prerecorded_available', 'is_active']);
 
-        return response()->json(['tenant_id' => $tenant->id, 'courses' => $courses]);
+        // Build the card context (ratings/instructor/bestseller) once for the
+        // whole list to avoid a per-course N+1.
+        $cardCtx = CourseCards::context($courses->pluck('id')->all(), $tenant->name);
+
+        $payload = $courses->map(fn (LmsCourse $c) => $this->coursePayload($c, $cardCtx));
+
+        return response()->json(['tenant_id' => $tenant->id, 'courses' => $payload]);
     }
 
     /**
@@ -1083,6 +1089,7 @@ class OwnerAdminController extends BaseLmsController
             'description' => ['nullable', 'string'],
             'requirements' => ['nullable', 'string'],
             'price' => ['nullable', 'numeric', 'min:0'],
+            'original_price' => ['nullable', 'numeric', 'min:0'],
             'max_students' => ['nullable', 'integer', 'min:0'],
             'is_live_available' => ['nullable', 'boolean'],
             'is_prerecorded_available' => ['nullable', 'boolean'],
@@ -1093,6 +1100,7 @@ class OwnerAdminController extends BaseLmsController
             'description' => $validated['description'] ?? null,
             'requirements' => $validated['requirements'] ?? null,
             'price' => $validated['price'] ?? 0,
+            'original_price' => $validated['original_price'] ?? null,
             'max_students' => (int) ($validated['max_students'] ?? 0),
             'is_live_available' => $validated['is_live_available'] ?? true,
             'is_prerecorded_available' => $validated['is_prerecorded_available'] ?? true,
@@ -1123,6 +1131,7 @@ class OwnerAdminController extends BaseLmsController
             'description' => ['nullable', 'string'],
             'requirements' => ['nullable', 'string'],
             'price' => ['nullable', 'numeric', 'min:0'],
+            'original_price' => ['nullable', 'numeric', 'min:0'],
             'max_students' => ['nullable', 'integer', 'min:0'],
             'is_live_available' => ['nullable', 'boolean'],
             'is_prerecorded_available' => ['nullable', 'boolean'],
@@ -1132,7 +1141,7 @@ class OwnerAdminController extends BaseLmsController
         // Apply only the keys the client actually sent (validated() omits absent
         // fields), so a partial save never blanks untouched columns.
         $data = array_intersect_key($validated, array_flip([
-            'title', 'description', 'requirements', 'price', 'max_students',
+            'title', 'description', 'requirements', 'price', 'original_price', 'max_students',
             'is_live_available', 'is_prerecorded_available', 'is_active',
         ]));
         if (array_key_exists('max_students', $data)) {
@@ -1160,6 +1169,36 @@ class OwnerAdminController extends BaseLmsController
         LmsCourse::query()->findOrFail($id)->delete();
 
         return response()->json(['message' => 'Course deleted.']);
+    }
+
+    /**
+     * Upload (or remove) a course's storefront cover image. Mirrors uploadCover
+     * (public disk + asset() URL) but writes to the course's own
+     * cover_image_path column. findOrFail is tenant-scoped, so an id from another
+     * institute 404s. `remove_cover=true` clears it (the card then falls back to
+     * the branded placeholder). Returns the refreshed coursePayload.
+     */
+    public function uploadCourseCover(Request $request, int $id): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        $course = LmsCourse::query()->findOrFail($id);
+
+        if ($request->boolean('remove_cover')) {
+            $course->update(['cover_image_path' => null]);
+
+            return response()->json(['course' => $this->coursePayload($course->fresh())]);
+        }
+
+        $request->validate(['file' => ['required', 'image', 'max:4096']]);
+
+        $path = $request->file('file')->store('course-covers', 'public');
+        $course->update(['cover_image_path' => $path]);
+
+        return response()->json(['course' => $this->coursePayload($course->fresh())]);
     }
 
     // ─── Track / cohort management (this is where staff get assigned to a
@@ -1274,8 +1313,12 @@ class OwnerAdminController extends BaseLmsController
 
     /**
      * The course shape shared by the list, create, and update responses.
+     *
+     * `$cardCtx` is the batch-built card context (ratings/instructor/bestseller)
+     * from CourseCards::context(). The list method builds it once for all courses
+     * (no N+1); create/update pass null so it's built for the single course.
      */
-    private function coursePayload(LmsCourse $course): array
+    private function coursePayload(LmsCourse $course, ?array $cardCtx = null): array
     {
         // The list query already eager-counts via withCount; only load here when
         // called with a fresh model (create/update) that hasn't been counted yet,
@@ -1284,6 +1327,14 @@ class OwnerAdminController extends BaseLmsController
             $course->loadCount(['students', 'tracks']);
         }
 
+        if ($cardCtx === null) {
+            $fallback = app()->bound('currentTenant') && app('currentTenant')
+                ? app('currentTenant')->name
+                : null;
+            $cardCtx = CourseCards::context([$course->id], $fallback);
+        }
+        $card = CourseCards::fieldsFor($cardCtx, $course->id);
+
         return [
             'id' => $course->id,
             'title' => $course->title,
@@ -1291,6 +1342,12 @@ class OwnerAdminController extends BaseLmsController
             'description' => $course->description,
             'requirements' => $course->requirements,
             'price' => $course->price,
+            'original_price' => $course->original_price,
+            'cover_image_url' => $course->cover_image_url,
+            'rating_average' => $card['rating_average'],
+            'rating_count' => $card['rating_count'],
+            'instructor_name' => $card['instructor_name'],
+            'is_bestseller' => $card['is_bestseller'],
             'max_students' => $course->max_students,
             'students_count' => $course->students_count,
             'tracks_count' => $course->tracks_count,

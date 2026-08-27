@@ -12,6 +12,7 @@ use App\Http\Controllers\Lms\StudentClassroomController;
 use App\Http\Controllers\Lms\StudentChatController;
 use App\Http\Controllers\Lms\StudentMaterialController;
 use App\Http\Controllers\Lms\StudentModuleController;
+use App\Http\Controllers\Lms\StudentCourseReviewController;
 use App\Http\Controllers\Lms\StaffAuthController;
 use App\Http\Controllers\Lms\StaffTaskController;
 use App\Http\Controllers\Lms\StaffChatController;
@@ -175,6 +176,8 @@ Route::middleware('tenant.required')->group(function () {
     Route::post('/api/frontend/lms/owner/courses', [OwnerAdminController::class, 'storeCourse']);
     Route::put('/api/frontend/lms/owner/courses/{id}', [OwnerAdminController::class, 'updateCourse']);
     Route::delete('/api/frontend/lms/owner/courses/{id}', [OwnerAdminController::class, 'destroyCourse']);
+    // Course storefront cover image (upload / remove) — multipart, owner-scoped.
+    Route::post('/api/frontend/lms/owner/courses/{id}/cover', [OwnerAdminController::class, 'uploadCourseCover']);
 
     // Owner student management (remove a student, re-send a set-password invite).
     // Tenant-scoped: findOrFail resolves only within the owner's institute.
@@ -239,6 +242,11 @@ Route::middleware('tenant.required')->group(function () {
     Route::get('/api/frontend/lms/notifications', [StudentDashboardController::class, 'notifications']);
     Route::post('/api/frontend/lms/notifications/{id}/read', [StudentDashboardController::class, 'markNotificationRead']);
     Route::get('/api/frontend/lms/attendance', [StudentDashboardController::class, 'attendance']);
+
+    // Student course rating (Udemy-style ★). Enrolled-only gate lives in the
+    // controller; a student can only rate the course they're enrolled in. Kept
+    // OUTSIDE plan.chat so ratings work on the free plan too.
+    Route::post('/api/frontend/lms/courses/{id}/rate', [StudentCourseReviewController::class, 'store'])->middleware('throttle:30,1');
 
     // Student Classroom
     Route::post('/api/frontend/lms/classrooms/{id}/join', [StudentClassroomController::class, 'join']);
