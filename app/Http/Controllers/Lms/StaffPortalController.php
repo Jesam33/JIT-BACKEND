@@ -194,7 +194,20 @@ class StaffPortalController extends BaseLmsController
             'type' => ['required', 'in:pdf,doc,video,link,other'],
             'file_url' => ['required', 'string', 'max:2048'],
             'session_id' => ['nullable', 'integer', 'exists:lms_classrooms,id'],
+            // Externally-hosted video (Bunny Stream) pointers — set by the client
+            // after a direct upload finishes. file_url carries the embed URL.
+            'provider' => ['nullable', 'string', 'max:40'],
+            'external_id' => ['nullable', 'string', 'max:255'],
+            'thumbnail_url' => ['nullable', 'string', 'max:2048'],
+            'duration_seconds' => ['nullable', 'integer'],
+            'status' => ['nullable', 'string', 'max:40'],
         ]);
+
+        // Video materials are a paid feature (Basic+); other material types are
+        // available on every plan. Gate only the video type.
+        if (($validated['type'] ?? null) === 'video') {
+            \App\Support\PlanGate::ensureFeature($this->currentTenantOrPrimary(), 'pre_recorded_video');
+        }
 
         $material = LmsMaterial::query()->create($validated);
 

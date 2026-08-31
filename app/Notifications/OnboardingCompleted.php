@@ -27,6 +27,9 @@ class OnboardingCompleted extends Notification
     {
         // Prefer the frontend/base URL used by the Next.js app when generating links in emails.
         $frontend = config('saas.frontend_url');
+        // What this org calls itself in customer-facing copy — "Institute" for the
+        // primary (Jorsas), "Online Academy" (or the owner's override) otherwise.
+        $label = $this->tenant ? $this->tenant->entityLabelArray()['singular'] : 'Online Academy';
 
         // Build a friendly frontend onboarding status URL that the Next.js app understands.
         $tenantId = $this->tenant->id ?? null;
@@ -43,9 +46,9 @@ class OnboardingCompleted extends Notification
         $frontendAdmin = rtrim($frontend, '/') . '/lms/admin' . ($tenantId ? ('?tenant=' . urlencode($tenantId)) : '');
 
         return (new MailMessage)
-            ->subject('Your institute onboarding is complete')
+            ->subject('Your ' . $label . ' onboarding is complete')
             ->greeting('Hello ' . ($notifiable->name ?? $notifiable->email))
-            ->line('Your institute "' . ($this->tenant->name ?? 'your institute') . '" is ready.')
+            ->line('Your ' . $label . ' "' . ($this->tenant->name ?? ('your ' . $label)) . '" is ready.')
             ->action('View onboarding status', $frontendOnboarding)
             ->line('When ready, sign in to your owner console.')
             ->action('Go to dashboard', $frontendAdmin)

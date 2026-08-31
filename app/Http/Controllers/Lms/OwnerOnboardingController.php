@@ -13,6 +13,7 @@ use App\Mail\LmsPasswordResetMail;
 use App\Models\LmsStudent;
 use App\Models\LmsTeacher;
 use App\Models\Tenant;
+use App\Support\PlanGate;
 use Illuminate\Support\Facades\Schema;
 
 class OwnerOnboardingController extends BaseLmsController
@@ -74,9 +75,20 @@ class OwnerOnboardingController extends BaseLmsController
         // password-reset token) with this organisation.
         app()->instance('currentTenant', $tenant);
 
+        // Plan student cap. A null limit is unlimited; otherwise we track a running
+        // headcount and stop creating NEW students once the cap is reached. Existing
+        // students (re-invites) never count, so they're always processed. Enforcing
+        // it here (rather than throwing) lets a partial import still invite everyone
+        // who fits and report how many were held back for an upgrade.
+        $studentLimit = $tenant->planLimit('students');
+        $studentCount = $studentLimit === null
+            ? 0
+            : LmsStudent::query()->withTenant($tenant->id)->count();
+
         $created = 0;
         $invited = 0;
         $skipped = 0;
+        $limited = 0;
         $failed = [];
 
         foreach ($emails as $rawEmail) {
@@ -88,6 +100,14 @@ class OwnerOnboardingController extends BaseLmsController
 
             $student = LmsStudent::query()->where('email', $email)->first();
             if (! $student) {
+                // At the plan cap and this would be a NEW seat → hold it back rather
+                // than exceed the limit. Already-existing students fall through and
+                // are still (re-)invited.
+                if ($studentLimit !== null && $studentCount >= $studentLimit) {
+                    $limited++;
+                    continue;
+                }
+
                 $student = LmsStudent::query()->create([
                     'email' => $email,
                     'first_name' => Str::before($email, '@'),
@@ -100,6 +120,7 @@ class OwnerOnboardingController extends BaseLmsController
                     'onboarding_completed' => false,
                 ]);
                 $created++;
+                $studentCount++;
             }
 
             // Reuse the student password-reset flow as a "set your password"
@@ -122,7 +143,7 @@ class OwnerOnboardingController extends BaseLmsController
         DB::table('tenant_onboarding_audits')->insert([
             'tenant_id' => $tenant->id,
             'user_id' => null,
-            'payload' => json_encode(['action' => 'students_imported', 'created' => $created, 'invited' => $invited, 'skipped' => $skipped, 'failed' => count($failed)]),
+            'payload' => json_encode(['action' => 'students_imported', 'created' => $created, 'invited' => $invited, 'skipped' => $skipped, 'limited' => $limited, 'failed' => count($failed)]),
             'status' => 'students_imported',
             'created_at' => now(),
             'updated_at' => now(),
@@ -132,6 +153,11 @@ class OwnerOnboardingController extends BaseLmsController
             'imported' => $created,
             'invited' => $invited,
             'skipped' => $skipped,
+            // Number of NEW students held back because the plan's student cap was
+            // reached. The UI surfaces this as an upgrade nudge; existing students
+            // were still re-invited.
+            'limited' => $limited,
+            'limit' => $studentLimit,
             'failed' => count($failed),
             'failed_emails' => $failed,
         ]);
@@ -145,6 +171,11 @@ class OwnerOnboardingController extends BaseLmsController
         if (! $this->authorizeOwnerForTenant($request, $tenant)) return response()->json(['message' => 'not authorized'], 403);
 
         $validated = $request->validate(['title' => ['required','string'], 'description' => ['nullable','string']]);
+
+        // Confirmed owner → bind the tenant so the new course is stamped with it,
+        // then enforce the plan's course cap (throws a 402 with an upgrade hint).
+        app()->instance('currentTenant', $tenant);
+        PlanGate::ensureCanAddCourse($tenant);
 
         $course = new \App\Models\LmsCourse();
         $course->title = $validated['title'];
@@ -182,6 +213,10 @@ class OwnerOnboardingController extends BaseLmsController
         // Confirmed owner of $tenant → bind it so the new teacher is stamped with
         // this organisation.
         app()->instance('currentTenant', $tenant);
+
+        // Enforce the plan's staff cap. A re-invite of an existing staff member
+        // (same email) is an existing seat and never counts (handled in the gate).
+        PlanGate::ensureCanAddStaff($tenant, $email);
 
         $teacher = LmsTeacher::query()->where('email', $email)->first();
         if (! $teacher) {

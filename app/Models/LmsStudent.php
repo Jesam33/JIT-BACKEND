@@ -98,6 +98,21 @@ class LmsStudent extends Model
         return $candidate;
     }
 
+    /**
+     * Display the photo as an absolute URL rebuilt against the CURRENT host, so a
+     * host baked in at upload time can't break it (see App\Support\MediaUrl).
+     */
+    public function getProfilePhotoUrlAttribute(): ?string
+    {
+        return \App\Support\MediaUrl::url($this->attributes['profile_photo_url'] ?? null);
+    }
+
+    /** Store the photo as a relative disk path, never a host-frozen absolute URL. */
+    public function setProfilePhotoUrlAttribute($value): void
+    {
+        $this->attributes['profile_photo_url'] = \App\Support\MediaUrl::toStorage($value);
+    }
+
     public function taskSubmissions(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(LmsTaskSubmission::class, 'student_id');

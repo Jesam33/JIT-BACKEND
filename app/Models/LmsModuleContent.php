@@ -17,10 +17,17 @@ class LmsModuleContent extends Model
         'content_body',
         'file_path',
         'sort_order',
+        // Externally-hosted video (Bunny Stream) pointers — bytes never on our server.
+        'provider',
+        'external_id',
+        'thumbnail_url',
+        'duration_seconds',
+        'status',
     ];
 
     protected $casts = [
         'sort_order' => 'integer',
+        'duration_seconds' => 'integer',
     ];
 
     public function module(): BelongsTo

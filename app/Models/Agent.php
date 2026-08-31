@@ -23,9 +23,19 @@ class Agent extends Model
 
     protected $appends = ['profile_photo_url'];
 
+    /**
+     * Display the avatar as an absolute URL rebuilt against the CURRENT host, so a
+     * host baked in at upload time can't break it (see App\Support\MediaUrl).
+     */
     public function getProfilePhotoUrlAttribute(): ?string
     {
-        return $this->avatar;
+        return \App\Support\MediaUrl::url($this->attributes['avatar'] ?? null);
+    }
+
+    /** Store the avatar as a relative disk path, never a host-frozen absolute URL. */
+    public function setAvatarAttribute($value): void
+    {
+        $this->attributes['avatar'] = \App\Support\MediaUrl::toStorage($value);
     }
 
     public function sessions()

@@ -17,20 +17,25 @@ use Illuminate\Validation\ValidationException;
 class TenantSignupController extends Controller
 {
     /**
-     * Pay-first institute signup. Every institute must complete a Paystack
-     * payment before anything is provisioned. This endpoint only:
+     * Institute signup. A FREE plan provisions immediately (no payment); a paid
+     * plan is pay-first — this endpoint only:
      *   1. creates a `pending` tenant + owner user (no LMS content, no invite),
      *   2. initializes a Paystack transaction, and
      *   3. returns the authorization_url for the browser to redirect to.
-     * Provisioning happens later — in verify() or the webhook — once money
-     * confirms. See TenantOnboardingService::activatePaidSignup().
+     * Paid provisioning happens later — in verify() or the webhook — once money
+     * confirms. Free signups are activated + provisioned inline here, reusing the
+     * same idempotent {@see TenantOnboardingService::activatePaidSignup()}.
      */
-    public function signup(Request $request, PaystackService $paystack)
+    public function signup(Request $request, PaystackService $paystack, TenantOnboardingService $onboarding)
     {
-        // Paid plans only — there is no free tier at signup.
-        $paidPlans = array_keys(array_filter(
-            config('saas.plans', []),
-            fn ($p) => (float) ($p['price'] ?? 0) > 0
+        // Self-serve plans only (free/basic/pro). Enterprise is contact-sales:
+        // its price is null and `contact_sales` is set, so it must NEVER be
+        // provisioned through signup — otherwise the null price would read as
+        // "free" ((float) null <= 0) and hand out an unlimited academy at no
+        // charge. Enterprise goes through the contact path instead.
+        $selfServePlans = array_keys(array_filter(
+            (array) config('saas.plans', []),
+            fn ($p) => empty($p['contact_sales'] ?? false) && ($p['price'] ?? null) !== null
         ));
 
         // Normalise a supplied slug to the DNS-safe lowercase form before validating.
@@ -47,7 +52,7 @@ class TenantSignupController extends Controller
             'admin_email' => ['required', 'email', 'max:255'],
             // No password at signup — the owner sets it later on the emailed setup
             // link (/lms/admin/setup), so registration only collects who they are.
-            'plan' => ['required', 'string', Rule::in($paidPlans)],
+            'plan' => ['required', 'string', Rule::in($selfServePlans)],
         ], [
             'slug.regex' => 'The subdomain may only contain lowercase letters, numbers, and hyphens.',
             'slug.not_in' => 'That subdomain is reserved. Please choose another.',
@@ -55,17 +60,19 @@ class TenantSignupController extends Controller
             'plan.in' => 'Please choose one of the available plans.',
         ]);
 
-        // Online signup is impossible without a live payment gateway. Fail loud
-        // (but only after validation) so we never create a pending tenant that
-        // can never be paid for.
-        if (! $paystack->isConfigured()) {
+        $plan = $validated['plan'];
+        $email = $validated['admin_email'];
+
+        // A free plan (price ≤ 0) provisions without payment; only paid signups
+        // need a live gateway. Fail loud for a paid plan when Paystack is unset
+        // (but only after validation) so we never create a pending tenant that can
+        // never be paid for. A free plan is unaffected.
+        $isFree = (float) config("saas.plans.$plan.price", 0) <= 0;
+        if (! $isFree && ! $paystack->isConfigured()) {
             return response()->json([
                 'message' => 'Online signup is temporarily unavailable. Please contact us to get started.',
             ], 503);
         }
-
-        $plan = $validated['plan'];
-        $email = $validated['admin_email'];
 
         // Existing email: allow resuming an abandoned (still-pending) signup;
         // otherwise the account already exists and they should sign in. This
@@ -91,6 +98,12 @@ class TenantSignupController extends Controller
             $settings = $tenant->settings ?? [];
             $settings['plan'] = $plan;
             $tenant->update(['name' => $validated['name'], 'settings' => $settings]);
+
+            // Switching an abandoned (still-pending) signup to the free plan:
+            // provision it now instead of re-opening a payment.
+            if ($isFree) {
+                return $this->activateFreeSignup($onboarding, $tenant, true);
+            }
 
             $init = $this->initPayment($paystack, $tenant, $existingUser, $plan);
             if (! ($init['ok'] ?? false)) {
@@ -152,6 +165,13 @@ class TenantSignupController extends Controller
             throw $e;
         }
 
+        // Free plan → provision immediately, no payment. Same idempotent
+        // activation the paid verify path uses, so the owner gets the same seeded
+        // LMS and setup-link email.
+        if ($isFree) {
+            return $this->activateFreeSignup($onboarding, $tenant, false);
+        }
+
         $init = $this->initPayment($paystack, $tenant, $user, $plan);
         if (! ($init['ok'] ?? false)) {
             // Payment couldn't be started. The pending tenant/user remain and can
@@ -166,6 +186,42 @@ class TenantSignupController extends Controller
             'admin' => ['id' => $user->id, 'email' => $user->email, 'name' => $user->name],
             'authorization_url' => $init['authorization_url'],
             'reference' => $init['reference'],
+        ], 201);
+    }
+
+    /**
+     * Provision a FREE-plan signup immediately — no payment. Mirrors verify()'s
+     * success path: activation + provisioning is idempotent and self-healing
+     * (activatePaidSignup reverts the tenant to `pending` and rethrows on failure),
+     * so we surface a 503 "finalizing" the frontend can retry rather than a raw 500.
+     * The response carries `free: true` so the client shows an inline "check your
+     * email" success instead of redirecting to a payment page.
+     */
+    private function activateFreeSignup(TenantOnboardingService $onboarding, Tenant $tenant, bool $resumed)
+    {
+        try {
+            $onboarding->activatePaidSignup($tenant);
+        } catch (\Throwable $e) {
+            Log::error('Free-signup activation failed', [
+                'tenant_id' => $tenant->id,
+                'err' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'status' => 'pending',
+                'message' => 'We are finalizing your institute. This can take a moment; please try again.',
+            ], 503);
+        }
+
+        $tenant->refresh();
+
+        return response()->json([
+            'status' => 'success',
+            'free' => true,
+            'resumed' => $resumed,
+            'message' => 'Your institute is ready — check your email for your setup link.',
+            'front_door' => $this->frontDoor($tenant),
+            'tenant' => $tenant->only(['id', 'name', 'slug']),
         ], 201);
     }
 
@@ -252,7 +308,7 @@ class TenantSignupController extends Controller
         // Pre-fill the callback with this reference (Paystack echoes the same
         // value back, so the frontend reads a correct ?reference=). Points at the
         // tenant-signup verify page, NOT the student /institute/verify flow.
-        $callbackUrl = rtrim((string) env('FRONTEND_URL', config('app.url')), '/') . '/signup/verify?reference=' . $reference;
+        $callbackUrl = config('saas.frontend_url') . '/signup/verify?reference=' . $reference;
 
         try {
             $resp = $paystack->initializeTransaction($user->email, $amount, $reference, [
@@ -289,6 +345,6 @@ class TenantSignupController extends Controller
 
         return $appDomain
             ? 'https://' . $tenant->slug . '.' . $appDomain
-            : rtrim((string) env('FRONTEND_URL', config('app.url')), '/') . '/?tenant=' . $tenant->slug;
+            : config('saas.frontend_url') . '/?tenant=' . $tenant->slug;
     }
 }

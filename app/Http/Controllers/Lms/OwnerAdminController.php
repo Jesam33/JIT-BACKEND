@@ -17,6 +17,7 @@ use App\Models\TrainingRegistration;
 use App\Models\User;
 use App\Services\PaystackService;
 use App\Support\CourseCards;
+use App\Support\PlanGate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -112,6 +113,7 @@ class OwnerAdminController extends BaseLmsController
                 'name' => trim(($owner?->first_name ?? '') . ' ' . ($owner?->last_name ?? '')) ?: $owner?->email,
             ],
             'plan' => $tenant->plan ?? 'free',
+            'plan_summary' => $tenant->planSummaryArray(),
             'subscription_status' => $tenant->subscription_status ?? 'active',
             'current_period_end' => $tenant->current_period_end,
             'counts' => [
@@ -140,7 +142,17 @@ class OwnerAdminController extends BaseLmsController
             return response()->json(['message' => 'Not authorized.'], 403);
         }
 
+        [$tenant] = $context;
+
+        // Snapshot totals + the registration funnel are STANDARD analytics — every
+        // plan sees them. The 6-month trend charts (students/enrollments/revenue
+        // over time) are ADVANCED analytics, a Pro+ feature: skip those queries
+        // and return empty series on plans without it, so the dashboard can show
+        // an upgrade prompt in place of the charts (see the `advanced` flag).
+        $advanced = $tenant->planFeature('advanced_analytics');
+
         // Build the last 6 whole-month buckets, oldest → newest (e.g. Mar…Aug).
+        // The axis labels are cheap (no query) so they're always returned.
         $start = now()->startOfMonth()->subMonths(5);
         $months = [];
         $cursor = $start->copy();
@@ -148,34 +160,49 @@ class OwnerAdminController extends BaseLmsController
             $months[] = ['key' => $cursor->format('Y-m'), 'label' => $cursor->format('M')];
             $cursor->addMonth();
         }
-        // Map a "Y-m => value" result onto the fixed 6-month axis (0 for gaps).
-        $align = fn (array $map): array => array_map(fn ($m) => $map[$m['key']] ?? 0, $months);
-        $bucket = "DATE_FORMAT(created_at, '%Y-%m')";
 
-        $studentsByMonth = LmsStudent::query()
-            ->where('created_at', '>=', $start)
-            ->selectRaw("$bucket as ym, COUNT(*) as c")
-            ->groupByRaw($bucket)
-            ->pluck('c', 'ym')
-            ->map(fn ($v) => (int) $v)
-            ->all();
+        $series = [
+            'students' => array_fill(0, 6, 0),
+            'enrollments' => array_fill(0, 6, 0),
+            'revenue' => array_fill(0, 6, 0),
+        ];
 
-        $enrollByMonth = LmsEnrollment::query()
-            ->where('created_at', '>=', $start)
-            ->selectRaw("$bucket as ym, COUNT(*) as c")
-            ->groupByRaw($bucket)
-            ->pluck('c', 'ym')
-            ->map(fn ($v) => (int) $v)
-            ->all();
+        if ($advanced) {
+            // Map a "Y-m => value" result onto the fixed 6-month axis (0 for gaps).
+            $align = fn (array $map): array => array_map(fn ($m) => $map[$m['key']] ?? 0, $months);
+            $bucket = "DATE_FORMAT(created_at, '%Y-%m')";
 
-        $revenueByMonth = Payment::query()
-            ->where('status', 'success')
-            ->where('created_at', '>=', $start)
-            ->selectRaw("$bucket as ym, SUM(amount) as s")
-            ->groupByRaw($bucket)
-            ->pluck('s', 'ym')
-            ->map(fn ($v) => round((float) $v, 2))
-            ->all();
+            $studentsByMonth = LmsStudent::query()
+                ->where('created_at', '>=', $start)
+                ->selectRaw("$bucket as ym, COUNT(*) as c")
+                ->groupByRaw($bucket)
+                ->pluck('c', 'ym')
+                ->map(fn ($v) => (int) $v)
+                ->all();
+
+            $enrollByMonth = LmsEnrollment::query()
+                ->where('created_at', '>=', $start)
+                ->selectRaw("$bucket as ym, COUNT(*) as c")
+                ->groupByRaw($bucket)
+                ->pluck('c', 'ym')
+                ->map(fn ($v) => (int) $v)
+                ->all();
+
+            $revenueByMonth = Payment::query()
+                ->where('status', 'success')
+                ->where('created_at', '>=', $start)
+                ->selectRaw("$bucket as ym, SUM(amount) as s")
+                ->groupByRaw($bucket)
+                ->pluck('s', 'ym')
+                ->map(fn ($v) => round((float) $v, 2))
+                ->all();
+
+            $series = [
+                'students' => $align($studentsByMonth),
+                'enrollments' => $align($enrollByMonth),
+                'revenue' => $align($revenueByMonth),
+            ];
+        }
 
         $regByStatus = TrainingRegistration::query()
             ->selectRaw('status, COUNT(*) as c')
@@ -185,12 +212,9 @@ class OwnerAdminController extends BaseLmsController
             ->all();
 
         return response()->json([
+            'advanced' => $advanced,
             'months' => array_map(fn ($m) => $m['label'], $months),
-            'series' => [
-                'students' => $align($studentsByMonth),
-                'enrollments' => $align($enrollByMonth),
-                'revenue' => $align($revenueByMonth),
-            ],
+            'series' => $series,
             'totals' => [
                 'revenue' => round((float) Payment::query()->where('status', 'success')->sum('amount'), 2),
                 'students' => LmsStudent::query()->count(),
@@ -571,6 +595,10 @@ class OwnerAdminController extends BaseLmsController
             'font_family' => ['nullable', 'string', 'in:default,inter,system,serif,mono,rounded'],
             'remove_logo' => ['nullable', 'boolean'],
             'remove_background' => ['nullable', 'boolean'],
+            // What this academy calls itself (e.g. "Institute", "Academy",
+            // "School"). Customer-facing label only — never touches identifiers.
+            'entity_label' => ['nullable', 'string', 'max:40'],
+            'entity_label_plural' => ['nullable', 'string', 'max:40'],
         ]);
 
         $settings = (array) ($tenant->settings ?? []);
@@ -588,6 +616,21 @@ class OwnerAdminController extends BaseLmsController
         // key preserves the stored value, so clearing needs an explicit flag.
         if ($request->boolean('remove_background')) {
             $branding['background_color'] = null;
+        }
+
+        // Entity label: an empty submitted value reverts to the plan default
+        // (Institute for the primary, Online Academy for everyone else); a
+        // skipped key preserves what's stored. Plural is optional — when blank,
+        // entityLabelArray() derives it from the singular via Str::plural.
+        foreach (['entity_label', 'entity_label_plural'] as $key) {
+            if ($request->has($key)) {
+                $value = trim((string) ($validated[$key] ?? ''));
+                if ($value === '') {
+                    unset($branding[$key]);
+                } else {
+                    $branding[$key] = $value;
+                }
+            }
         }
 
         $settings['branding'] = $branding;
@@ -624,15 +667,19 @@ class OwnerAdminController extends BaseLmsController
         $request->validate(['file' => ['required', 'image', 'max:2048']]);
 
         $path = $request->file('file')->store('tenant-logos', 'public');
-        $url = asset('storage/' . $path);
 
         $settings = (array) ($tenant->settings ?? []);
         $branding = (array) ($settings['branding'] ?? []);
-        $branding['logo_url'] = $url;
+        // Store the RELATIVE path; brandingArray() rebuilds the absolute URL against
+        // the current host on read, so a host baked in at upload (localhost → live,
+        // http → https) can't break the logo.
+        $branding['logo_url'] = $path;
         $settings['branding'] = $branding;
         $tenant->update(['settings' => $settings]);
 
-        return response()->json(['url' => $url, 'branding' => $this->brandingFor($tenant->fresh())]);
+        $branding = $this->brandingFor($tenant->fresh());
+
+        return response()->json(['url' => $branding['logo_url'], 'branding' => $branding]);
     }
 
     /**
@@ -740,15 +787,19 @@ class OwnerAdminController extends BaseLmsController
         $request->validate(['file' => ['required', 'image', 'max:4096']]);
 
         $path = $request->file('file')->store('tenant-covers', 'public');
-        $url = asset('storage/' . $path);
 
         $settings = (array) ($tenant->settings ?? []);
         $profile = (array) ($settings['profile'] ?? []);
-        $profile['cover_url'] = $url;
+        // Store the RELATIVE path; profileArray() rebuilds the absolute URL against
+        // the current host on read (see uploadLogo), so the cover can't break on a
+        // host change.
+        $profile['cover_url'] = $path;
         $settings['profile'] = $profile;
         $tenant->update(['settings' => $settings]);
 
-        return response()->json(['url' => $url, 'profile' => $tenant->fresh()->profileArray()]);
+        $profile = $tenant->fresh()->profileArray();
+
+        return response()->json(['url' => $profile['cover_url'], 'profile' => $profile]);
     }
 
     /**
@@ -787,13 +838,18 @@ class OwnerAdminController extends BaseLmsController
             'payment' => [
                 'configured' => ! empty($paystack['subaccount_code']),
                 'subaccount_code' => $paystack['subaccount_code'] ?? null,
+                // Whether we created this subaccount (its split follows the plan) or
+                // the owner pasted a code (its split is their own, shown as unknown).
+                'managed' => $tenant->payoutSubaccountManaged(),
+                // The split actually recorded on the linked subaccount, if known.
+                'subaccount_commission_percent' => isset($paystack['percentage_charge']) ? (float) $paystack['percentage_charge'] : null,
                 'business_name' => $paystack['business_name'] ?? null,
                 'bank_code' => $paystack['bank_code'] ?? null,
                 'bank_name' => $paystack['bank_name'] ?? null,
                 'account_number_masked' => $maskedAccount ?: null,
                 'account_name' => $paystack['account_name'] ?? null,
             ],
-            'platform_commission_percent' => (float) config('saas.platform_commission_percent', 2),
+            'platform_commission_percent' => $tenant->commissionPercent(),
             'gateway_ready' => $gatewayReady,
             // The bank picker only needs codes when linking a fresh subaccount, and
             // the list is a live Paystack round-trip — only fetch it when the
@@ -833,16 +889,21 @@ class OwnerAdminController extends BaseLmsController
 
         // Explicit disconnect: course fees revert to the platform account.
         if ($request->boolean('disconnect')) {
-            unset($paystack['subaccount_code'], $paystack['business_name'], $paystack['bank_code'], $paystack['bank_name'], $paystack['account_number'], $paystack['account_name']);
+            unset($paystack['subaccount_code'], $paystack['business_name'], $paystack['bank_code'], $paystack['bank_name'], $paystack['account_number'], $paystack['account_name'], $paystack['managed'], $paystack['percentage_charge']);
             $settings['paystack'] = $paystack;
             $tenant->update(['settings' => $settings]);
 
             return response()->json(['message' => 'Payout account disconnected. Course fees will settle to the platform account.', 'configured' => false]);
         }
 
-        // Path A — a subaccount code was pasted directly. Trust it as-is.
+        // Path A — a subaccount code was pasted directly. Trust it as-is. Marked
+        // unmanaged: it may live on another Paystack account and carries whatever
+        // split the owner set there, so a plan change must never rewrite it — and
+        // we don't know its %, so clear any recorded split.
         if (! empty($validated['subaccount_code'])) {
             $paystack['subaccount_code'] = trim($validated['subaccount_code']);
+            $paystack['managed'] = false;
+            unset($paystack['percentage_charge']);
             if (! empty($validated['business_name'])) {
                 $paystack['business_name'] = trim($validated['business_name']);
             }
@@ -858,7 +919,11 @@ class OwnerAdminController extends BaseLmsController
                 return response()->json(['message' => 'The payment gateway is not configured on the platform yet. Try again later.'], 503);
             }
 
-            $commission = (float) config('saas.platform_commission_percent', 2);
+            // Per-plan commission (the platform's cut of this institute's course
+            // sales), set on the split at creation. Because this subaccount is
+            // platform-managed, a later plan change re-syncs the split to the new
+            // plan's commission (Tenant::syncPayoutCommission), so it won't go stale.
+            $commission = $tenant->commissionPercent();
             $result = $service->createSubaccount(
                 trim($validated['business_name']),
                 trim($validated['bank_code']),
@@ -878,6 +943,10 @@ class OwnerAdminController extends BaseLmsController
             $paystack['bank_name'] = $validated['bank_name'] ?? ($result['data']['settlement_bank'] ?? null);
             $paystack['account_number'] = trim($validated['account_number']);
             $paystack['account_name'] = $result['data']['account_name'] ?? null;
+            // Platform-created → we own the split and keep it in step with the plan
+            // on every change (Tenant::syncPayoutCommission). Record the % applied.
+            $paystack['managed'] = true;
+            $paystack['percentage_charge'] = $commission;
         }
 
         $settings['paystack'] = $paystack;
@@ -1083,6 +1152,12 @@ class OwnerAdminController extends BaseLmsController
         if (! $context) {
             return response()->json(['message' => 'Not authorized.'], 403);
         }
+
+        [$tenant] = $context;
+
+        // Enforce the plan's course cap before creating (throws a 402 with an
+        // upgrade hint when the institute is at its limit). Unlimited plans no-op.
+        PlanGate::ensureCanAddCourse($tenant);
 
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],

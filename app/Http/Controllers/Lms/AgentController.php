@@ -78,7 +78,17 @@ class AgentController extends BaseLmsController
         // Agents are per-tenant. Attribute the application to the requested
         // organisation (from the tenant header) or, on the bare primary domain,
         // to JIT. This binds the tenant so Agent::create auto-stamps tenant_id.
-        $this->currentTenantOrPrimary();
+        $tenant = $this->currentTenantOrPrimary();
+
+        // The Admission-Marketer Network is a paid feature (Basic+). On an academy
+        // whose plan doesn't include it the public application path is closed with
+        // a neutral message — a visitor can't upgrade the academy, so (unlike the
+        // owner-side management endpoints) this never raises the upgrade modal.
+        if ($tenant && ! $tenant->planFeature('admission_marketer')) {
+            return response()->json([
+                'message' => "This academy isn't currently accepting Admission Marketer applications.",
+            ], 403);
+        }
 
         $agent = Agent::create([
             'name' => $validated['name'],
@@ -169,9 +179,12 @@ class AgentController extends BaseLmsController
         $request->validate(['file' => ['required', 'image', 'max:2048']]);
 
         $path = $request->file('file')->store('profile-photos', 'public');
-        $agent->update(['avatar' => asset('storage/' . $path)]);
+        // Store the RELATIVE path (the model mutator normalises it); the accessor
+        // rebuilds an absolute URL against the current host on read, so the image
+        // can't break when the app host changes (localhost → live, http → https).
+        $agent->update(['avatar' => $path]);
 
-        return response()->json(['url' => $agent->avatar]);
+        return response()->json(['url' => $agent->profile_photo_url]);
     }
 
     // --- Dashboard ---

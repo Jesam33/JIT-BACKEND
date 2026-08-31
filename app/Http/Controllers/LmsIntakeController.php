@@ -172,6 +172,19 @@ class LmsIntakeController extends BaseLmsController
             ], 422);
         }
 
+        // Plan student cap. Money-safe by design: this never throws (a self-enrolling
+        // visitor can't upgrade the institute's plan) and never blocks an existing
+        // student re-enrolling in another course — only a brand-new student email at
+        // an institute that has hit its seat cap is turned away, with a neutral
+        // message. The primary institute is unlimited, so this is a no-op there.
+        $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
+        if ($tenant && \App\Support\PlanGate::studentLimitReached($tenant, $validated['email']) !== null) {
+            return response()->json([
+                'message' => 'This institute isn’t taking new student registrations right now. Please check back soon.',
+                'institute_full' => true,
+            ], 422);
+        }
+
         $referredByAgentId = null;
         $price = (float) $course->price;
         if (! empty($validated['referral_code'])) {
@@ -285,7 +298,7 @@ class LmsIntakeController extends BaseLmsController
                 return $this->handleZeroPayment($registration);
             }
 
-            $frontendUrl = rtrim((string) env('FRONTEND_URL', 'http://127.0.0.1:3000'), '/');
+            $frontendUrl = config('saas.frontend_url');
 
             if ($registration->registered_by_agent_id || $registration->referred_by_agent_id) {
                 $callbackUrl = $frontendUrl . '/lms/agent/verify?reference=' . $reference;
@@ -394,7 +407,7 @@ class LmsIntakeController extends BaseLmsController
     {
         $signature = $request->header('x-paystack-signature');
 
-        $secret = (string) env('PAYSTACK_SECRET_KEY', '');
+        $secret = (string) config('services.paystack.secret_key', '');
         $payload = $request->getContent();
 
         if ($signature !== hash_hmac('sha512', $payload, $secret)) {

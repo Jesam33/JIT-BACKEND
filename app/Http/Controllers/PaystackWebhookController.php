@@ -14,7 +14,7 @@ class PaystackWebhookController extends Controller
         // Paystack sends JSON payloads. We verify signature if configured.
         $signature = $request->header('x-paystack-signature');
 
-        $secret = env('PAYSTACK_SECRET_KEY', '');
+        $secret = (string) config('services.paystack.secret_key', '');
         if ($secret && $signature) {
             $computed = hash_hmac('sha512', $request->getContent(), $secret);
             if (! hash_equals($computed, $signature)) {

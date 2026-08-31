@@ -38,7 +38,14 @@ class PublicInstituteController extends Controller
         // valid) storefront rather than 404 the marketing page.
         if (! $tenant) {
             return response()->json([
-                'institute' => ['name' => 'Institute', 'slug' => ''],
+                'institute' => [
+                    'name' => 'Online Academy',
+                    'slug' => '',
+                    'show_powered_by' => false,
+                    'show_agent_program' => false,
+                    'entity_label' => 'Online Academy',
+                    'entity_label_plural' => 'Online Academies',
+                ],
                 'branding' => Tenant::defaultBranding(),
                 'profile' => Tenant::defaultProfile(),
                 'courses' => [],
@@ -90,7 +97,7 @@ class PublicInstituteController extends Controller
             ->values();
 
         return response()->json([
-            'institute' => ['name' => $tenant->name, 'slug' => $tenant->slug],
+            'institute' => $this->instituteMeta($tenant),
             'branding' => $tenant->brandingArray(),
             'profile' => $tenant->profileArray(),
             'courses' => $serialized,
@@ -118,11 +125,32 @@ class PublicInstituteController extends Controller
         $ctx['card'] = CourseCards::context([$course->id], $tenant->name);
 
         return response()->json([
-            'institute' => ['name' => $tenant->name, 'slug' => $tenant->slug],
+            'institute' => $this->instituteMeta($tenant),
             'branding' => $tenant->brandingArray(),
             'profile' => $tenant->profileArray(),
             'course' => $this->serializeCourse($course, $ctx, true),
         ]);
+    }
+
+    /**
+     * The storefront's `institute` descriptor. Carries the display name/slug,
+     * the "Powered by Jorsas" flag (off once a plan removes branding), whether
+     * the Admission-Marketer Network is offered on this plan (so the storefront
+     * hides "Become an agent" on plans without it), and the tenant's own entity
+     * label (what this academy calls itself — customer-facing text only).
+     */
+    private function instituteMeta(Tenant $tenant): array
+    {
+        $label = $tenant->entityLabelArray();
+
+        return [
+            'name' => $tenant->name,
+            'slug' => $tenant->slug,
+            'show_powered_by' => ! $tenant->planFeature('remove_branding'),
+            'show_agent_program' => $tenant->planFeature('admission_marketer'),
+            'entity_label' => $label['singular'],
+            'entity_label_plural' => $label['plural'],
+        ];
     }
 
     /**

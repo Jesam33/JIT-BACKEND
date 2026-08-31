@@ -42,6 +42,226 @@ class Tenant extends Model
             'subscription_status' => 'active',
             'current_period_end' => now()->addMonthNoOverflow(),
         ]);
+
+        // Keep the Paystack payout split in step with the new plan's commission so
+        // an upgrade/downgrade actually changes what the platform retains on this
+        // institute's course sales — otherwise the % frozen at subaccount creation
+        // would persist. Best-effort and only for a subaccount we manage; it never
+        // lets a gateway hiccup break plan activation. (No-op at signup — the bank
+        // is linked later — and for the primary, which has no subaccount.)
+        $this->syncPayoutCommission();
+    }
+
+    /**
+     * Whether this tenant's linked Paystack subaccount is one the PLATFORM created
+     * from bank details (Path B in OwnerAdminController::updatePaymentSettings) —
+     * as opposed to a code the owner pasted in (Path A). Only a platform-managed
+     * subaccount belongs to our integration and carries a split we set, so only it
+     * is safe to re-sync on a plan change; a pasted code is the owner's own
+     * arrangement (possibly on another Paystack account) and is never touched.
+     */
+    public function payoutSubaccountManaged(): bool
+    {
+        $paystack = (array) (data_get($this->settings, 'paystack') ?? []);
+        if (empty($paystack['subaccount_code'])) {
+            return false;
+        }
+
+        // The explicit flag set at creation wins; fall back to the presence of the
+        // bank details we'd only hold if we created it (covers any row linked
+        // before the flag existed).
+        return array_key_exists('managed', $paystack)
+            ? (bool) $paystack['managed']
+            : ! empty($paystack['bank_code']);
+    }
+
+    /**
+     * Re-point this tenant's Paystack subaccount split at its current plan's
+     * commission percent. No-op unless a platform-managed subaccount is linked
+     * (a pasted code is left untouched). Best-effort: any failure is logged and
+     * swallowed so it never blocks plan activation — the split simply stays at its
+     * previous value until the next successful sync. On success the applied % is
+     * recorded in settings so the owner payments UI reflects the live split.
+     */
+    public function syncPayoutCommission(): void
+    {
+        if (! $this->payoutSubaccountManaged()) {
+            return;
+        }
+
+        $settings = (array) ($this->settings ?? []);
+        $paystack = (array) ($settings['paystack'] ?? []);
+        $code = trim((string) ($paystack['subaccount_code'] ?? ''));
+        if ($code === '') {
+            return;
+        }
+
+        $commission = $this->commissionPercent();
+
+        try {
+            $service = app(\App\Services\PaystackService::class);
+            if (! $service->isConfigured()) {
+                return; // gateway off (local/test) — nothing to sync
+            }
+
+            $result = $service->updateSubaccount($code, $commission);
+            if (! ($result['status'] ?? false)) {
+                \Illuminate\Support\Facades\Log::warning('Paystack subaccount split sync not confirmed', [
+                    'tenant_id' => $this->id,
+                    'subaccount' => $code,
+                    'commission' => $commission,
+                    'message' => $result['message'] ?? null,
+                ]);
+
+                return;
+            }
+
+            // Record the split we actually applied so the owner UI shows the live %.
+            $paystack['percentage_charge'] = $commission;
+            $settings['paystack'] = $paystack;
+            $this->update(['settings' => $settings]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Paystack subaccount split sync failed', [
+                'tenant_id' => $this->id,
+                'subaccount' => $code,
+                'err' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Whether this is the platform's own primary institute (Jorsas). The primary
+     * is never limited or gated — it is always treated as the top plan.
+     */
+    public function isPrimary(): bool
+    {
+        return $this->slug === config('saas.primary_slug', 'jorsas');
+    }
+
+    /**
+     * The effective plan definition for this tenant, merged over the free-plan
+     * shape so every key (limits, features, commission) is always present even
+     * for a partially-configured plan. The primary institute always resolves to
+     * the top ('enterprise') plan regardless of what's stored on the row.
+     *
+     * Single source of truth for every plan-derived decision (limits, feature
+     * gates, commission) so the whole pricing model is retuned in config alone.
+     */
+    public function planConfig(): array
+    {
+        $plans = (array) config('saas.plans', []);
+        $free = (array) ($plans['free'] ?? []);
+
+        if ($this->isPrimary()) {
+            $top = (array) ($plans['enterprise'] ?? $plans['pro'] ?? []);
+
+            return array_replace_recursive($free, $top);
+        }
+
+        $plan = $this->plan ?: 'free';
+        $current = (array) ($plans[$plan] ?? []);
+
+        return array_replace_recursive($free, $current);
+    }
+
+    /** The resolved plan slug for this tenant (primary always reads as the top plan, 'enterprise'). */
+    public function planSlug(): string
+    {
+        $plans = (array) config('saas.plans', []);
+
+        if ($this->isPrimary()) {
+            return isset($plans['enterprise']) ? 'enterprise' : 'pro';
+        }
+
+        $plan = $this->plan ?: 'free';
+
+        return isset($plans[$plan]) ? $plan : 'free';
+    }
+
+    /**
+     * A numeric plan limit (courses|students|staff), or null when unlimited.
+     * A missing key also reads as unlimited (null) — fail-open on config typos
+     * rather than accidentally capping at zero.
+     */
+    public function planLimit(string $key): ?int
+    {
+        $limits = (array) (data_get($this->planConfig(), 'limits') ?? []);
+        if (! array_key_exists($key, $limits)) {
+            return null;
+        }
+
+        $value = $limits[$key];
+
+        return $value === null ? null : (int) $value;
+    }
+
+    /**
+     * Whether a plan feature is enabled. Known keys: live_classes, chat,
+     * certificates, pre_recorded_video, admission_marketer, remove_branding,
+     * advanced_analytics, advanced_reporting, custom_domain, priority_support,
+     * ai_materials, api_access, white_label.
+     */
+    public function planFeature(string $key): bool
+    {
+        return (bool) data_get($this->planConfig(), "features.$key", false);
+    }
+
+    /** The platform commission percent for this tenant's plan (per-plan; falls back to the global default). */
+    public function commissionPercent(): float
+    {
+        return (float) data_get(
+            $this->planConfig(),
+            'commission_percent',
+            config('saas.platform_commission_percent', 2)
+        );
+    }
+
+    /**
+     * Plan state + limits + current usage, shaped for the owner UI (billing and
+     * dashboard). Usage counts are tenant-scoped to this institute; pass true to
+     * include them (they run three COUNT queries).
+     */
+    public function planSummaryArray(bool $withUsage = true): array
+    {
+        $config = $this->planConfig();
+
+        $summary = [
+            'slug' => $this->planSlug(),
+            'name' => (string) ($config['name'] ?? ucfirst($this->planSlug())),
+            'label' => (string) ($config['label'] ?? ''),
+            'contact_sales' => (bool) ($config['contact_sales'] ?? false),
+            'commission_percent' => $this->commissionPercent(),
+            'limits' => [
+                'courses' => $this->planLimit('courses'),
+                'students' => $this->planLimit('students'),
+                'staff' => $this->planLimit('staff'),
+            ],
+            'features' => [
+                'live_classes' => $this->planFeature('live_classes'),
+                'chat' => $this->planFeature('chat'),
+                'certificates' => $this->planFeature('certificates'),
+                'pre_recorded_video' => $this->planFeature('pre_recorded_video'),
+                'admission_marketer' => $this->planFeature('admission_marketer'),
+                'remove_branding' => $this->planFeature('remove_branding'),
+                'advanced_analytics' => $this->planFeature('advanced_analytics'),
+                'advanced_reporting' => $this->planFeature('advanced_reporting'),
+                'custom_domain' => $this->planFeature('custom_domain'),
+                'priority_support' => $this->planFeature('priority_support'),
+                'ai_materials' => $this->planFeature('ai_materials'),
+                'api_access' => $this->planFeature('api_access'),
+                'white_label' => $this->planFeature('white_label'),
+            ],
+        ];
+
+        if ($withUsage) {
+            $summary['usage'] = [
+                'courses' => \App\Models\LmsCourse::query()->withTenant($this->id)->count(),
+                'students' => \App\Models\LmsStudent::query()->withTenant($this->id)->count(),
+                'staff' => \App\Models\LmsTeacher::query()->withTenant($this->id)->count(),
+            ];
+        }
+
+        return $summary;
     }
 
     /**
@@ -62,6 +282,37 @@ class Tenant extends Model
     }
 
     /**
+     * What this tenant calls its own organisation, in customer-facing copy —
+     * the primary (Jorsas) is an "Institute"; every other academy defaults to
+     * "Online Academy" and its owner can rename it in Customisation. This is
+     * TEXT only: routes, columns, and identifiers never change. Depends on the
+     * slug, so it's resolved fresh (not stored) for the primary.
+     */
+    public function defaultEntityLabel(): string
+    {
+        return $this->isPrimary() ? 'Institute' : 'Online Academy';
+    }
+
+    /**
+     * The singular + plural entity label for this tenant, merged over the
+     * default. The plural is the stored override when present, else derived
+     * from the singular via Str::plural. Single source every surface reads so
+     * the storefront, portals, and emails all name the entity identically.
+     */
+    public function entityLabelArray(): array
+    {
+        $b = (array) (data_get($this->settings, 'branding') ?? []);
+
+        $singular = trim((string) ($b['entity_label'] ?? '')) ?: $this->defaultEntityLabel();
+        $plural = trim((string) ($b['entity_label_plural'] ?? '')) ?: \Illuminate\Support\Str::plural($singular);
+
+        return [
+            'singular' => $singular,
+            'plural' => $plural,
+        ];
+    }
+
+    /**
      * This tenant's white-label branding merged over the defaults. Shared by
      * the owner customization endpoints and the student/staff portal branding
      * read, so every portal themes itself identically to the owner's choices.
@@ -70,13 +321,20 @@ class Tenant extends Model
     {
         $b = (array) (data_get($this->settings, 'branding') ?? []);
         $d = static::defaultBranding();
+        $label = $this->entityLabelArray();
 
         return [
-            'logo_url' => $b['logo_url'] ?? $d['logo_url'],
+            // Rebuilt against the current host so a logo URL frozen at upload time
+            // (localhost → live, http → https) still resolves — and legacy absolute
+            // rows self-heal without a data migration (see App\Support\MediaUrl).
+            'logo_url' => \App\Support\MediaUrl::url($b['logo_url'] ?? $d['logo_url']),
             'primary_color' => $b['primary_color'] ?? $d['primary_color'],
             'secondary_color' => $b['secondary_color'] ?? $d['secondary_color'],
             'background_color' => $b['background_color'] ?? $d['background_color'],
             'font_family' => $b['font_family'] ?? $d['font_family'],
+            // What the owner calls their organisation (customer-facing text only).
+            'entity_label' => $label['singular'],
+            'entity_label_plural' => $label['plural'],
         ];
     }
 
@@ -122,7 +380,9 @@ class Tenant extends Model
         return [
             'tagline' => $p['tagline'] ?? null,
             'about' => $p['about'] ?? null,
-            'cover_url' => $p['cover_url'] ?? null,
+            // Rebuilt against the current host so a cover frozen at upload time still
+            // resolves (see brandingArray()/App\Support\MediaUrl).
+            'cover_url' => \App\Support\MediaUrl::url($p['cover_url'] ?? null),
             'contact' => [
                 'email' => $contact['email'] ?? null,
                 'phone' => $contact['phone'] ?? null,

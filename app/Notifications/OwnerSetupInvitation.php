@@ -30,6 +30,9 @@ class OwnerSetupInvitation extends Notification
         $token = urlencode($this->invitation->token);
         $slug = $this->tenant->slug ?? null;
         $appDomain = env('APP_DOMAIN');
+        // What this org calls itself in customer-facing copy — "Institute" for the
+        // primary (Jorsas), "Online Academy" (or the owner's override) otherwise.
+        $label = $this->tenant ? $this->tenant->entityLabelArray()['singular'] : 'Online Academy';
 
         // With APP_DOMAIN configured, the owner's front door is their subdomain.
         // Otherwise (local dev / before wildcard DNS) fall back to the apex plus
@@ -47,9 +50,9 @@ class OwnerSetupInvitation extends Notification
         URL::forceRootUrl($frontend);
 
         return (new MailMessage)
-            ->subject('Set up your institute owner account')
+            ->subject('Set up your ' . $label . ' owner account')
             ->greeting('Hello ' . ($notifiable->name ?? $notifiable->email))
-            ->line('You are listed as the owner for "' . ($this->tenant->name ?? 'your institute') . '".')
+            ->line('You are listed as the owner for "' . ($this->tenant->name ?? ('your ' . $label)) . '".')
             ->action('Set up your account', $setupUrl)
             ->line('This link expires in 7 days and can be used once.')
             ->line('If you did not expect this, contact support.');

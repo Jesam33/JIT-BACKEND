@@ -59,6 +59,63 @@ class TenantBillingController extends BaseLmsController
     }
 
     /**
+     * Sanitise the browser-supplied return origin used for the Paystack callback.
+     * Returns a bare "scheme://host[:port]" only when it is safe, else null (the
+     * caller then falls back to the configured frontend URL). A bare origin — no
+     * path/query/fragment — that is either a local dev host or the configured
+     * frontend host / a subdomain of its root domain, so this can never become an
+     * open redirect to an attacker-chosen destination.
+     */
+    protected function safeReturnOrigin(?string $origin): ?string
+    {
+        if (! is_string($origin) || trim($origin) === '') {
+            return null;
+        }
+
+        $parts = parse_url(rtrim(trim($origin), '/'));
+        if (! is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+            return null;
+        }
+        if (! in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
+            return null;
+        }
+        // An origin is scheme://host[:port] and nothing more — reject anything
+        // carrying a path, query, fragment or credentials.
+        if ((isset($parts['path']) && $parts['path'] !== '' && $parts['path'] !== '/')
+            || isset($parts['query']) || isset($parts['fragment'])
+            || isset($parts['user']) || isset($parts['pass'])) {
+            return null;
+        }
+
+        $host = strtolower($parts['host']);
+        $allowed = in_array($host, ['localhost', '127.0.0.1', '::1'], true);
+
+        if (! $allowed) {
+            $feHost = strtolower((string) parse_url((string) config('saas.frontend_url'), PHP_URL_HOST));
+            if ($feHost !== '') {
+                $root = $this->rootDomain($feHost);
+                $allowed = $host === $feHost || $host === $root || str_ends_with($host, '.' . $root);
+            }
+        }
+        if (! $allowed) {
+            return null;
+        }
+
+        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+
+        return strtolower($parts['scheme']) . '://' . $host . $port;
+    }
+
+    /** The registrable-ish root ("a.b.example.com" → "example.com") for origin matching. */
+    private function rootDomain(string $host): string
+    {
+        $labels = explode('.', $host);
+        $n = count($labels);
+
+        return $n >= 2 ? ($labels[$n - 2] . '.' . $labels[$n - 1]) : $host;
+    }
+
+    /**
      * Current plan / subscription state plus the catalogue of upgradeable plans,
      * for the owner billing page.
      */
@@ -80,6 +137,10 @@ class TenantBillingController extends BaseLmsController
             'plan' => $tenant->plan ?? 'free',
             'subscription_status' => $tenant->subscription_status ?? 'active',
             'current_period_end' => $tenant->current_period_end,
+            // Resolved current plan (limits + features + commission) with live usage
+            // counts, so the billing page can show "12 / 50 students" and which
+            // features the current plan includes. Primary institute reads as 'pro'.
+            'plan_summary' => $tenant->planSummaryArray(),
             'plans' => $this->planCatalogue(),
             'billing_configured' => app(PaystackService::class)->isConfigured(),
         ]);
@@ -100,6 +161,9 @@ class TenantBillingController extends BaseLmsController
 
         $validated = $request->validate([
             'plan' => ['required', 'string'],
+            // The frontend sends the origin the owner is actually on, so the
+            // Paystack callback returns them THERE (see safeReturnOrigin + below).
+            'return_origin' => ['nullable', 'string', 'max:2048'],
         ]);
 
         $plan = $validated['plan'];
@@ -107,6 +171,17 @@ class TenantBillingController extends BaseLmsController
 
         if (! isset($plans[$plan])) {
             return response()->json(['message' => 'Unknown plan.'], 422);
+        }
+
+        // Enterprise is a contact-sales tier: it has a null price, so it must
+        // never reach the "amount <= 0 → activate free" path below (that would
+        // hand out the top plan for free). Self-serve checkout is Free/Basic/Pro
+        // only; Enterprise is provisioned by the team after a sales conversation.
+        if (! empty($plans[$plan]['contact_sales']) || ($plans[$plan]['price'] ?? null) === null) {
+            return response()->json([
+                'message' => 'The Enterprise plan is arranged with our team. Please contact sales to get started.',
+                'contact_sales' => true,
+            ], 422);
         }
 
         $amount = (float) ($plans[$plan]['price'] ?? 0);
@@ -134,8 +209,19 @@ class TenantBillingController extends BaseLmsController
         }
 
         $reference = 'JORSAS-UPG-' . Str::upper(Str::random(16));
-        $frontendUrl = rtrim((string) env('FRONTEND_URL', 'http://127.0.0.1:3000'), '/');
-        $callbackUrl = $frontendUrl . '/lms/admin/billing/verify?reference=' . $reference;
+        // Return to the SAME origin the owner is on (sent by the billing page) so
+        // their owner token (localStorage, per-origin) and tenant cookie survive
+        // the Paystack round-trip. Returning to a different host — the primary
+        // domain, or 127.0.0.1 when they're on localhost — drops both and bounces
+        // them to a bare "jorsas" login. Carry ?tenant={slug} so the verify page
+        // re-pins THIS academy even if the cookie was lost. Falls back to the
+        // configured URL (config(), not env(), so it survives config:cache) when
+        // no valid origin is supplied.
+        $origin = $this->safeReturnOrigin($request->input('return_origin'))
+            ?? config('saas.frontend_url');
+        $callbackUrl = $origin
+            . '/lms/admin/billing/verify?reference=' . $reference
+            . '&tenant=' . urlencode((string) $tenant->slug);
 
         try {
             $response = $paystack->initializeTransaction(
@@ -237,15 +323,42 @@ class TenantBillingController extends BaseLmsController
     }
 
     /**
-     * The upgradeable plan catalogue from config, shaped for the billing UI.
+     * The upgradeable plan catalogue from config, shaped for the billing UI —
+     * price, per-plan commission, the three limits (null = unlimited) and the
+     * feature flags — so the page can render a full comparison from one call.
      */
     protected function planCatalogue(): array
     {
+        $default = config('saas.platform_commission_percent', 2);
+
+        // Every feature flag the plan model exposes, in display order — kept in
+        // sync with config/saas.php `features` and the billing UI's labels. `free`
+        // lists them all (false), so data_get always resolves.
+        $featureKeys = [
+            'live_classes', 'chat', 'certificates', 'pre_recorded_video',
+            'admission_marketer', 'remove_branding', 'advanced_analytics',
+            'advanced_reporting', 'custom_domain', 'priority_support',
+            'ai_materials', 'api_access', 'white_label',
+        ];
+
         return collect(config('saas.plans', []))
             ->map(fn ($plan, $slug) => [
                 'slug' => $slug,
                 'name' => $plan['name'] ?? ucfirst($slug),
-                'price' => (float) ($plan['price'] ?? 0),
+                'label' => $plan['label'] ?? null,
+                // Enterprise has no self-serve price — it's a contact-sales tier,
+                // so price stays null (the UI renders "Contact sales", not ₦0).
+                'price' => array_key_exists('price', $plan) && $plan['price'] !== null ? (float) $plan['price'] : null,
+                'contact_sales' => (bool) ($plan['contact_sales'] ?? false),
+                'commission_percent' => (float) ($plan['commission_percent'] ?? $default),
+                'limits' => [
+                    'courses' => data_get($plan, 'limits.courses'),
+                    'students' => data_get($plan, 'limits.students'),
+                    'staff' => data_get($plan, 'limits.staff'),
+                ],
+                'features' => collect($featureKeys)
+                    ->mapWithKeys(fn ($k) => [$k => (bool) data_get($plan, "features.$k", false)])
+                    ->all(),
             ])
             ->values()
             ->all();

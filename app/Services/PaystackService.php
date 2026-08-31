@@ -13,7 +13,7 @@ class PaystackService
 
     public function __construct()
     {
-        $this->secretKey = (string) env('PAYSTACK_SECRET_KEY', '');
+        $this->secretKey = (string) config('services.paystack.secret_key', '');
         $this->baseUrl = 'https://api.paystack.co';
     }
 
@@ -48,7 +48,7 @@ class PaystackService
         }
 
         if ($callbackUrl === null) {
-            $callbackUrl = rtrim((string) env('FRONTEND_URL', 'http://127.0.0.1:3000'), '/') . '/institute/verify?reference=' . $reference;
+            $callbackUrl = config('saas.frontend_url') . '/institute/verify?reference=' . $reference;
         }
 
         $payload = [
@@ -103,6 +103,27 @@ class PaystackService
             'business_name' => $businessName,
             'settlement_bank' => $bankCode,
             'account_number' => $accountNumber,
+            'percentage_charge' => $percentageCharge,
+        ]);
+
+        return $response->json();
+    }
+
+    /**
+     * Update an existing subaccount's split — used to keep the platform commission
+     * in step when an institute changes plan (see Tenant::syncPayoutCommission()).
+     * Only `percentage_charge` is sent; Paystack leaves the bank/name untouched.
+     * `subaccountCode` is the stored ACCT_… code. Returns the raw Paystack response.
+     */
+    public function updateSubaccount(string $subaccountCode, float $percentageCharge): array
+    {
+        $client = $this->client();
+
+        if (! $client) {
+            return ['status' => false, 'message' => 'Payment gateway not configured.'];
+        }
+
+        $response = $client->put($this->baseUrl . '/subaccount/' . $subaccountCode, [
             'percentage_charge' => $percentageCharge,
         ]);
 

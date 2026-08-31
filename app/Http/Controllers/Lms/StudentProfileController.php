@@ -179,9 +179,12 @@ class StudentProfileController extends BaseLmsController
         $path = $request->file('file')->store('profile-photos', 'public');
 
         $student = LmsStudent::query()->findOrFail($session->user_id);
-        $student->update(['profile_photo_url' => asset('storage/' . $path)]);
+        // Store the RELATIVE path (the model mutator normalises it); the accessor
+        // rebuilds an absolute URL against the current host on read, so the image
+        // can't break when the app host changes (localhost → live, http → https).
+        $student->update(['profile_photo_url' => $path]);
 
-        return response()->json(['url' => asset('storage/' . $path)]);
+        return response()->json(['url' => $student->profile_photo_url]);
     }
 
     public function certificates(Request $request): JsonResponse

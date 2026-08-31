@@ -5,6 +5,7 @@ use App\Http\Controllers\LmsIntakeController;
 use App\Http\Controllers\PublicInstituteController;
 use App\Http\Controllers\Lms\TenantBillingController;
 use App\Http\Controllers\Lms\OwnerAdminController;
+use App\Http\Controllers\Lms\OwnerGammaController;
 use App\Http\Controllers\Lms\StudentAuthController;
 use App\Http\Controllers\Lms\StudentProfileController;
 use App\Http\Controllers\Lms\StudentDashboardController;
@@ -19,6 +20,7 @@ use App\Http\Controllers\Lms\StaffChatController;
 use App\Http\Controllers\Lms\StaffClassroomController;
 use App\Http\Controllers\Lms\StaffProfileController;
 use App\Http\Controllers\Lms\StaffModuleController;
+use App\Http\Controllers\Lms\StaffVideoController;
 use App\Http\Controllers\Lms\StaffPortalController;
 use App\Http\Controllers\Lms\StaffNotificationController;
 use App\Http\Controllers\Lms\AdminController;
@@ -219,6 +221,15 @@ Route::middleware('tenant.required')->group(function () {
     // Confirm the account-holder name before linking (Paystack /bank/resolve).
     Route::post('/api/frontend/lms/owner/resolve-account', [OwnerAdminController::class, 'resolveBankAccount'])->middleware('throttle:30,1');
 
+    // Owner AI training materials (Gamma, Pro+). generate → poll status → save the
+    // finished Gamma link into a course/module. Every action gates on the
+    // ai_materials feature inside the controller (PlanGate → 402 → UpgradeModal),
+    // so the routes stay open here and a non-Pro academy simply gets the upgrade
+    // prompt. Generate is throttled — each call spends Gamma credits.
+    Route::post('/api/frontend/lms/owner/ai/materials/generate', [OwnerGammaController::class, 'generate'])->middleware('throttle:20,1');
+    Route::get('/api/frontend/lms/owner/ai/materials/{id}', [OwnerGammaController::class, 'status']);
+    Route::post('/api/frontend/lms/owner/ai/materials/save', [OwnerGammaController::class, 'save']);
+
     // Portal-agnostic branding read: student & staff shells theme themselves
     // to match the owner's customization (tenant resolved from their session).
     Route::get('/api/frontend/lms/branding', [\App\Http\Controllers\Lms\BrandingController::class, 'show']);
@@ -354,6 +365,12 @@ Route::middleware('tenant.required')->group(function () {
     Route::get('/api/frontend/lms/staff/scheduled-classes', [StaffModuleController::class, 'classes']);
     Route::put('/api/frontend/lms/staff/scheduled-classes/{classId}', [StaffModuleController::class, 'updateClass']);
     Route::delete('/api/frontend/lms/staff/scheduled-classes/{classId}', [StaffModuleController::class, 'destroyClass']);
+
+    // Staff pre-recorded video (Bunny Stream) — mint a signed direct-upload
+    // envelope (the browser uploads the bytes straight to Bunny) + poll status.
+    // Plan-gated on `pre_recorded_video` (Basic+) inside the controller.
+    Route::post('/api/frontend/lms/staff/videos/upload', [StaffVideoController::class, 'createUpload']);
+    Route::get('/api/frontend/lms/staff/videos/{videoId}/status', [StaffVideoController::class, 'videoStatus']);
 
     // Student Modules & Timetable
     Route::get('/api/frontend/lms/modules', [StudentModuleController::class, 'index']);

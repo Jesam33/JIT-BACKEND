@@ -8,6 +8,7 @@ use App\Models\LmsModuleContent;
 use App\Models\LmsScheduledClass;
 use App\Models\LmsTeacher;
 use App\Models\LmsTrack;
+use App\Support\PlanGate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -201,7 +202,20 @@ class StaffModuleController extends BaseLmsController
             'content_url' => 'nullable|string',
             'content_body' => 'nullable|string',
             'sort_order' => 'nullable|integer',
+            // Externally-hosted video (Bunny Stream) pointers — set by the client
+            // after a direct upload finishes. content_url carries the embed URL.
+            'provider' => 'nullable|string|max:40',
+            'external_id' => 'nullable|string|max:255',
+            'thumbnail_url' => 'nullable|string|max:2048',
+            'duration_seconds' => 'nullable|integer',
+            'status' => 'nullable|string|max:40',
         ]);
+
+        // Pre-recorded video lessons are a paid feature (Basic+). Only the video
+        // content type is gated — slides/pdf/link/text/code are on every plan.
+        if (($validated['type'] ?? null) === 'video') {
+            PlanGate::ensureFeature($this->currentTenantOrPrimary(), 'pre_recorded_video');
+        }
 
         $validated['module_id'] = $moduleId;
         $content = LmsModuleContent::create($validated);
@@ -229,6 +243,13 @@ class StaffModuleController extends BaseLmsController
             'content_body' => 'nullable|string',
             'sort_order' => 'nullable|integer',
         ]);
+
+        // Turning an existing non-video item INTO a video is a new video lesson,
+        // so it's gated like a create. Editing a video that already exists (e.g.
+        // a plan downgrade left it) is left alone — never break existing rows.
+        if (($validated['type'] ?? null) === 'video' && $content->type !== 'video') {
+            PlanGate::ensureFeature($this->currentTenantOrPrimary(), 'pre_recorded_video');
+        }
 
         $content->update($validated);
 

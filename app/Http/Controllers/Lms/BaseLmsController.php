@@ -22,7 +22,10 @@ abstract class BaseLmsController extends Controller
 {
     protected function ensureLmsEnabled(): void
     {
-        if (! filter_var(env('LMS_FEATURE_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+        // Read via config (bound in config/saas.php) — NOT env() directly — so the
+        // flag still resolves after `php artisan config:cache` on live. Reading
+        // env() here returned null under cached config and 404'd every LMS login.
+        if (! config('saas.lms_feature_enabled')) {
             throw new NotFoundHttpException();
         }
     }
@@ -373,14 +376,19 @@ abstract class BaseLmsController extends Controller
      */
     protected function planForSession(?LmsSession $session = null): string
     {
+        // Return the RESOLVED plan slug (Tenant::planSlug()), never the raw `plan`
+        // column: the primary institute is always the top plan regardless of what's
+        // stored (its column reads 'free' but resolves to 'pro'), and an invalid/
+        // legacy column value falls back to 'free'. Reading the raw column here
+        // wrongly hid chat for the primary institute's own students and staff.
         if (app()->bound('currentTenant') && app('currentTenant')) {
-            return app('currentTenant')->plan ?? 'free';
+            return app('currentTenant')->planSlug();
         }
 
         if ($session && $session->tenant_id) {
             $tenant = \App\Models\Tenant::find($session->tenant_id);
             if ($tenant) {
-                return $tenant->plan ?? 'free';
+                return $tenant->planSlug();
             }
         }
 
