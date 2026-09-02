@@ -74,25 +74,46 @@ class TenantSignupController extends Controller
             ], 503);
         }
 
-        // Existing email: allow resuming an abandoned (still-pending) signup;
-        // otherwise the account already exists and they should sign in. This
-        // replaces the plain `unique:users,email` rule so a user who bailed at
-        // the Paystack screen can retry instead of being locked out.
+        // Existing email: three cases, decided by what this user actually owns.
+        //   1. Owns a still-PENDING institute  → resume that abandoned signup.
+        //   2. Host super admin, or owns a LIVE (active/suspended) institute
+        //      → genuinely registered; tell them to sign in.
+        //   3. Neither → an ORPHANED owner row: the `users` row survives but every
+        //      institute it owned is gone (the classic case: a database reset wipes
+        //      the tenant-scoped tables — tenant_admins, tenants — but NOT the core
+        //      `users` table, which has no tenant_id). Reuse the row for a fresh
+        //      signup instead of locking the person out with "already registered".
+        // This replaces the plain `unique:users,email` rule.
+        $reuseUserId = null;
+        $pendingTenantId = null;
         $existingUser = User::where('email', $email)->first();
         if ($existingUser) {
-            $pendingTenantId = DB::table('tenant_admins')
+            $ownerLinks = DB::table('tenant_admins')
                 ->join('tenants', 'tenants.id', '=', 'tenant_admins.tenant_id')
                 ->where('tenant_admins.user_id', $existingUser->id)
                 ->where('tenant_admins.role', 'owner')
-                ->where('tenants.status', 'pending')
-                ->value('tenants.id');
+                ->get(['tenants.id', 'tenants.status']);
 
-            if (! $pendingTenantId) {
+            $pendingTenantId = optional($ownerLinks->firstWhere('status', 'pending'))->id;
+            $ownsLiveTenant = $ownerLinks->contains(fn ($l) => $l->status !== 'pending');
+            // super_user is the Botble host admin flag — never let signup adopt or
+            // clobber that account, even if it somehow owns no tenant.
+            $isSuperAdmin = (bool) ($existingUser->super_user ?? false);
+
+            if (! $pendingTenantId && ($isSuperAdmin || $ownsLiveTenant)) {
                 throw ValidationException::withMessages([
                     'admin_email' => 'This email is already registered. Please sign in instead.',
                 ]);
             }
 
+            if (! $pendingTenantId) {
+                // Case 3 — orphan. Fall through to the fresh-signup transaction
+                // below, reusing this user row rather than creating a duplicate.
+                $reuseUserId = $existingUser->id;
+            }
+        }
+
+        if ($pendingTenantId) {
             // Resume: reuse the pending tenant, refresh the chosen plan, re-init.
             $tenant = Tenant::find($pendingTenantId);
             $settings = $tenant->settings ?? [];
@@ -142,16 +163,31 @@ class TenantSignupController extends Controller
             ]);
 
             [$first, $last] = array_pad(explode(' ', $validated['admin_name'], 2), 2, '');
-            $user = User::create([
-                'first_name' => $first,
-                'last_name' => $last,
-                'username' => $email,
-                'email' => $email,
-                // Unusable placeholder — the owner sets a real password via the
-                // emailed setup link (OwnerAuthController::setup). Random so it can
-                // never be signed into until then, and it satisfies NOT NULL.
-                'password' => Hash::make(Str::random(40)),
-            ]);
+            // Unusable placeholder — the owner sets a real password via the emailed
+            // setup link (OwnerAuthController::setup). Random so it can never be
+            // signed into until then, and it satisfies NOT NULL.
+            $placeholderPassword = Hash::make(Str::random(40));
+
+            if ($reuseUserId) {
+                // Case 3 — adopt the orphaned owner row (its institutes are gone)
+                // rather than creating a duplicate. Refresh the name and reset the
+                // password to an unusable placeholder so the setup link is again the
+                // only way in. username left as-is (it's already this email).
+                $user = User::find($reuseUserId);
+                $user->update([
+                    'first_name' => $first,
+                    'last_name' => $last,
+                    'password' => $placeholderPassword,
+                ]);
+            } else {
+                $user = User::create([
+                    'first_name' => $first,
+                    'last_name' => $last,
+                    'username' => $email,
+                    'email' => $email,
+                    'password' => $placeholderPassword,
+                ]);
+            }
 
             DB::table('tenant_admins')->insert([
                 'tenant_id' => $tenant->id,
@@ -265,6 +301,20 @@ class TenantSignupController extends Controller
             ], 402);
         }
 
+        // Confirmed — record it in the platform revenue ledger (idempotent on the
+        // reference, so a racing webhook won't double-count). Best-effort.
+        try {
+            \App\Models\PlatformTransaction::markSuccess(
+                $tenant,
+                $reference,
+                'tenant_signup',
+                data_get($tenant->settings, 'plan', $tenant->plan),
+                (array) data_get($result, 'data', []),
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Could not mark platform transaction success (signup verify)', ['tenant_id' => $tenant->id, 'err' => $e->getMessage()]);
+        }
+
         // Payment is confirmed. Activation + provisioning is idempotent and
         // self-healing: on failure it reverts the tenant to `pending` and rethrows,
         // so a repeat verify() (or the webhook) retries cleanly. We surface a 503
@@ -331,6 +381,15 @@ class TenantSignupController extends Controller
 
         // Persist the reference so verify()/the webhook can find this tenant later.
         $tenant->update(['paystack_init_reference' => $reference]);
+
+        // Record a pending row in the platform revenue ledger. Marked success once
+        // the charge confirms (verify or webhook). Best-effort — a ledger hiccup
+        // must never block the owner's checkout.
+        try {
+            \App\Models\PlatformTransaction::recordPending($tenant, $reference, $amount, 'tenant_signup', $plan);
+        } catch (\Throwable $e) {
+            Log::warning('Could not record pending platform transaction (signup)', ['tenant_id' => $tenant->id, 'err' => $e->getMessage()]);
+        }
 
         return ['ok' => true, 'authorization_url' => $authUrl, 'reference' => $reference];
     }

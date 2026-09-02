@@ -74,17 +74,36 @@ class PaystackWebhookController extends Controller
                         // redeliveries) and mirrors the synchronous verify path,
                         // so the plan lands even if the browser never returns.
                         $plan = $metadata['plan'] ?? null;
-                        if (($metadata['purpose'] ?? null) === 'plan_upgrade'
+                        $purpose = $metadata['purpose'] ?? null;
+                        if ($purpose === 'plan_upgrade'
                             && $plan
                             && isset(config('saas.plans', [])[$plan])) {
                             $tenant->activatePlan($plan);
-                        } elseif (($metadata['purpose'] ?? null) === 'tenant_signup') {
+                        } elseif ($purpose === 'tenant_signup') {
                             // Pay-first signup confirmed asynchronously. Activate
                             // and provision the tenant (seed content + email the
                             // owner setup link). Idempotent: activatePaidSignup
                             // guards the pending->active transition, so this is
                             // safe even when the browser verify already ran.
                             app(\App\Services\TenantOnboardingService::class)->activatePaidSignup($tenant);
+                        }
+
+                        // Record the confirmed payment in the platform revenue
+                        // ledger. Idempotent on the reference, so this never
+                        // double-counts against the synchronous verify paths that
+                        // may have already marked it — whichever confirms first wins.
+                        if (in_array($purpose, ['plan_upgrade', 'tenant_signup'], true) && $reference) {
+                            try {
+                                \App\Models\PlatformTransaction::markSuccess(
+                                    $tenant,
+                                    (string) $reference,
+                                    $purpose,
+                                    $plan ?? data_get($tenant->settings, 'plan', $tenant->plan),
+                                    (array) $data,
+                                );
+                            } catch (\Throwable $e) {
+                                Log::warning('Could not mark platform transaction success (webhook)', ['tenant_id' => $tenant->id, 'err' => $e->getMessage()]);
+                            }
                         }
                     }
                 }

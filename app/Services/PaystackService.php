@@ -131,6 +131,40 @@ class PaystackService
     }
 
     /**
+     * Deactivate a subaccount when an institute disconnects its payout bank.
+     * Paystack has no delete endpoint for subaccounts, so teardown is a
+     * `PUT /subaccount/:code` with `active:false` — the code stops accepting
+     * splits and drops out of the active list on the Paystack dashboard.
+     *
+     * Best-effort and NON-throwing: disconnect is a local settings change the
+     * owner must always be able to make, so an unconfigured/unreachable gateway
+     * (or a code Paystack no longer knows) never blocks it. Returns true only when
+     * Paystack confirms the deactivation, false otherwise — the caller clears its
+     * local record either way.
+     */
+    public function deactivateSubaccount(string $subaccountCode): bool
+    {
+        $client = $this->client();
+
+        if (! $client || $subaccountCode === '') {
+            return false;
+        }
+
+        try {
+            $response = $client->put($this->baseUrl . '/subaccount/' . $subaccountCode, [
+                'active' => false,
+            ]);
+
+            return (bool) ($response->json()['status'] ?? false);
+        } catch (\Throwable $e) {
+            // client() uses ->throw(); swallow any transport/4xx so the local
+            // disconnect still goes through. The subaccount lingering on Paystack
+            // is a soft failure, not something to surface to the owner.
+            return false;
+        }
+    }
+
+    /**
      * List banks + their Paystack codes, for the institute's payout bank picker.
      * Defaults to Nigeria: Paystack subaccounts settle only to Nigerian banks, so
      * Nigeria-only is correct for a Paystack payout — the parameter is future-proofing

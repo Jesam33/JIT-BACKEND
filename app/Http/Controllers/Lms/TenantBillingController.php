@@ -242,6 +242,13 @@ class TenantBillingController extends BaseLmsController
                 $tenant->update(['paystack_init_reference' => $reference]);
             }
 
+            // Pending row in the platform revenue ledger; confirmed on verify/webhook.
+            try {
+                \App\Models\PlatformTransaction::recordPending($tenant, $reference, $amount, 'plan_upgrade', $plan);
+            } catch (\Throwable $e) {
+                Log::warning('Could not record pending platform transaction (upgrade)', ['tenant_id' => $tenant->id, 'err' => $e->getMessage()]);
+            }
+
             return response()->json([
                 'authorization_url' => $response['data']['authorization_url'] ?? null,
                 'reference' => $reference,
@@ -313,6 +320,14 @@ class TenantBillingController extends BaseLmsController
         }
 
         $tenant->activatePlan($plan);
+
+        // Confirmed upgrade — record it in the platform revenue ledger (idempotent
+        // on the reference, so a racing webhook won't double-count). Best-effort.
+        try {
+            \App\Models\PlatformTransaction::markSuccess($tenant, $validated['reference'], 'plan_upgrade', $plan, $data);
+        } catch (\Throwable $e) {
+            Log::warning('Could not mark platform transaction success (upgrade verify)', ['tenant_id' => $tenant->id, 'err' => $e->getMessage()]);
+        }
 
         return response()->json([
             'status' => 'active',

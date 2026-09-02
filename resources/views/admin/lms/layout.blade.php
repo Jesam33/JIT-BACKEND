@@ -433,6 +433,14 @@
                         </div>
                         <span>&rsaquo;</span>
                     </a>
+
+                    <a href="{{ route('admin.lms.transactions.index') }}" class="nav-item {{ ($activeLmsPage ?? '') === 'transactions' ? 'active' : '' }}">
+                        <div class="nav-left">
+                            <div class="nav-icon">₦</div>
+                            <span>Transactions &amp; Revenue</span>
+                        </div>
+                        <span>&rsaquo;</span>
+                    </a>
                 </div>
 
                     <div class="sidebar-footer">

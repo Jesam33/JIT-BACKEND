@@ -6,8 +6,12 @@ use App\Http\Controllers\Auth\SignupController;
 use Botble\Base\Facades\DashboardMenu;
 use Illuminate\Support\Facades\Route;
 
-// Register top-level LMS admin menu (groups links for LMS management)
-if (filter_var(env('LMS_FEATURE_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+// Register top-level LMS admin menu (groups links for LMS management).
+// Gate via config(), not env(): under `php artisan config:cache` a runtime
+// env() read returns the default (false), which would silently drop this menu
+// on production even when LMS_FEATURE_ENABLED=true. config/saas.php captures the
+// flag at build time, so config('saas.lms_feature_enabled') survives caching.
+if (config('saas.lms_feature_enabled')) {
 	DashboardMenu::default()->beforeRetrieving(function (): void {
 		DashboardMenu::make()->registerItem([
 			'id' => 'cms-core-lms',
@@ -63,6 +67,9 @@ Route::middleware(['auth', 'tenant.primary'])->prefix(env('ADMIN_DIR', 'admin'))
 	// Platform-wide announcements (host → every institute's students/staff/agents)
 	Route::get('/lms/announcements', [AdminController::class, 'platformAnnouncementsPage'])->name('admin.lms.announcements.index');
 	Route::post('/lms/announcements', [AdminController::class, 'createPlatformAnnouncement'])->name('admin.lms.announcements.store');
+
+	// Platform revenue ledger (institute→platform subscription payments + live per-institute course earnings/commission)
+	Route::get('/lms/transactions', [AdminController::class, 'transactionsPage'])->name('admin.lms.transactions.index');
 
 	// Plans admin
 	Route::get('/plans', [\App\Http\Controllers\Admin\PlanController::class, 'index'])->name('admin.plans.index');

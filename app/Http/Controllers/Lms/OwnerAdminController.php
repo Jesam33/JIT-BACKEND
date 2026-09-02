@@ -844,6 +844,8 @@ class OwnerAdminController extends BaseLmsController
                 // The split actually recorded on the linked subaccount, if known.
                 'subaccount_commission_percent' => isset($paystack['percentage_charge']) ? (float) $paystack['percentage_charge'] : null,
                 'business_name' => $paystack['business_name'] ?? null,
+                'first_name' => $paystack['first_name'] ?? null,
+                'last_name' => $paystack['last_name'] ?? null,
                 'bank_code' => $paystack['bank_code'] ?? null,
                 'bank_name' => $paystack['bank_name'] ?? null,
                 'account_number_masked' => $maskedAccount ?: null,
@@ -861,10 +863,12 @@ class OwnerAdminController extends BaseLmsController
     /**
      * Link (or replace) the institute's Paystack subaccount so course fees settle
      * to its own bank. Two ways in: paste an existing `subaccount_code` directly,
-     * or supply bank_code + account_number + business_name and we create the
-     * subaccount via Paystack (platform commission from config). Mirrors
-     * updateBranding's read-merge-save on the `settings` JSON blob so nothing else
-     * stored there is disturbed.
+     * or supply bank_code + account_number + the owner's legal first/last name and
+     * we create the subaccount via Paystack (platform commission from config). The
+     * legal name — not a free-text business name — is what we register as the
+     * subaccount name so it matches the settlement account and Paystack can
+     * auto-verify it. Mirrors updateBranding's read-merge-save on the `settings`
+     * JSON blob so nothing else stored there is disturbed.
      */
     public function updatePaymentSettings(Request $request): JsonResponse
     {
@@ -881,6 +885,11 @@ class OwnerAdminController extends BaseLmsController
             'bank_name' => ['nullable', 'string', 'max:120'],
             'account_number' => ['nullable', 'string', 'max:20'],
             'business_name' => ['nullable', 'string', 'max:255'],
+            // The owner's legal name on the settlement bank account. Paystack won't
+            // auto-verify a subaccount whose name doesn't match the bank record, so
+            // we send this (not the free-text business name) as the subaccount name.
+            'first_name' => ['nullable', 'string', 'max:120'],
+            'last_name' => ['nullable', 'string', 'max:120'],
             'disconnect' => ['nullable', 'boolean'],
         ]);
 
@@ -889,7 +898,18 @@ class OwnerAdminController extends BaseLmsController
 
         // Explicit disconnect: course fees revert to the platform account.
         if ($request->boolean('disconnect')) {
-            unset($paystack['subaccount_code'], $paystack['business_name'], $paystack['bank_code'], $paystack['bank_name'], $paystack['account_number'], $paystack['account_name'], $paystack['managed'], $paystack['percentage_charge']);
+            // Tear the subaccount down on Paystack too, so a disconnected bank
+            // doesn't linger as an active subaccount on the dashboard. Only for
+            // subaccounts WE created (managed): a pasted code may live on the
+            // owner's own Paystack account and be used elsewhere, so we never
+            // touch it. Best-effort and non-throwing — the local disconnect must
+            // succeed even if the gateway is down or already forgot the code.
+            $existingCode = $paystack['subaccount_code'] ?? null;
+            if ($existingCode && ! empty($paystack['managed'])) {
+                app(PaystackService::class)->deactivateSubaccount((string) $existingCode);
+            }
+
+            unset($paystack['subaccount_code'], $paystack['business_name'], $paystack['first_name'], $paystack['last_name'], $paystack['bank_code'], $paystack['bank_name'], $paystack['account_number'], $paystack['account_name'], $paystack['managed'], $paystack['percentage_charge']);
             $settings['paystack'] = $paystack;
             $tenant->update(['settings' => $settings]);
 
@@ -908,10 +928,17 @@ class OwnerAdminController extends BaseLmsController
                 $paystack['business_name'] = trim($validated['business_name']);
             }
         } else {
-            // Path B — create a subaccount from bank details.
-            $missing = empty($validated['bank_code']) || empty($validated['account_number']) || empty($validated['business_name']);
+            // Path B — create a subaccount from bank details. We send the owner's
+            // LEGAL name (first + last) as the subaccount name, not a free-text
+            // business name: Paystack flags a subaccount for manual "verify" when
+            // its name doesn't match the settlement account's bank record, so a name
+            // that tallies with the account holder is what lets it settle cleanly.
+            $first = trim((string) ($validated['first_name'] ?? ''));
+            $last = trim((string) ($validated['last_name'] ?? ''));
+            $fullName = trim("{$first} {$last}");
+            $missing = empty($validated['bank_code']) || empty($validated['account_number']) || $first === '' || $last === '';
             if ($missing) {
-                return response()->json(['message' => 'Provide a subaccount code, or the bank, account number, and business name to link a payout account.'], 422);
+                return response()->json(['message' => 'Provide a subaccount code, or your bank, account number, and the legal first and last name on the account.'], 422);
             }
 
             $service = app(PaystackService::class);
@@ -925,7 +952,7 @@ class OwnerAdminController extends BaseLmsController
             // plan's commission (Tenant::syncPayoutCommission), so it won't go stale.
             $commission = $tenant->commissionPercent();
             $result = $service->createSubaccount(
-                trim($validated['business_name']),
+                $fullName,
                 trim($validated['bank_code']),
                 trim($validated['account_number']),
                 $commission,
@@ -938,7 +965,12 @@ class OwnerAdminController extends BaseLmsController
             }
 
             $paystack['subaccount_code'] = $result['data']['subaccount_code'];
-            $paystack['business_name'] = trim($validated['business_name']);
+            // Store the legal name (both the parts and the combined name Paystack
+            // now carries). business_name is kept as the combined name so every
+            // surface that already reads it keeps working.
+            $paystack['first_name'] = $first;
+            $paystack['last_name'] = $last;
+            $paystack['business_name'] = $fullName;
             $paystack['bank_code'] = trim($validated['bank_code']);
             $paystack['bank_name'] = $validated['bank_name'] ?? ($result['data']['settlement_bank'] ?? null);
             $paystack['account_number'] = trim($validated['account_number']);

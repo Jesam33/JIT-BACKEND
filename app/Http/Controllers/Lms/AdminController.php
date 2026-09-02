@@ -13,6 +13,7 @@ use App\Models\LmsSession;
 use App\Models\LmsStudent;
 use App\Models\LmsTeacher;
 use App\Models\LmsTrack;
+use App\Models\Payment;
 use App\Models\PlatformAnnouncement;
 use App\Models\TrainingRegistration;
 use Illuminate\Http\JsonResponse;
@@ -401,6 +402,103 @@ class AdminController extends BaseLmsController
         return view('admin.lms.institutes.index', array_merge($this->adminShellData(), [
             'tenantsList' => $tenants,
             'tenantCount' => $tenants->count(),
+        ]));
+    }
+
+    /**
+     * Host revenue view. Two ledgers, both live off real funds:
+     *
+     *  1. Platform revenue — what Jorsas has been paid by institutes (paid signups
+     *     + plan upgrades). Read straight from `platform_transactions` (the ledger
+     *     the signup/billing/webhook confirmation paths all write, idempotent on
+     *     reference), so the "success" total reconciles 1:1 against Paystack.
+     *
+     *  2. Per-institute course earnings — what each institute has earned from
+     *     student course fees, and the platform commission owed on that, derived
+     *     LIVE from the tenant-scoped `payments` table (successful rows only) times
+     *     each tenant's per-plan commission percent. Nothing is stored/duplicated:
+     *     re-open the page and the numbers reflect the funds as they stand now.
+     *
+     * Both cross tenant boundaries (this is the super-admin's platform-wide view),
+     * so `payments` is queried with the tenant scope removed and grouped by tenant.
+     */
+    public function transactionsPage(Request $request)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        // --- Ledger 1: platform subscription revenue (institute → Jorsas) --------
+        $transactions = \App\Models\PlatformTransaction::query()
+            ->orderByDesc('created_at')
+            ->limit(500)
+            ->get()
+            ->map(fn (\App\Models\PlatformTransaction $t) => [
+                'id' => $t->id,
+                'tenant_name' => $t->tenant_name ?? '—',
+                'plan' => $t->plan,
+                'purpose' => $t->purpose,
+                'reference' => $t->reference,
+                'amount' => (float) $t->amount,
+                'currency' => $t->currency,
+                'status' => $t->status,
+                'paid_at' => $t->paid_at,
+                'created_at' => $t->created_at,
+            ]);
+
+        $platformRevenue = (float) \App\Models\PlatformTransaction::query()
+            ->where('status', 'success')
+            ->sum('amount');
+        $pendingPlatform = (float) \App\Models\PlatformTransaction::query()
+            ->where('status', 'pending')
+            ->sum('amount');
+        $successCount = \App\Models\PlatformTransaction::query()->where('status', 'success')->count();
+
+        // --- Ledger 2: per-institute course earnings + commission (live) ---------
+        // Successful course-fee payments across ALL tenants (scope removed), summed
+        // per tenant. Commission is applied per-tenant using that tenant's own plan
+        // rate, so the platform's cut reflects each institute's actual plan.
+        $paidByTenant = Payment::query()
+            ->withoutGlobalScope(\App\Scopes\TenantScope::class)
+            ->where('status', 'success')
+            ->selectRaw('tenant_id, COUNT(*) as sales, SUM(amount) as gross')
+            ->groupBy('tenant_id')
+            ->get()
+            ->keyBy('tenant_id');
+
+        $instituteEarnings = Tenant::query()
+            ->orderBy('name')
+            ->get()
+            ->map(function (Tenant $t) use ($paidByTenant) {
+                $row = $paidByTenant->get($t->id);
+                $gross = (float) ($row->gross ?? 0);
+                $rate = $t->commissionPercent();
+                $commission = round($gross * ($rate / 100), 2);
+
+                return [
+                    'tenant_name' => $t->name,
+                    'plan' => $t->planSlug(),
+                    'commission_percent' => $rate,
+                    'sales' => (int) ($row->sales ?? 0),
+                    'gross' => round($gross, 2),
+                    'commission' => $commission,
+                    'net_to_institute' => round($gross - $commission, 2),
+                ];
+            })
+            ->filter(fn ($r) => $r['sales'] > 0 || $r['gross'] > 0)
+            ->values();
+
+        $totalCourseGross = round($instituteEarnings->sum('gross'), 2);
+        $totalCommission = round($instituteEarnings->sum('commission'), 2);
+
+        return view('admin.lms.transactions.index', array_merge($this->adminShellData(), [
+            'activeLmsPage' => 'transactions',
+            'transactions' => $transactions,
+            'platformRevenue' => $platformRevenue,
+            'pendingPlatform' => $pendingPlatform,
+            'successCount' => $successCount,
+            'instituteEarnings' => $instituteEarnings,
+            'totalCourseGross' => $totalCourseGross,
+            'totalCommission' => $totalCommission,
         ]));
     }
 
