@@ -73,6 +73,77 @@ class PublicInstituteController extends Controller
         return $this->courseFor(Tenant::query()->where('slug', $slug)->first(), $courseSlug, $request);
     }
 
+    /**
+     * The "Campuses" directory (jorsastech's own nav): every Pro-and-above
+     * academy, shown as an avatar card that links to its storefront. Only Pro+
+     * academies are listed — the plan tier is the paid placement, so a Free/Basic
+     * academy never appears here. The primary (Jorsas) is itself excluded: this
+     * is a showcase of the customer academies built on the platform.
+     *
+     * Each entry carries the academy's brand (name, logo, entity label), a short
+     * description (its public tagline, then its About text), and a handful of its
+     * active course titles as a taster, plus the count so the card can say
+     * "+N more". Tenant scope is intentionally bypassed (this is a cross-tenant
+     * directory) and each academy's course count is scoped explicitly by id.
+     */
+    public function campuses(): JsonResponse
+    {
+        $primarySlug = config('saas.primary_slug', 'jorsas');
+
+        // Pro-and-above = the plans whose config unlocks a Pro-tier feature.
+        // Deriving it from the feature flag (rather than a hardcoded slug list)
+        // keeps the tier definition in config: any plan that grants ai_materials
+        // (Gamma, a Pro+ perk) counts as a showcased campus.
+        $plans = (array) config('saas.plans', []);
+        $proPlans = [];
+        foreach ($plans as $slug => $def) {
+            if (data_get($def, 'features.ai_materials')) {
+                $proPlans[] = $slug;
+            }
+        }
+
+        $tenants = Tenant::query()
+            ->where('slug', '!=', $primarySlug)
+            ->where('status', 'active')
+            ->whereIn('plan', $proPlans)
+            ->orderBy('name')
+            ->get();
+
+        $campuses = $tenants->map(function (Tenant $tenant) {
+            $branding = $tenant->brandingArray();
+            $profile = $tenant->profileArray();
+
+            $courses = LmsCourse::query()
+                ->withTenant($tenant->id)
+                ->where('is_active', true)
+                ->orderBy('title')
+                ->limit(6)
+                ->pluck('title')
+                ->values();
+
+            $courseCount = LmsCourse::query()
+                ->withTenant($tenant->id)
+                ->where('is_active', true)
+                ->count();
+
+            $about = $profile['tagline'] ?: $profile['about'];
+            $description = $about ? \Illuminate\Support\Str::limit(strip_tags($about), 160) : null;
+
+            return [
+                'name' => $tenant->name,
+                'slug' => $tenant->slug,
+                'logo_url' => $branding['logo_url'],
+                'primary_color' => $branding['primary_color'],
+                'entity_label' => $branding['entity_label'],
+                'description' => $description,
+                'course_titles' => $courses,
+                'course_count' => $courseCount,
+            ];
+        })->values();
+
+        return response()->json(['campuses' => $campuses]);
+    }
+
     // ─── internals ───────────────────────────────────────────────────
 
     private function storefrontFor(?Tenant $tenant, Request $request): JsonResponse
@@ -182,6 +253,10 @@ class PublicInstituteController extends Controller
             'forced_currency' => $forced,
             'charge_currency' => $fx->chargeCurrencyForCountry($country),
             'block_unlinked' => $isNonPrimary && ! $hasSubaccount,
+            // Pre-recorded video is a paid-plan feature. On a plan without it the
+            // storefront must not offer pre-recorded at all (the radio is disabled),
+            // regardless of the per-course setting.
+            'plan_prerecorded' => $tenant->planFeature('pre_recorded_video'),
         ];
     }
 
@@ -244,7 +319,9 @@ class PublicInstituteController extends Controller
             'slots_remaining' => $course->slotsRemaining(),
             'is_full' => $course->isFull(),
             'is_live_available' => $course->is_live_available,
-            'is_prerecorded_available' => $course->is_prerecorded_available,
+            // Pre-recorded requires BOTH the per-course toggle AND a plan that
+            // unlocks pre-recorded video, so a Free academy never offers it.
+            'is_prerecorded_available' => $course->is_prerecorded_available && ($ctx['plan_prerecorded'] ?? true),
         ];
 
         if ($detail) {

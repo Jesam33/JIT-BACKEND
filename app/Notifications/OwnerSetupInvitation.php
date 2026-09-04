@@ -51,10 +51,11 @@ class OwnerSetupInvitation extends Notification
 
         return (new MailMessage)
             ->subject('Set up your ' . $label . ' owner account')
-            ->greeting('Hello ' . ($notifiable->name ?? $notifiable->email))
-            ->line('You are listed as the owner for "' . ($this->tenant->name ?? ('your ' . $label)) . '".')
-            ->action('Set up your account', $setupUrl)
-            ->line('This link expires in 7 days and can be used once.')
-            ->line('If you did not expect this, contact support.');
+            ->view('emails.owner-setup-invitation', [
+                'brand' => $this->tenant->name ?? $label,
+                'ownerName' => $notifiable->name ?? $notifiable->email,
+                'entityName' => $this->tenant->name ?? ('your ' . $label),
+                'setupUrl' => $setupUrl,
+            ]);
     }
 }

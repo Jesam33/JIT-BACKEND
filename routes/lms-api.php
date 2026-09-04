@@ -53,6 +53,10 @@ Route::get('/api/frontend/institute/primary/courses/{courseSlug}', [PublicInstit
 Route::get('/api/frontend/i/{slug}', [PublicInstituteController::class, 'show']);
 Route::get('/api/frontend/i/{slug}/courses/{courseSlug}', [PublicInstituteController::class, 'course']);
 
+// "Campuses" directory (jorsastech nav): every Pro-and-above academy as an
+// avatar card. Cross-tenant showcase — see PublicInstituteController::campuses.
+Route::get('/api/frontend/campuses', [PublicInstituteController::class, 'campuses']);
+
 // Tenant resolution for frontends (by host or slug)
 Route::get('/api/tenant/resolve', [\App\Http\Controllers\PublicPagesController::class, 'resolveTenant']);
 

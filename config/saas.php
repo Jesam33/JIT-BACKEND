@@ -140,7 +140,7 @@ return [
             'commission_percent' => (float) env('PLAN_FREE_COMMISSION', 5),
             'limits' => [
                 'courses' => (int) env('PLAN_FREE_MAX_COURSES', 3),
-                'students' => (int) env('PLAN_FREE_MAX_STUDENTS', 10),
+                'students' => (int) env('PLAN_FREE_MAX_STUDENTS', 1),
                 'staff' => (int) env('PLAN_FREE_MAX_STAFF', 1),
             ],
             // `free` MUST list every feature key (all false): planConfig() merges

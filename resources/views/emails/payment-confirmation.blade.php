@@ -1,15 +1,16 @@
-<div style="font-family: sans-serif; max-width: 600px; margin: auto;">
-    <h2>Welcome to Jorsas Institute of Technology!</h2>
-    <p>Hi <strong>{{ $registration->first_name }}</strong>,</p>
-    <p>Your payment has been confirmed and you have been accepted into <strong>{{ $registration->course_name }}</strong>.</p>
-    <p>Click the button below to set your password and access your student portal:</p>
-    <p style="text-align: center;">
-        <a href="{{ $setupLink }}" style="display: inline-block; background: #000; color: #fff; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: bold;">
-            Set Up My Account
-        </a>
-    </p>
-    <p>Or copy this link into your browser:</p>
-    <p style="word-break: break-all; color: #555;">{{ $setupLink }}</p>
-    <hr>
-    <p style="color: #888; font-size: 12px;">Jorsas Institute of Technology</p>
-</div>
+@extends('emails.layout', ['brandName' => 'Jorsas Institute of Technology', 'preheader' => 'Payment confirmed — set up your account to start learning.'])
+
+@section('content')
+  <p style="margin:0 0 18px;font-size:15px;color:#555;">Hi {{ $registration->first_name }},</p>
+  <h1 style="margin:0 0 12px;font-size:21px;line-height:1.3;color:#1a1a1a;font-weight:700;">You're in — welcome aboard</h1>
+  <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#444;">
+    Your payment has been confirmed and you've been accepted into
+    <strong>{{ $registration->course_name }}</strong>. Set up your account below to access your student portal.
+  </p>
+  @include('emails.partials.button', ['url' => $setupLink, 'label' => 'Set up my account'])
+  @include('emails.partials.fallback-link', ['url' => $setupLink])
+@endsection
+
+@section('footer')
+  <p style="margin:0;">Jorsas Institute of Technology</p>
+@endsection

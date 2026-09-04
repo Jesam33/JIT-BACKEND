@@ -47,11 +47,12 @@ class OnboardingCompleted extends Notification
 
         return (new MailMessage)
             ->subject('Your ' . $label . ' onboarding is complete')
-            ->greeting('Hello ' . ($notifiable->name ?? $notifiable->email))
-            ->line('Your ' . $label . ' "' . ($this->tenant->name ?? ('your ' . $label)) . '" is ready.')
-            ->action('View onboarding status', $frontendOnboarding)
-            ->line('When ready, sign in to your owner console.')
-            ->action('Go to dashboard', $frontendAdmin)
-            ->line('If you did not expect this, contact support.');
+            ->view('emails.owner-onboarding-completed', [
+                'brand' => $this->tenant->name ?? $label,
+                'label' => $label,
+                'ownerName' => $notifiable->name ?? $notifiable->email,
+                'entityName' => $this->tenant->name ?? ('your ' . $label),
+                'adminUrl' => $frontendAdmin,
+            ]);
     }
 }

@@ -200,10 +200,25 @@ class StudentAuthController extends BaseLmsController
             'password' => ['required', 'string'],
         ]);
 
-        $student = $this->authenticateStudent($validated['email'], $validated['password']);
+        [$student, $reason] = $this->authenticateStudent($validated['email'], $validated['password']);
 
         if (! $student) {
-            return response()->json(['message' => 'Invalid login credentials.'], 422);
+            // Distinguish "no such account" from "wrong password" so the sign-in
+            // form can point a would-be student to registration instead of
+            // leaving them guessing at a password for an account that isn't there.
+            // (`reason` is a coarse hint, not an account-enumeration oracle beyond
+            // what the two messages already imply on this self-serve portal.)
+            if ($reason === 'not_found') {
+                return response()->json([
+                    'message' => 'We couldn’t find an account with that email. Browse the courses to register.',
+                    'reason' => 'not_found',
+                ], 422);
+            }
+
+            return response()->json([
+                'message' => 'Incorrect password. Please try again.',
+                'reason' => 'invalid_password',
+            ], 422);
         }
 
         // Bind the student's own organisation BEFORE minting the session, so the
@@ -231,13 +246,25 @@ class StudentAuthController extends BaseLmsController
      *  - otherwise (bare domain / local dev) search across institutes and
      *    authenticate whichever same-email account's password matches — newest
      *    first — so a non-primary student can still log in without a subdomain.
+     *
+     * Returns [student|null, reason]. `reason` is null on success, 'not_found'
+     * when no account exists for that email, or 'invalid_password' when one or
+     * more accounts exist but none matched the password — so the caller can give
+     * a distinct, more helpful message for each case.
+     *
+     * @return array{0: ?LmsStudent, 1: ?string}
      */
-    private function authenticateStudent(string $email, string $password): ?LmsStudent
+    private function authenticateStudent(string $email, string $password): array
     {
         if (app()->bound('requestedTenantSlug')) {
             $student = LmsStudent::query()->where('email', $email)->first();
+            if (! $student) {
+                return [null, 'not_found'];
+            }
 
-            return $student && Hash::check($password, $student->password) ? $student : null;
+            return Hash::check($password, $student->password)
+                ? [$student, null]
+                : [null, 'invalid_password'];
         }
 
         $candidates = LmsStudent::query()
@@ -246,13 +273,17 @@ class StudentAuthController extends BaseLmsController
             ->orderByDesc('id')
             ->get();
 
+        if ($candidates->isEmpty()) {
+            return [null, 'not_found'];
+        }
+
         foreach ($candidates as $candidate) {
             if (Hash::check($password, $candidate->password)) {
-                return $candidate;
+                return [$candidate, null];
             }
         }
 
-        return null;
+        return [null, 'invalid_password'];
     }
 
     public function forgotPassword(Request $request): JsonResponse

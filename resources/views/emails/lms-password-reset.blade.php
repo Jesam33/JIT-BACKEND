@@ -1,7 +1,14 @@
-<h2>{{ $portalLabel }} Password Reset</h2>
-<p>Hi {{ $name }},</p>
-<p>We received a request to reset your {{ $portalLabel }} password.</p>
-<p>Use the link below to create a new password:</p>
-<p><a href="{{ $resetLink }}">Reset password</a></p>
-<p>This link will expire in 30 minutes.</p>
-<p>If you did not request this, you can ignore this email.</p>
+@extends('emails.layout', ['preheader' => 'Reset your ' . $portalLabel . ' password — link expires in 30 minutes.'])
+
+@section('content')
+  <p style="margin:0 0 18px;font-size:15px;color:#555;">Hi {{ $name }},</p>
+  <h1 style="margin:0 0 12px;font-size:21px;line-height:1.3;color:#1a1a1a;font-weight:700;">Reset your password</h1>
+  <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#444;">
+    We received a request to reset your {{ $portalLabel }} password. Tap the button below to choose a new one.
+  </p>
+  @include('emails.partials.button', ['url' => $resetLink, 'label' => 'Reset password'])
+  @include('emails.partials.fallback-link', ['url' => $resetLink])
+  <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#888;">
+    This link expires in 30 minutes. If you didn't request this, you can safely ignore this email — your password won't change.
+  </p>
+@endsection

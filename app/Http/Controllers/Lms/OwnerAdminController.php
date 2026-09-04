@@ -1178,6 +1178,26 @@ class OwnerAdminController extends BaseLmsController
      * the TenantAware creating hook (ownerContext() bound currentTenant), so no
      * tenant_id is accepted from the client.
      */
+    /**
+     * Clamp a course's requested capacity to the academy's plan student cap.
+     *
+     * A single course can never seat more students than the plan allows for the
+     * whole academy, so this returns min(requested, planCap). A requested value of
+     * 0 means "unlimited" — honoured only on an unlimited plan (null cap); on a
+     * capped plan 0 becomes the plan cap so it isn't silently unbounded.
+     */
+    private function capCourseCapacity(Tenant $tenant, int $requested): int
+    {
+        $cap = $tenant->planLimit('students');
+        if ($cap === null) {
+            return max(0, $requested);
+        }
+        if ($requested <= 0) {
+            return $cap;
+        }
+        return min($requested, $cap);
+    }
+
     public function storeCourse(Request $request): JsonResponse
     {
         $context = $this->ownerContext($request);
@@ -1195,22 +1215,38 @@ class OwnerAdminController extends BaseLmsController
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'requirements' => ['nullable', 'string'],
-            'price' => ['nullable', 'numeric', 'min:0'],
+            // Courses can't be free — the platform earns a commission % on each
+            // sale, so a ₦0 course would earn nothing and can't be sold.
+            'price' => ['required', 'numeric', 'min:0.01'],
             'original_price' => ['nullable', 'numeric', 'min:0'],
-            'max_students' => ['nullable', 'integer', 'min:0'],
+            // Capacity is at least 1 seat; the plan-cap clamp below bounds the top.
+            'max_students' => ['required', 'integer', 'min:1'],
             'is_live_available' => ['nullable', 'boolean'],
             'is_prerecorded_available' => ['nullable', 'boolean'],
+        ], [
+            'price.min' => 'Enter a price greater than ₦0. Courses can\'t be free.',
         ]);
+
+        // A course cannot seat more students than the plan allows for the whole
+        // academy: clamp capacity to the plan's student cap so a Free academy (1
+        // student) can't advertise 1000 slots. On a capped plan the request is
+        // clamped down to the cap; unlimited plans keep the requested number.
+        $maxStudents = $this->capCourseCapacity($tenant, (int) $validated['max_students']);
+
+        // Pre-recorded video is a Pro+ feature — never persist it as available on
+        // a plan that doesn't include it, regardless of what the client sent.
+        $prerecorded = ($validated['is_prerecorded_available'] ?? false)
+            && $tenant->planFeature('pre_recorded_video');
 
         $course = LmsCourse::query()->create([
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'requirements' => $validated['requirements'] ?? null,
-            'price' => $validated['price'] ?? 0,
+            'price' => $validated['price'],
             'original_price' => $validated['original_price'] ?? null,
-            'max_students' => (int) ($validated['max_students'] ?? 0),
+            'max_students' => $maxStudents,
             'is_live_available' => $validated['is_live_available'] ?? true,
-            'is_prerecorded_available' => $validated['is_prerecorded_available'] ?? true,
+            'is_prerecorded_available' => $prerecorded,
             'is_active' => true,
         ]);
 
@@ -1231,18 +1267,23 @@ class OwnerAdminController extends BaseLmsController
             return response()->json(['message' => 'Not authorized.'], 403);
         }
 
+        [$tenant] = $context;
+
         $course = LmsCourse::query()->findOrFail($id);
 
         $validated = $request->validate([
             'title' => ['sometimes', 'required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'requirements' => ['nullable', 'string'],
-            'price' => ['nullable', 'numeric', 'min:0'],
+            // No free courses — the platform earns a commission % on each sale.
+            'price' => ['sometimes', 'required', 'numeric', 'min:0.01'],
             'original_price' => ['nullable', 'numeric', 'min:0'],
-            'max_students' => ['nullable', 'integer', 'min:0'],
+            'max_students' => ['sometimes', 'required', 'integer', 'min:1'],
             'is_live_available' => ['nullable', 'boolean'],
             'is_prerecorded_available' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
+        ], [
+            'price.min' => 'Enter a price greater than ₦0. Courses can\'t be free.',
         ]);
 
         // Apply only the keys the client actually sent (validated() omits absent
@@ -1252,10 +1293,14 @@ class OwnerAdminController extends BaseLmsController
             'is_live_available', 'is_prerecorded_available', 'is_active',
         ]));
         if (array_key_exists('max_students', $data)) {
-            $data['max_students'] = (int) ($data['max_students'] ?? 0);
+            // Same plan-cap clamp as create (see storeCourse): capacity can't exceed
+            // the academy's plan student cap.
+            $data['max_students'] = $this->capCourseCapacity($tenant, (int) $data['max_students']);
         }
-        if (array_key_exists('price', $data) && $data['price'] === null) {
-            $data['price'] = 0;
+        if (array_key_exists('is_prerecorded_available', $data)) {
+            // Pre-recorded video is Pro+; force it off on plans without the feature.
+            $data['is_prerecorded_available'] = (bool) $data['is_prerecorded_available']
+                && $tenant->planFeature('pre_recorded_video');
         }
 
         $course->update($data);
