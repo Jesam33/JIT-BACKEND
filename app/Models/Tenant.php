@@ -335,6 +335,12 @@ class Tenant extends Model
             // What the owner calls their organisation (customer-facing text only).
             'entity_label' => $label['singular'],
             'entity_label_plural' => $label['plural'],
+            // The academy's display name — customer-facing text. Public institute
+            // pages (login / signup / agent) use it to title the browser tab with
+            // the academy instead of leaking the platform's inherited "Jorsas
+            // Tech". Empty when the tenant has no name; the client only applies it
+            // on a NON-primary academy (the primary keeps the default title).
+            'name' => trim((string) $this->name),
         ];
     }
 
