@@ -50,19 +50,20 @@ class SendNotificationEmails extends Command
         $tenantNames = Tenant::query()->pluck('name', 'id')->all();
         $slugs = NotificationLinks::tenantSlugMap();
         $replyTos = $this->replyToMap();
+        $colors = $this->brandColorMap();
 
         $sent = 0;
-        $sent += $this->sweepStudents($batch, $maxAttempts, $exclude, $tenantNames, $slugs, $replyTos);
-        $sent += $this->sweepStaff($batch, $maxAttempts, $exclude, $tenantNames, $slugs, $replyTos);
-        $sent += $this->sweepAgents($batch, $maxAttempts, $exclude, $tenantNames, $slugs, $replyTos);
+        $sent += $this->sweepStudents($batch, $maxAttempts, $exclude, $tenantNames, $slugs, $replyTos, $colors);
+        $sent += $this->sweepStaff($batch, $maxAttempts, $exclude, $tenantNames, $slugs, $replyTos, $colors);
+        $sent += $this->sweepAgents($batch, $maxAttempts, $exclude, $tenantNames, $slugs, $replyTos, $colors);
 
         $this->info("Notification email sweep complete: {$sent} sent.");
 
         return self::SUCCESS;
     }
 
-    /** @param string[] $exclude @param array<int,string> $tenantNames @param array<int,string> $slugs @param array<int,string> $replyTos */
-    private function sweepStudents(int $batch, int $maxAttempts, array $exclude, array $tenantNames, array $slugs, array $replyTos): int
+    /** @param string[] $exclude @param array<int,string> $tenantNames @param array<int,string> $slugs @param array<int,string> $replyTos @param array<int,string> $brandColors */
+    private function sweepStudents(int $batch, int $maxAttempts, array $exclude, array $tenantNames, array $slugs, array $replyTos, array $brandColors): int
     {
         $notifs = $this->pending(LmsNotification::query(), $batch, $maxAttempts, $exclude);
         if ($notifs->isEmpty()) {
@@ -80,14 +81,14 @@ class SendNotificationEmails extends Command
             $name = $r
                 ? (trim(($r->first_name ?? '') . ' ' . ($r->last_name ?? '')) ?: ($r->username ?: 'there'))
                 : 'there';
-            $sent += $this->deliver($n, 'student', $r?->email, $name, $tenantNames, $slugs, $replyTos) ? 1 : 0;
+            $sent += $this->deliver($n, 'student', $r?->email, $name, $tenantNames, $slugs, $replyTos, $brandColors) ? 1 : 0;
         }
 
         return $sent;
     }
 
-    /** @param string[] $exclude @param array<int,string> $tenantNames @param array<int,string> $slugs @param array<int,string> $replyTos */
-    private function sweepStaff(int $batch, int $maxAttempts, array $exclude, array $tenantNames, array $slugs, array $replyTos): int
+    /** @param string[] $exclude @param array<int,string> $tenantNames @param array<int,string> $slugs @param array<int,string> $replyTos @param array<int,string> $brandColors */
+    private function sweepStaff(int $batch, int $maxAttempts, array $exclude, array $tenantNames, array $slugs, array $replyTos, array $brandColors): int
     {
         $notifs = $this->pending(LmsTeacherNotification::query(), $batch, $maxAttempts, $exclude);
         if ($notifs->isEmpty()) {
@@ -103,14 +104,14 @@ class SendNotificationEmails extends Command
         foreach ($notifs as $n) {
             $r = $recipients->get($n->teacher_id);
             $name = $r ? (trim((string) $r->name) ?: ($r->username ?: 'there')) : 'there';
-            $sent += $this->deliver($n, 'staff', $r?->email, $name, $tenantNames, $slugs, $replyTos) ? 1 : 0;
+            $sent += $this->deliver($n, 'staff', $r?->email, $name, $tenantNames, $slugs, $replyTos, $brandColors) ? 1 : 0;
         }
 
         return $sent;
     }
 
-    /** @param string[] $exclude @param array<int,string> $tenantNames @param array<int,string> $slugs @param array<int,string> $replyTos */
-    private function sweepAgents(int $batch, int $maxAttempts, array $exclude, array $tenantNames, array $slugs, array $replyTos): int
+    /** @param string[] $exclude @param array<int,string> $tenantNames @param array<int,string> $slugs @param array<int,string> $replyTos @param array<int,string> $brandColors */
+    private function sweepAgents(int $batch, int $maxAttempts, array $exclude, array $tenantNames, array $slugs, array $replyTos, array $brandColors): int
     {
         $notifs = $this->pending(AgentNotification::query(), $batch, $maxAttempts, $exclude);
         if ($notifs->isEmpty()) {
@@ -126,7 +127,7 @@ class SendNotificationEmails extends Command
         foreach ($notifs as $n) {
             $r = $recipients->get($n->agent_id);
             $name = $r ? (trim((string) $r->name) ?: 'there') : 'there';
-            $sent += $this->deliver($n, 'agent', $r?->email, $name, $tenantNames, $slugs, $replyTos) ? 1 : 0;
+            $sent += $this->deliver($n, 'agent', $r?->email, $name, $tenantNames, $slugs, $replyTos, $brandColors) ? 1 : 0;
         }
 
         return $sent;
@@ -169,6 +170,25 @@ class SendNotificationEmails extends Command
     }
 
     /**
+     * [tenant_id => primary brand colour] for each institute's outgoing mail, so
+     * a notification/announcement email's header + CTA match the academy's
+     * storefront rather than the platform red. Built once per run (one query),
+     * like the name/slug/reply-to maps — never per-row. {@see Tenant::brandMailColor()}
+     * falls back to the platform red per-tenant, so every id resolves to a hex.
+     *
+     * @return array<int,string>
+     */
+    private function brandColorMap(): array
+    {
+        $map = [];
+        foreach (Tenant::query()->get(['id', 'name', 'settings']) as $t) {
+            $map[(int) $t->id] = $t->brandMailColor();
+        }
+
+        return $map;
+    }
+
+    /**
      * Pending, un-emailed notifications for one table, oldest first.
      *
      * @param  \Illuminate\Database\Eloquent\Builder  $query
@@ -193,8 +213,9 @@ class SendNotificationEmails extends Command
      * @param  array<int,string>  $tenantNames
      * @param  array<int,string>  $slugs
      * @param  array<int,string>  $replyTos
+     * @param  array<int,string>  $brandColors
      */
-    private function deliver(Model $n, string $audience, ?string $email, string $name, array $tenantNames, array $slugs, array $replyTos): bool
+    private function deliver(Model $n, string $audience, ?string $email, string $name, array $tenantNames, array $slugs, array $replyTos, array $brandColors): bool
     {
         if (! $email || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             // No deliverable address (recipient deleted, or address invalid).
@@ -208,6 +229,7 @@ class SendNotificationEmails extends Command
         $institute = $tenantNames[$tid] ?? (string) config('app.name', 'Jorsas Tech');
         $slug = $slugs[$tid] ?? null;
         $replyTo = $replyTos[$tid] ?? null;
+        $color = $brandColors[$tid] ?? null;
         $url = NotificationLinks::forNotification($audience, $n->reference_type, $n->reference_id, $slug);
 
         try {
@@ -218,6 +240,7 @@ class SendNotificationEmails extends Command
                 actionUrl: $url,
                 instituteName: $institute,
                 instituteReplyTo: $replyTo,
+                instituteColor: $color,
             ));
 
             $n->forceFill(['emailed_at' => now()])->saveQuietly();

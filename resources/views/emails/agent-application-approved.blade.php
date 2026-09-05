@@ -1,4 +1,4 @@
-@extends('emails.layout', ['preheader' => 'Your agent application is approved — here is your referral code.'])
+@extends('emails.layout', ['brandName' => $brand['name'], 'brandColor' => $brand['color'], 'preheader' => 'Your agent application is approved — here is your referral code.'])
 
 @section('content')
   <p style="margin:0 0 18px;font-size:15px;color:#555;">Congratulations {{ $agent->name }},</p>
@@ -19,8 +19,8 @@
     </tr>
   </table>
 
-  @include('emails.partials.button', ['url' => $portalUrl, 'label' => 'Set up your password'])
-  @include('emails.partials.fallback-link', ['url' => $portalUrl])
+  @include('emails.partials.button', ['url' => $portalUrl, 'label' => 'Set up your password', 'color' => $brand['color']])
+  @include('emails.partials.fallback-link', ['url' => $portalUrl, 'color' => $brand['color']])
   <p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#888;">
     Your email is already filled in — just enter the temporary password to sign in, then change it from your profile settings.
   </p>

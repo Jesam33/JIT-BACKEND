@@ -1,6 +1,6 @@
 {{-- Notification / announcement email. Rendered by the lms:send-notification-emails
      sweep. {{ }} escaping is intentional — titles/bodies are user-entered. --}}
-@extends('emails.layout', ['brandName' => $instituteName, 'preheader' => $notifTitle])
+@extends('emails.layout', ['brandName' => $instituteName, 'brandColor' => $instituteColor ?? null, 'preheader' => $notifTitle])
 
 @section('content')
   <p style="margin:0 0 18px;font-size:15px;color:#555;">Hi {{ $greetingName }},</p>
@@ -8,8 +8,8 @@
   @if(trim($notifBody) !== '')
     <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#444;">{{ $notifBody }}</p>
   @endif
-  @include('emails.partials.button', ['url' => $actionUrl, 'label' => $actionLabel])
-  @include('emails.partials.fallback-link', ['url' => $actionUrl])
+  @include('emails.partials.button', ['url' => $actionUrl, 'label' => $actionLabel, 'color' => $instituteColor ?? null])
+  @include('emails.partials.fallback-link', ['url' => $actionUrl, 'color' => $instituteColor ?? null])
 @endsection
 
 @section('footer')

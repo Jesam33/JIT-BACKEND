@@ -189,6 +189,10 @@ Route::middleware('tenant.required')->group(function () {
     // Tenant-scoped: findOrFail resolves only within the owner's institute.
     Route::delete('/api/frontend/lms/owner/students/{id}', [OwnerAdminController::class, 'destroyStudent']);
     Route::post('/api/frontend/lms/owner/students/{id}/resend-invite', [OwnerAdminController::class, 'resendStudentInvite']);
+    // Owner course invite: attach a student to a specific course — paid via the
+    // academy's own Paystack (pay-first, provisioned on confirmation) or comped
+    // straight in. Distinct from the bulk importer above (course-less accounts).
+    Route::post('/api/frontend/lms/owner/students/invite', [OwnerAdminController::class, 'inviteStudentToCourse']);
 
     // Owner staff management (remove an instructor, re-send their set-password
     // invite, suspend/re-enable portal access). Tenant-scoped like the student

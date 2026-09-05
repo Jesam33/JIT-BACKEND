@@ -1,15 +1,19 @@
 {{-- Shared, email-safe layout for every transactional email.
      Inline styles only (no <style>/external CSS — many clients strip them).
-     Single-column, 560px, table-based wrapper for Outlook. Brand red #ed180d.
+     Single-column, 560px, table-based wrapper for Outlook.
 
      Variables (all optional, sensible fallbacks):
        $brandName   — header wordmark (defaults to the platform mail name)
+       $brandColor  — header background hex; the per-institute white-label
+                      accent so an academy's email matches its storefront
+                      (defaults to the platform red #ed180d)
        $preheader   — hidden inbox-preview line
      Sections:
        @section('content')  — the body (required)
        @section('footer')   — overrides the default footer note --}}
 @php
     $brand = trim($brandName ?? '') !== '' ? $brandName : (config('mail.from.name') ?: 'Jorsas');
+    $headerColor = trim($brandColor ?? '') !== '' ? $brandColor : '#ed180d';
 @endphp
 <!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
@@ -36,7 +40,7 @@
               {{-- Brand header --}}
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td style="background:#ed180d;padding:20px 32px;">
+                  <td style="background:{{ $headerColor }};padding:20px 32px;">
                     <p style="margin:0;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;letter-spacing:0.4px;">{{ $brand }}</p>
                   </td>
                 </tr>

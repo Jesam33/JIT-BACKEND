@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Lms;
 
 use App\Mail\LmsPasswordResetMail;
+use App\Mail\StudentCourseInviteMail;
 use App\Models\LmsCourse;
 use App\Models\LmsCertificate;
 use App\Models\LmsEnrollment;
@@ -21,8 +22,10 @@ use App\Support\PlanGate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 /**
  * Read-only data for the institute owner's admin dashboard (the sidebar UI at
@@ -296,6 +299,8 @@ class OwnerAdminController extends BaseLmsController
             return response()->json(['message' => 'Not authorized.'], 403);
         }
 
+        [$tenant] = $context;
+
         $student = LmsStudent::query()->findOrFail($id);
         if (! $student->email) {
             return response()->json(['message' => 'This student has no email address on file.'], 422);
@@ -305,7 +310,8 @@ class OwnerAdminController extends BaseLmsController
         try {
             $token = $this->createPasswordResetToken('student', $student->email);
             $link = $this->buildResetLink('student', $student->email, $token);
-            Mail::to($student->email)->send(new LmsPasswordResetMail($student->first_name ?: 'there', 'Student Portal', $link));
+            $brand = $this->mailBranding($tenant);
+            Mail::to($student->email)->send(new LmsPasswordResetMail($student->first_name ?: 'there', 'Student Portal', $link, $brand['name'], $brand['color'], $brand['reply_to']));
             $sent = true;
         } catch (\Throwable $e) {
             Log::warning('Failed to resend student invite', ['student_id' => $student->id, 'err' => $e->getMessage()]);
@@ -317,6 +323,273 @@ class OwnerAdminController extends BaseLmsController
                 ? "Invite re-sent to {$student->email}."
                 : "Could not send the invite email to {$student->email}. Check your mail settings and try again.",
         ]);
+    }
+
+    /**
+     * Invite one or more students straight into a specific course (Issue C).
+     *
+     * Unlike the bulk importer (which creates course-less accounts and emails a
+     * bare set-password link), every invite here attaches a course — so the
+     * student knows exactly what they're joining — and the owner decides per
+     * invite whether it's paid:
+     *
+     *  - Paid (toggle on + a course fee > 0): a PENDING TrainingRegistration is
+     *    created and the email links to the signup page, which launches payment
+     *    through the academy's own Paystack subaccount. The account is
+     *    provisioned — and the seat counted — only after Paystack confirms
+     *    (completePayment), the exact pay-first pipeline the public storefront
+     *    uses, so payment can't be bypassed.
+     *  - Comped / free (toggle off, or a free course): the student is enrolled
+     *    immediately into the course's active cohort and the email links to a
+     *    set-password page. The seat is counted here, once, on first enrolment.
+     *
+     * Money safety: a non-primary academy that hasn't linked its payout bank yet
+     * is refused a PAID invite up front, so fees can't land in the platform
+     * account. Plan caps are honoured — the platform student cap holds new
+     * accounts and a full course holds further comped seats — and a partial
+     * invite still processes everyone who fits, reporting what was held back.
+     */
+    public function inviteStudentToCourse(Request $request): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        [$tenant, $owner] = $context;
+
+        $validated = $request->validate([
+            'emails' => ['required', 'array', 'min:1'],
+            'emails.*' => ['string'],
+            'course_id' => ['required', 'integer'],
+            'learning_mode' => ['nullable', 'in:live,pre_recorded'],
+            'requires_payment' => ['nullable', 'boolean'],
+        ]);
+
+        // Resolve the course inside the owner's tenant — ownerContext bound the
+        // current tenant, so the global TenantScope stops another institute's id
+        // from resolving here.
+        $course = LmsCourse::query()->find($validated['course_id']);
+        if (! $course) {
+            return response()->json(['message' => 'Course not found for your institute.'], 404);
+        }
+        if (! $course->is_active) {
+            return response()->json(['message' => 'That course is not active. Activate it before inviting students.'], 422);
+        }
+
+        // Learning mode falls back to live when the course doesn't offer
+        // pre-recorded, so the price/mode we store always stays coherent.
+        $mode = $validated['learning_mode'] ?? 'live';
+        if ($mode === 'pre_recorded' && ! $course->is_prerecorded_available) {
+            $mode = 'live';
+        }
+
+        // Base fee for the chosen mode (pre-recorded may be cheaper). A 0 base is
+        // always free, whatever the toggle says.
+        $base = ($mode === 'pre_recorded' && $course->prerecorded_price !== null)
+            ? (float) $course->prerecorded_price
+            : (float) $course->price;
+
+        $mustPay = $request->boolean('requires_payment', true) && $base > 0;
+
+        // Money-safety pre-guard: a non-primary academy must link its payout bank
+        // before it can collect course fees, or the money would settle to the
+        // platform account. Mirrors the defense in LmsIntakeController.
+        $isNonPrimary = $tenant->slug && $tenant->slug !== config('saas.primary_slug', 'jorsas');
+        if ($mustPay && $isNonPrimary && ! $this->payoutSubaccountCode($tenant)) {
+            return response()->json([
+                'message' => 'Link your bank account under Payment settings before inviting students to a paid course, so fees settle to you.',
+            ], 409);
+        }
+
+        // Plan platform-student cap (null = unlimited). New accounts beyond the
+        // cap are held; existing students (re-invites) never count. Mirrors
+        // importStudents so invites can't quietly exceed the plan.
+        $studentLimit = $tenant->planLimit('students');
+        $studentCount = $studentLimit === null
+            ? 0
+            : LmsStudent::query()->withTenant($tenant->id)->count();
+
+        // Per-course seat cap (0 max_students = unlimited). Only comped invites
+        // take a seat here (paid seats are taken on payment), so we track the
+        // remaining capacity and hold comped invites once the course is full.
+        $seatCap = $course->max_students > 0 ? (int) $course->max_students : null;
+        $seatsUsed = (int) $course->registered_count;
+
+        $brand = $this->mailBranding($tenant);
+        $priceDisplay = '₦' . number_format($base, 2);
+
+        $invited = 0;
+        $created = 0;
+        $skipped = 0;
+        $limited = 0;
+        $courseFull = 0;
+        $failed = [];
+
+        foreach ($validated['emails'] as $rawEmail) {
+            $email = strtolower(trim((string) $rawEmail));
+            if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $skipped++;
+                continue;
+            }
+
+            $existing = LmsStudent::query()->where('email', $email)->first();
+            $isNew = ! $existing;
+
+            if ($isNew && $studentLimit !== null && $studentCount >= $studentLimit) {
+                $limited++;
+                continue;
+            }
+
+            // A comped seat must fit the course capacity (paid seats are reserved
+            // on payment, not here).
+            if (! $mustPay && $seatCap !== null && $seatsUsed >= $seatCap) {
+                $courseFull++;
+                continue;
+            }
+
+            // Upsert the student. A new account gets an unusable random password
+            // (set for real via the emailed link) and stays un-onboarded; an
+            // existing account only has its current course/mode pointed at this
+            // invite — never its password or onboarding flag reset.
+            $attrs = [
+                'selected_course_id' => $course->id,
+                'learning_mode' => $mode,
+            ];
+            if ($isNew) {
+                $attrs['first_name'] = Str::before($email, '@');
+                $attrs['last_name'] = '';
+                $attrs['password'] = Hash::make(Str::random(40));
+                $attrs['onboarding_completed'] = false;
+            }
+            $student = LmsStudent::query()->updateOrCreate(['email' => $email], $attrs);
+            if ($isNew) {
+                $created++;
+                $studentCount++;
+            }
+
+            // One TrainingRegistration per invite carries the course + a fresh
+            // invite_token. Paid → pending (provisioned on payment); comped/free →
+            // approved now. course_price is frozen for the paid charge, in NGN —
+            // the academy's settlement currency (its Paystack subaccount is a
+            // Nigerian bank).
+            $registration = TrainingRegistration::query()->create([
+                'first_name' => $student->first_name ?: Str::before($email, '@'),
+                'last_name' => $student->last_name ?? '',
+                'email' => $email,
+                'course_id' => $course->id,
+                'course_name' => $course->title,
+                'learning_mode' => $mode,
+                'course_price' => $mustPay ? $base : 0,
+                'charge_currency' => 'NGN',
+                'status' => $mustPay ? 'pending' : 'approved',
+                'approved_by' => $mustPay ? null : ($owner->id ?? null),
+                'approved_at' => $mustPay ? null : now(),
+                'invite_token' => Str::random(64),
+            ]);
+
+            $student->update(['training_registration_id' => $registration->id]);
+
+            // Comped/free: enrol into the course's active cohort now (the same
+            // bridge the free intake path uses) and count the seat once, on the
+            // first enrolment. Paid invites are enrolled + counted in
+            // completePayment after Paystack confirms.
+            if (! $mustPay) {
+                $track = $this->findActiveTrackForCourse($course->id);
+                if ($track) {
+                    $enrollment = LmsEnrollment::query()->updateOrCreate(
+                        ['student_id' => $student->id],
+                        ['track_id' => $track->id],
+                    );
+                    if ($enrollment->wasRecentlyCreated) {
+                        LmsCourse::query()->where('id', $course->id)->increment('registered_count');
+                        $seatsUsed++;
+                    }
+                }
+            }
+
+            try {
+                $link = $this->buildStudentSignupLink($email, $registration->invite_token);
+                Mail::to($email)->send(new StudentCourseInviteMail($registration, $link, $mustPay, $priceDisplay));
+                $invited++;
+            } catch (\Throwable $e) {
+                // The account/registration exists; only delivery failed. Surface
+                // it so the owner can fix mail settings and resend, rather than
+                // the failure vanishing into the log behind a success message.
+                $failed[] = $email;
+                Log::warning('Failed sending course invite', ['email' => $email, 'err' => $e->getMessage()]);
+            }
+        }
+
+        DB::table('tenant_onboarding_audits')->insert([
+            'tenant_id' => $tenant->id,
+            'user_id' => $owner->id ?? null,
+            'payload' => json_encode([
+                'action' => 'students_invited_to_course',
+                'course_id' => $course->id,
+                'course' => $course->title,
+                'requires_payment' => $mustPay,
+                'invited' => $invited,
+                'created' => $created,
+                'limited' => $limited,
+                'course_full' => $courseFull,
+                'failed' => count($failed),
+            ]),
+            'status' => 'students_invited_to_course',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json([
+            'invited' => $invited,
+            'created' => $created,
+            'skipped' => $skipped,
+            'limited' => $limited,
+            'course_full' => $courseFull,
+            'failed' => $failed,
+            'requires_payment' => $mustPay,
+            'course' => $course->title,
+            'price_display' => $priceDisplay,
+            'message' => $this->summariseCourseInvite($invited, $mustPay, $course->title, $limited, $courseFull, $failed),
+        ]);
+    }
+
+    /**
+     * The institute's own Paystack subaccount code (its bank), or null when it
+     * hasn't linked one. Paid course fees split to this so the money settles to
+     * the academy, not the platform. Kept private + local to mirror
+     * LmsIntakeController::tenantSubaccountCode (also private there).
+     */
+    private function payoutSubaccountCode(Tenant $tenant): ?string
+    {
+        $code = data_get($tenant->settings, 'paystack.subaccount_code');
+
+        return is_string($code) && $code !== '' ? $code : null;
+    }
+
+    /**
+     * Human summary of a course-invite batch for the owner's toast.
+     */
+    private function summariseCourseInvite(int $invited, bool $mustPay, string $course, int $limited, int $courseFull, array $failed): string
+    {
+        $parts = [];
+        if ($invited > 0) {
+            $verb = $mustPay ? 'Sent a payment invite to' : 'Invited';
+            $parts[] = "{$verb} {$invited} student" . ($invited === 1 ? '' : 's') . " for {$course}";
+        } else {
+            $parts[] = "No invites were sent for {$course}";
+        }
+        if ($limited > 0) {
+            $parts[] = "{$limited} held back — you've reached your plan's student limit";
+        }
+        if ($courseFull > 0) {
+            $parts[] = "{$courseFull} held back — this course is full";
+        }
+        if (! empty($failed)) {
+            $parts[] = count($failed) . ' email(s) failed to send — check your mail settings';
+        }
+
+        return implode('. ', $parts) . '.';
     }
 
     /**
@@ -394,6 +667,8 @@ class OwnerAdminController extends BaseLmsController
             return response()->json(['message' => 'Not authorized.'], 403);
         }
 
+        [$tenant] = $context;
+
         $teacher = LmsTeacher::query()->findOrFail($id);
         if (! $teacher->email) {
             return response()->json(['message' => 'This staff member has no email address on file.'], 422);
@@ -403,7 +678,8 @@ class OwnerAdminController extends BaseLmsController
         try {
             $token = $this->createPasswordResetToken('staff', $teacher->email);
             $link = $this->buildSetupLink('staff', $teacher->email, $token);
-            Mail::to($teacher->email)->send(new LmsPasswordResetMail($teacher->name ?: 'there', 'Staff Portal', $link));
+            $brand = $this->mailBranding($tenant);
+            Mail::to($teacher->email)->send(new LmsPasswordResetMail($teacher->name ?: 'there', 'Staff Portal', $link, $brand['name'], $brand['color'], $brand['reply_to']));
             $sent = true;
         } catch (\Throwable $e) {
             Log::warning('Failed to resend staff invite', ['teacher_id' => $teacher->id, 'err' => $e->getMessage()]);

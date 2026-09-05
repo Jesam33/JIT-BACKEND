@@ -339,6 +339,97 @@ class Tenant extends Model
     }
 
     /**
+     * The display NAME for this tenant's outgoing transactional mail — the
+     * sender's from-NAME and the email header wordmark. A student invited by
+     * "Perka Foundation Class" must see that academy, never "Jorsas". Falls back
+     * to the platform mail name only when the tenant has no name of its own.
+     */
+    public function brandMailName(): string
+    {
+        $name = trim((string) $this->name);
+
+        return $name !== '' ? $name : ((string) config('mail.from.name') ?: 'Jorsas');
+    }
+
+    /**
+     * The accent colour for this tenant's outgoing transactional mail — the
+     * email header background and the CTA button/link. Drawn from the same
+     * white-label palette the portals theme off ({@see brandingArray()}), so an
+     * academy's invite/reset emails match its storefront. Defaults to platform red.
+     */
+    public function brandMailColor(): string
+    {
+        $color = trim((string) ($this->brandingArray()['primary_color'] ?? ''));
+
+        return $color !== '' ? $color : '#ed180d';
+    }
+
+    /**
+     * Where replies to this tenant's transactional mail should land. The
+     * from-ADDRESS stays on the platform's verified domain (deliverability), but a
+     * reply belongs to the INSTITUTE: its published public contact email
+     * (settings.profile.contact.email) when set + valid, else the owner's own
+     * login email (tenant_admins.role = owner). Null when neither is known — the
+     * mailable then simply omits Reply-To. Mirrors the per-run map built in
+     * SendNotificationEmails::replyToMap(), for the single-send invite/forgot paths.
+     */
+    public function brandMailReplyTo(): ?string
+    {
+        $contact = data_get($this->settings, 'profile.contact.email');
+        if (is_string($contact) && filter_var($contact, FILTER_VALIDATE_EMAIL)) {
+            return $contact;
+        }
+
+        $ownerEmail = \Illuminate\Support\Facades\DB::table('tenant_admins')
+            ->join('users', 'users.id', '=', 'tenant_admins.user_id')
+            ->where('tenant_admins.tenant_id', $this->id)
+            ->where('tenant_admins.role', 'owner')
+            ->value('users.email');
+
+        return (is_string($ownerEmail) && filter_var($ownerEmail, FILTER_VALIDATE_EMAIL))
+            ? $ownerEmail
+            : null;
+    }
+
+    /**
+     * The full per-institute mail identity — sender NAME, accent COLOUR and
+     * REPLY-TO — as one array, with a platform fallback when no tenant resolves.
+     * The single source for both {@see \App\Http\Controllers\Lms\BaseLmsController::mailBranding()}
+     * (callers that bind the recipient's tenant) and the model-carrying mailables
+     * ({@see \App\Mail\Concerns\BrandedMailable}), which resolve their brand from
+     * the row's tenant_id — so a paying academy's payment/approval emails are
+     * never stamped "Jorsas".
+     *
+     * @return array{name: string, color: string, reply_to: ?string}
+     */
+    public static function brandMailArray(?self $tenant): array
+    {
+        if (! $tenant instanceof self) {
+            return [
+                'name' => (string) config('mail.from.name') ?: 'Jorsas',
+                'color' => '#ed180d',
+                'reply_to' => null,
+            ];
+        }
+
+        return [
+            'name' => $tenant->brandMailName(),
+            'color' => $tenant->brandMailColor(),
+            'reply_to' => $tenant->brandMailReplyTo(),
+        ];
+    }
+
+    /**
+     * {@see brandMailArray()} resolved from a tenant id — a mailable holds the
+     * recipient row's tenant_id, not the model. Tenant carries no global scope,
+     * so a plain find() reaches any academy; a null/zero id yields the fallback.
+     */
+    public static function brandMailById(?int $tenantId): array
+    {
+        return static::brandMailArray($tenantId ? static::find($tenantId) : null);
+    }
+
+    /**
      * The empty public-profile shape: hero tagline/about/cover, contact details
      * and social links that make each institute's /i/{slug} page a real mini-site
      * rather than a bare course list. Single source of the profile keys that

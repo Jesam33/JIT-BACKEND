@@ -1,7 +1,7 @@
 {{-- Bulletproof, table-based CTA button. Usage:
      @include('emails.partials.button', ['url' => $link, 'label' => 'Open'])
-     Optional: ['color' => '#ed180d'] to override the brand red. --}}
-@php $btnColor = $color ?? '#ed180d'; @endphp
+     Optional: ['color' => '#ed180d'] to override the brand red (null/'' → red). --}}
+@php $btnColor = trim($color ?? '') !== '' ? $color : '#ed180d'; @endphp
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0;">
   <tr>
     <td align="center" bgcolor="{{ $btnColor }}" style="border-radius:999px;">

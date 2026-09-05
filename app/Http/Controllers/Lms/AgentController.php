@@ -624,7 +624,8 @@ class AgentController extends BaseLmsController
         $token = $this->createPasswordResetToken('agent', $agent->email);
         $link = $this->buildResetLink('agent', $agent->email, $token);
 
-        \Illuminate\Support\Facades\Mail::to($agent->email)->send(new LmsPasswordResetMail($agent->name, 'Agent Portal', $link));
+        $brand = $this->mailBranding();
+        \Illuminate\Support\Facades\Mail::to($agent->email)->send(new LmsPasswordResetMail($agent->name, 'Agent Portal', $link, $brand['name'], $brand['color'], $brand['reply_to']));
 
         return response()->json(['message' => 'If that email exists, a reset link has been sent.']);
     }

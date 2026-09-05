@@ -112,6 +112,28 @@ abstract class BaseLmsController extends Controller
         return $primary;
     }
 
+    /**
+     * The per-institute identity for an outgoing transactional email
+     * (invite / password-reset): sender display name, brand accent colour and
+     * reply-to — resolved from the given tenant, else the currently-bound one.
+     * Keeps every LmsPasswordResetMail call site branded from a single source,
+     * so an academy's emails never fall back to the platform's "Jorsas" red.
+     * Callers bind the recipient's tenant (bindTenantFromModel / owner context)
+     * before sending, so the no-argument form resolves the right academy.
+     *
+     * @return array{name: string, color: string, reply_to: ?string}
+     */
+    protected function mailBranding($tenant = null): array
+    {
+        if (! $tenant instanceof \App\Models\Tenant) {
+            $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
+        }
+
+        return \App\Models\Tenant::brandMailArray(
+            $tenant instanceof \App\Models\Tenant ? $tenant : null
+        );
+    }
+
     protected function classroomJoinOpensAt(LmsClassroom $classroom)
     {
         return $classroom->starts_at?->copy()->subMinutes(5);
@@ -469,6 +491,23 @@ abstract class BaseLmsController extends Controller
 
         return $this->appendTenantParam(
             $baseUrl . $path . '?email=' . urlencode($email) . '&token=' . urlencode($token)
+        );
+    }
+
+    /**
+     * Link for a COURSE invite — an owner inviting a student straight into a
+     * course (Issue C). Unlike the reset/setup links above, which only set a
+     * password on an already-provisioned account, this lands on the public
+     * signup page: it carries the course and, for a paid invite, launches
+     * payment before the account is provisioned. Shares the invite_token stored
+     * on the TrainingRegistration.
+     */
+    protected function buildStudentSignupLink(string $email, string $token): string
+    {
+        $baseUrl = config('saas.frontend_url');
+
+        return $this->appendTenantParam(
+            $baseUrl . '/lms/signup?email=' . urlencode($email) . '&token=' . urlencode($token)
         );
     }
 

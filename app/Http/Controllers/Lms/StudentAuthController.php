@@ -28,12 +28,19 @@ class StudentAuthController extends BaseLmsController
         $registration = TrainingRegistration::query()
             ->withoutGlobalScope(TenantScope::class)
             ->where('invite_token', $token)
-            ->where('status', 'approved')
+            ->whereIn('status', ['approved', 'pending'])
             ->first();
 
         if (! $registration) {
             return response()->json(['message' => 'Invalid or expired invite token.'], 404);
         }
+
+        // A pending invite that carries a fee is a PAID owner invite (Issue C):
+        // the signup page must collect payment before provisioning, not offer a
+        // set-password form. Only owner course-invites ever combine a token with
+        // a pending status — public pending registrations have no invite_token —
+        // so this can't expose a public checkout to the free signup path.
+        $requiresPayment = $registration->status === 'pending' && (float) $registration->course_price > 0;
 
         return response()->json([
             'email' => $registration->email,
@@ -42,6 +49,10 @@ class StudentAuthController extends BaseLmsController
             'course_id' => $registration->course_id,
             'course_name' => $registration->course_name,
             'learning_mode' => $registration->learning_mode,
+            'requires_payment' => $requiresPayment,
+            'registration_id' => $registration->id,
+            'amount' => $requiresPayment ? (float) $registration->course_price : 0,
+            'currency' => $registration->charge_currency ?: 'NGN',
         ]);
     }
 
@@ -322,7 +333,8 @@ class StudentAuthController extends BaseLmsController
         $token = $this->createPasswordResetToken('student', $student->email);
         $link = $this->buildResetLink('student', $student->email, $token);
 
-        Mail::to($student->email)->send(new LmsPasswordResetMail($student->first_name, 'Student Portal', $link));
+        $brand = $this->mailBranding();
+        Mail::to($student->email)->send(new LmsPasswordResetMail($student->first_name, 'Student Portal', $link, $brand['name'], $brand['color'], $brand['reply_to']));
 
         return response()->json(['message' => 'If that email exists, a reset link has been sent.']);
     }

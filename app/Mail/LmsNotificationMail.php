@@ -29,6 +29,10 @@ class LmsNotificationMail extends Mailable
         public string $actionUrl,
         public string $instituteName,
         public ?string $instituteReplyTo = null,
+        // The academy's brand accent hex — themes the email header + CTA so an
+        // announcement/notification matches its storefront (defaults to red in
+        // the layout when null). View-only; the envelope doesn't use it.
+        public ?string $instituteColor = null,
         public string $actionLabel = 'Open in the LMS',
     ) {
     }

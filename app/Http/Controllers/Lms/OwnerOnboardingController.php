@@ -91,6 +91,11 @@ class OwnerOnboardingController extends BaseLmsController
         $limited = 0;
         $failed = [];
 
+        // Resolve the academy's mail identity ONCE (its name/colour/reply-to) and
+        // reuse it for every invite — so each email is branded as this academy,
+        // not "Jorsas", without re-querying the reply-to per recipient.
+        $brand = $this->mailBranding($tenant);
+
         foreach ($emails as $rawEmail) {
             $email = strtolower(trim((string) $rawEmail));
             if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -129,7 +134,7 @@ class OwnerOnboardingController extends BaseLmsController
             try {
                 $token = $this->createPasswordResetToken('student', $email);
                 $link = $this->buildResetLink('student', $email, $token);
-                Mail::to($email)->send(new LmsPasswordResetMail($student->first_name ?: 'there', 'Student Portal', $link));
+                Mail::to($email)->send(new LmsPasswordResetMail($student->first_name ?: 'there', 'Student Portal', $link, $brand['name'], $brand['color'], $brand['reply_to']));
                 $invited++;
             } catch (\Throwable $e) {
                 // The account was created; only delivery failed. Surface it so the
@@ -241,7 +246,8 @@ class OwnerOnboardingController extends BaseLmsController
             // the login form — they have no credentials yet; the owner issues
             // access and they set their own password here.
             $link = $this->buildSetupLink('staff', $email, $token);
-            Mail::to($email)->send(new LmsPasswordResetMail($teacher->name ?: 'there', 'Staff Portal', $link));
+            $brand = $this->mailBranding($tenant);
+            Mail::to($email)->send(new LmsPasswordResetMail($teacher->name ?: 'there', 'Staff Portal', $link, $brand['name'], $brand['color'], $brand['reply_to']));
             $emailSent = true;
         } catch (\Throwable $e) {
             Log::warning('Failed sending staff invite', ['email' => $email, 'err' => $e->getMessage()]);
