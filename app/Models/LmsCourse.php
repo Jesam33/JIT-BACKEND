@@ -20,6 +20,7 @@ class LmsCourse extends Model
         'requirements',
         'price',
         'original_price',
+        'prerecorded_price',
         'cover_image_path',
         'max_students',
         'registered_count',
@@ -31,6 +32,7 @@ class LmsCourse extends Model
     protected $casts = [
         'price' => 'decimal:2',
         'original_price' => 'decimal:2',
+        'prerecorded_price' => 'decimal:2',
         'max_students' => 'integer',
         'registered_count' => 'integer',
         'is_live_available' => 'boolean',

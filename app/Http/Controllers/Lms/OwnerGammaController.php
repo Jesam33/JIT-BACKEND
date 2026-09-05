@@ -13,6 +13,9 @@ use App\Support\PlanGate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -97,8 +100,9 @@ class OwnerGammaController extends BaseLmsController
             'additional_instructions' => ['nullable', 'string', 'max:2000'],
             'tone' => ['nullable', 'string', 'max:120'],
             'audience' => ['nullable', 'string', 'max:120'],
-            // Optional downloadable export. Omitted → Gamma returns only the
-            // editable gammaUrl (which is what we persist; see save()).
+            // Optional downloadable export. When the owner doesn't pick a format
+            // we still request one (default PDF, below) so save() can always store
+            // a real downloadable file — the editable gammaUrl is returned too.
             'export_as' => ['nullable', Rule::in(['pdf', 'pptx'])],
         ]);
 
@@ -127,9 +131,10 @@ class OwnerGammaController extends BaseLmsController
             $body['textOptions'] = $textOptions;
         }
 
-        if (! empty($data['export_as'])) {
-            $body['exportAs'] = $data['export_as'];
-        }
+        // Always request an export so save() can store a real downloadable file;
+        // default to PDF when the owner didn't choose a format. The editable
+        // gammaUrl is returned by status() regardless of the export.
+        $body['exportAs'] = $data['export_as'] ?? 'pdf';
 
         // GammaService self-renders 503 (unset key) / 502 (upstream failure).
         $result = $this->gamma->generate($body);
@@ -201,6 +206,11 @@ class OwnerGammaController extends BaseLmsController
             'title' => ['required', 'string', 'max:255'],
             // The durable Gamma doc URL (gammaUrl from a completed generation).
             'url' => ['required', 'url', 'max:2048'],
+            // Optional downloadable export produced by the generation. When present
+            // (module target only) we fetch the bytes and store a real file as the
+            // module material; the editable gammaUrl above is kept alongside it.
+            'export_url' => ['nullable', 'url', 'max:2048'],
+            'format' => ['nullable', Rule::in(['pdf', 'pptx'])],
             'course_id' => ['nullable', 'integer', 'required_without:module_id'],
             'module_id' => ['nullable', 'integer', 'required_without:course_id'],
         ]);
@@ -219,18 +229,44 @@ class OwnerGammaController extends BaseLmsController
                 ->where('module_id', $module->id)
                 ->max('sort_order') ?? 0) + 1;
 
-            $content = LmsModuleContent::create([
+            // Default (no export, or a failed download): store the editable Gamma
+            // link itself as a `link` content — the pre-existing behaviour.
+            $attributes = [
                 'module_id' => $module->id,
                 'title' => $data['title'],
                 'type' => 'link',
                 'content_url' => $data['url'],
                 'sort_order' => $nextOrder,
-            ]);
+            ];
+
+            // When the generation produced a downloadable export, fetch the bytes
+            // now (the export URL is ephemeral — Gamma expires it ~1 week out) and
+            // store OUR OWN copy as the module material: content_url points at the
+            // stored file so the student's "Open pdf/slides" downloads the real
+            // file, file_path records it for cleanup on delete (mirrors the staff
+            // upload flow), and the durable editable Gamma link is preserved in
+            // content_body so it's never lost. Best-effort — any failure falls back
+            // to the link content above rather than aborting the save.
+            if (! empty($data['export_url'])) {
+                $format = $data['format'] ?? 'pdf';
+                $stored = $this->downloadExport($data['export_url'], $format);
+                if ($stored) {
+                    $attributes['type'] = $format === 'pptx' ? 'slides' : 'pdf';
+                    $attributes['content_url'] = Storage::url($stored);
+                    $attributes['file_path'] = $stored;
+                    $attributes['content_body'] = $data['url'];
+                }
+            }
+
+            $content = LmsModuleContent::create($attributes);
 
             return response()->json([
                 'saved' => true,
                 'target' => 'module',
                 'id' => $content->id,
+                'type' => $content->type,
+                // true when a real file was stored (vs. just the editable link).
+                'downloaded' => $content->type !== 'link',
             ], 201);
         }
 
@@ -249,5 +285,60 @@ class OwnerGammaController extends BaseLmsController
             'target' => 'course',
             'id' => $material->id,
         ], 201);
+    }
+
+    /**
+     * List a course's modules ({id,title}) to populate the AI-materials module
+     * picker. Tenant-scoped: a course id from another institute 404s. Same
+     * owner-context + Pro-feature gate as the rest of this controller.
+     */
+    public function courseModules(Request $request, int $course): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        [$tenant] = $context;
+        PlanGate::ensureFeature($tenant, 'ai_materials');
+
+        // Tenant-scoped: a foreign course 404s instead of leaking its modules.
+        $courseModel = LmsCourse::query()->findOrFail($course);
+
+        $modules = LmsModule::query()
+            ->where('course_id', $courseModel->id)
+            ->orderBy('sort_order')
+            ->get(['id', 'title']);
+
+        return response()->json(['modules' => $modules]);
+    }
+
+    /**
+     * Download a Gamma export (PDF/PPTX) to the public disk and return the stored
+     * relative path, or null on any failure. The export URL is ephemeral (Gamma
+     * expires it ~1 week out), so we fetch the bytes now and serve our own copy.
+     * Stored under module-contents/ to match the staff content-upload location.
+     */
+    private function downloadExport(string $url, string $format): ?string
+    {
+        try {
+            $response = Http::timeout(60)->get($url);
+            if (! $response->successful()) {
+                return null;
+            }
+
+            $body = $response->body();
+            if ($body === '') {
+                return null;
+            }
+
+            $ext = $format === 'pptx' ? 'pptx' : 'pdf';
+            $path = 'module-contents/' . Str::uuid()->toString() . '.' . $ext;
+            Storage::disk('public')->put($path, $body);
+
+            return $path;
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 }

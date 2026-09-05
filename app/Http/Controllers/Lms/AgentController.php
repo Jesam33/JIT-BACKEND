@@ -22,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class AgentController extends BaseLmsController
 {
@@ -50,9 +51,13 @@ class AgentController extends BaseLmsController
 
     private function generateReferralCode(): string
     {
+        // referral_code is GLOBALLY unique (its index spans all academies, unlike
+        // the now per-academy email), so the collision check must ignore the
+        // tenant scope — otherwise a code already taken by another academy would
+        // pass this check and then hit the DB unique index as a 500.
         do {
             $code = 'AGENT-' . strtoupper(Str::random(6));
-        } while (Agent::where('referral_code', $code)->exists());
+        } while (Agent::withoutGlobalScope(TenantScope::class)->where('referral_code', $code)->exists());
 
         return $code;
     }
@@ -61,23 +66,10 @@ class AgentController extends BaseLmsController
 
     public function apply(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:agents,email',
-            'phone' => 'required|string|max:40',
-            'home_address' => 'required|string',
-            'qualification' => 'required|string|max:255',
-            'custom_answers' => 'required|array',
-            'custom_answers.target_students' => 'required|string',
-            'custom_answers.experience' => 'required|string',
-            'custom_answers.courses_to_promote' => 'required|string',
-        ]);
-
-        $password = Str::random(12);
-
-        // Agents are per-tenant. Attribute the application to the requested
-        // organisation (from the tenant header) or, on the bare primary domain,
-        // to JIT. This binds the tenant so Agent::create auto-stamps tenant_id.
+        // Agents are per-academy: resolve the academy FIRST (from the tenant
+        // header, or JIT on the bare primary domain) so the email-uniqueness rule
+        // can be scoped to it — the SAME person may apply to be an agent at
+        // several academies with one email.
         $tenant = $this->currentTenantOrPrimary();
 
         // The Admission-Marketer Network is a paid feature (Basic+). On an academy
@@ -90,6 +82,27 @@ class AgentController extends BaseLmsController
             ], 403);
         }
 
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            // Unique PER ACADEMY, not globally (mirrors the (tenant_id, email)
+            // composite index): the same email may already be an agent elsewhere.
+            'email' => [
+                'required', 'email', 'max:255',
+                Rule::unique('agents', 'email')->where('tenant_id', $tenant?->id),
+            ],
+            'phone' => 'required|string|max:40',
+            'home_address' => 'required|string',
+            'qualification' => 'required|string|max:255',
+            'custom_answers' => 'required|array',
+            'custom_answers.target_students' => 'required|string',
+            'custom_answers.experience' => 'required|string',
+            'custom_answers.courses_to_promote' => 'required|string',
+        ]);
+
+        $password = Str::random(12);
+
+        // The tenant is already bound (above), so Agent::create auto-stamps its
+        // tenant_id via TenantAware.
         $agent = Agent::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
@@ -102,7 +115,7 @@ class AgentController extends BaseLmsController
             'password' => bcrypt($password),
         ]);
 
-        if (filter_var(env('TRAINING_EMAIL_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+        if (config('saas.training_email_enabled')) {
             $adminEmail = env('TRAINING_ADMIN_EMAIL');
             if ($adminEmail) {
                 $adminUrl = rtrim(env('APP_URL', 'http://127.0.0.1:8000'), '/')
@@ -123,12 +136,14 @@ class AgentController extends BaseLmsController
             'password' => 'required|string',
         ]);
 
-        // Agent emails are globally unique (unique:agents,email), so the login
-        // lookup is unambiguous without a tenant scope — and the agent's own
-        // tenant_id is the authoritative organisation for the session.
-        $agent = Agent::withoutGlobalScope(TenantScope::class)->where('email', $validated['email'])->first();
+        // Agent emails are unique PER ACADEMY (not globally), so resolve the
+        // account the tenant-aware way students log in: a pinned academy
+        // (?tenant= → requestedTenantSlug) scopes the lookup; otherwise match
+        // across academies by password. The resolved agent's own tenant_id is
+        // the authoritative organisation for the session.
+        $agent = $this->authenticateAgent($validated['email'], $validated['password']);
 
-        if (!$agent || !password_verify($validated['password'], $agent->password ?? '')) {
+        if (! $agent) {
             return response()->json(['message' => 'Invalid credentials.'], 401);
         }
 
@@ -147,6 +162,37 @@ class AgentController extends BaseLmsController
         ]);
 
         return response()->json(['token' => $token, 'agent' => $agent]);
+    }
+
+    /**
+     * Tenant-aware agent lookup for login, mirroring
+     * {@see StudentAuthController::authenticateStudent}. When the request pins an
+     * academy (?tenant= → requestedTenantSlug is bound, and the global TenantScope
+     * scopes to it), the lookup resolves the right per-academy account even when
+     * the same email is an agent at several academies. Otherwise we match across
+     * academies by password (newest first). Keeps agents' bcrypt password_verify.
+     */
+    private function authenticateAgent(string $email, string $password): ?Agent
+    {
+        if (app()->bound('requestedTenantSlug')) {
+            $agent = Agent::query()->where('email', $email)->first();
+
+            return ($agent && password_verify($password, $agent->password ?? '')) ? $agent : null;
+        }
+
+        $candidates = Agent::query()
+            ->withoutGlobalScope(TenantScope::class)
+            ->where('email', $email)
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($candidates as $candidate) {
+            if (password_verify($password, $candidate->password ?? '')) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     public function me(Request $request): JsonResponse
@@ -280,6 +326,13 @@ class AgentController extends BaseLmsController
             return response()->json(['message' => 'This course is full.', 'is_full' => true], 422);
         }
 
+        // Pre-recorded (on-demand) is cheaper when the course sets a distinct
+        // prerecorded_price; otherwise both modes charge the live price. This is
+        // the amount frozen into the registration (feeds Paystack + commissions).
+        $price = ($validated['learning_mode'] === 'pre_recorded' && $course->prerecorded_price !== null)
+            ? (float) $course->prerecorded_price
+            : (float) $course->price;
+
         $registration = \App\Models\TrainingRegistration::create([
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
@@ -291,7 +344,7 @@ class AgentController extends BaseLmsController
             'course_id' => $course->id,
             'course_name' => $course->title,
             'learning_mode' => $validated['learning_mode'],
-            'course_price' => (float) $course->price,
+            'course_price' => $price,
             'status' => 'pending',
             'registered_by_agent_id' => $agent->id,
         ]);
@@ -310,7 +363,7 @@ class AgentController extends BaseLmsController
             'registration_id' => $registration->id,
             'course' => [
                 'title' => $course->title,
-                'price' => (float) $course->price,
+                'price' => $price,
             ],
         ], 201);
     }
@@ -515,7 +568,7 @@ class AgentController extends BaseLmsController
             'approved_at' => now(),
         ]);
 
-        if (filter_var(env('TRAINING_EMAIL_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+        if (config('saas.training_email_enabled')) {
             $baseUrl = config('saas.frontend_url');
             try {
                 Mail::to($agent->email)->send(new AgentApplicationApprovedMail($agent, $baseUrl . '/lms/agent/login'));
@@ -543,11 +596,30 @@ class AgentController extends BaseLmsController
             'email' => 'required|email',
         ]);
 
-        $agent = Agent::withoutGlobalScope(TenantScope::class)->where('email', $validated['email'])->first();
+        $email = $validated['email'];
 
-        if (!$agent) {
+        // Agent emails are unique PER ACADEMY. Prefer the explicitly-requested
+        // academy (?tenant= → requestedTenantSlug), else fall back across
+        // academies (newest first). bindTenantFromModel then stamps the token —
+        // and the emailed link's ?tenant= — with the account's own academy, so the
+        // reset and the subsequent login both stay on it.
+        $agent = app()->bound('requestedTenantSlug')
+            ? Agent::query()->where('email', $email)->first()
+            : null;
+
+        if (! $agent) {
+            $agent = Agent::query()
+                ->withoutGlobalScope(TenantScope::class)
+                ->where('email', $email)
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        if (! $agent) {
             return response()->json(['message' => 'If that email exists, a reset link has been sent.']);
         }
+
+        $this->bindTenantFromModel($agent);
 
         $token = $this->createPasswordResetToken('agent', $agent->email);
         $link = $this->buildResetLink('agent', $agent->email, $token);
@@ -565,13 +637,24 @@ class AgentController extends BaseLmsController
             'password' => 'required|string|min:8',
         ]);
 
-        if (!$this->isValidResetToken('agent', $validated['email'], $validated['token'])) {
+        // The token row carries the issuing academy; bind it so the account lookup
+        // resolves the right per-academy agent even on the bare domain.
+        $reset = $this->resolveResetToken('agent', $validated['email'], $validated['token']);
+
+        if (! $reset) {
             return response()->json(['message' => 'Invalid or expired reset token.'], 422);
         }
 
-        $agent = Agent::withoutGlobalScope(TenantScope::class)->where('email', $validated['email'])->first();
+        $this->bindTenantFromModel($reset);
 
-        if (!$agent) {
+        $agent = Agent::query()
+            ->withoutGlobalScope(TenantScope::class)
+            ->where('email', $validated['email'])
+            ->when($reset->tenant_id, fn ($q) => $q->where('tenant_id', $reset->tenant_id))
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $agent) {
             return response()->json(['message' => 'Invalid or expired reset token.'], 422);
         }
 

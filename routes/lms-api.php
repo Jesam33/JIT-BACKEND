@@ -233,6 +233,9 @@ Route::middleware('tenant.required')->group(function () {
     Route::post('/api/frontend/lms/owner/ai/materials/generate', [OwnerGammaController::class, 'generate'])->middleware('throttle:20,1');
     Route::get('/api/frontend/lms/owner/ai/materials/{id}', [OwnerGammaController::class, 'status']);
     Route::post('/api/frontend/lms/owner/ai/materials/save', [OwnerGammaController::class, 'save']);
+    // Modules of one owner course — populates the AI-materials "save into module"
+    // picker. Tenant-scoped + ai_materials-gated inside the controller.
+    Route::get('/api/frontend/lms/owner/courses/{course}/modules', [OwnerGammaController::class, 'courseModules']);
 
     // Portal-agnostic branding read: student & staff shells theme themselves
     // to match the owner's customization (tenant resolved from their session).

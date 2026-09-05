@@ -1188,14 +1188,21 @@ class OwnerAdminController extends BaseLmsController
      */
     private function capCourseCapacity(Tenant $tenant, int $requested): int
     {
-        $cap = $tenant->planLimit('students');
-        if ($cap === null) {
-            return max(0, $requested);
-        }
+        // A course seats no more than the tightest of the academy-wide student
+        // cap and the per-class cap — either may be null (unlimited). Resulting
+        // per-class ceiling: Free = 1 (dominated by its 1-student academy cap),
+        // Basic = 30, Pro = 250, Enterprise = unlimited.
+        $limits = array_filter(
+            [$tenant->planLimit('students'), $tenant->planLimit('per_course')],
+            fn ($v) => $v !== null
+        );
+        $max = empty($limits) ? 0 : min($limits);   // 0 = unlimited (both null)
+
         if ($requested <= 0) {
-            return $cap;
+            return $max;                              // blank = "as many as the plan allows"
         }
-        return min($requested, $cap);
+
+        return $max === 0 ? $requested : min($requested, $max);
     }
 
     public function storeCourse(Request $request): JsonResponse
@@ -1219,6 +1226,9 @@ class OwnerAdminController extends BaseLmsController
             // sale, so a ₦0 course would earn nothing and can't be sold.
             'price' => ['required', 'numeric', 'min:0.01'],
             'original_price' => ['nullable', 'numeric', 'min:0'],
+            // Optional cheaper price for the pre-recorded mode (item 6). Only
+            // persisted when pre-recorded is actually offered on this plan.
+            'prerecorded_price' => ['nullable', 'numeric', 'min:0.01'],
             // Capacity is at least 1 seat; the plan-cap clamp below bounds the top.
             'max_students' => ['required', 'integer', 'min:1'],
             'is_live_available' => ['nullable', 'boolean'],
@@ -1238,12 +1248,17 @@ class OwnerAdminController extends BaseLmsController
         $prerecorded = ($validated['is_prerecorded_available'] ?? false)
             && $tenant->planFeature('pre_recorded_video');
 
+        // The separate pre-recorded price only means anything while pre-recorded
+        // is offered; otherwise store null so a hidden mode can't carry a price.
+        $prerecordedPrice = $prerecorded ? ($validated['prerecorded_price'] ?? null) : null;
+
         $course = LmsCourse::query()->create([
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'requirements' => $validated['requirements'] ?? null,
             'price' => $validated['price'],
             'original_price' => $validated['original_price'] ?? null,
+            'prerecorded_price' => $prerecordedPrice,
             'max_students' => $maxStudents,
             'is_live_available' => $validated['is_live_available'] ?? true,
             'is_prerecorded_available' => $prerecorded,
@@ -1278,6 +1293,7 @@ class OwnerAdminController extends BaseLmsController
             // No free courses — the platform earns a commission % on each sale.
             'price' => ['sometimes', 'required', 'numeric', 'min:0.01'],
             'original_price' => ['nullable', 'numeric', 'min:0'],
+            'prerecorded_price' => ['nullable', 'numeric', 'min:0.01'],
             'max_students' => ['sometimes', 'required', 'integer', 'min:1'],
             'is_live_available' => ['nullable', 'boolean'],
             'is_prerecorded_available' => ['nullable', 'boolean'],
@@ -1289,8 +1305,8 @@ class OwnerAdminController extends BaseLmsController
         // Apply only the keys the client actually sent (validated() omits absent
         // fields), so a partial save never blanks untouched columns.
         $data = array_intersect_key($validated, array_flip([
-            'title', 'description', 'requirements', 'price', 'original_price', 'max_students',
-            'is_live_available', 'is_prerecorded_available', 'is_active',
+            'title', 'description', 'requirements', 'price', 'original_price', 'prerecorded_price',
+            'max_students', 'is_live_available', 'is_prerecorded_available', 'is_active',
         ]));
         if (array_key_exists('max_students', $data)) {
             // Same plan-cap clamp as create (see storeCourse): capacity can't exceed
@@ -1301,6 +1317,18 @@ class OwnerAdminController extends BaseLmsController
             // Pre-recorded video is Pro+; force it off on plans without the feature.
             $data['is_prerecorded_available'] = (bool) $data['is_prerecorded_available']
                 && $tenant->planFeature('pre_recorded_video');
+        }
+        // A pre-recorded price is only meaningful while pre-recorded is offered.
+        // Use the EFFECTIVE availability (the value being set this request, else the
+        // course's current one) and null the price out whenever pre-recorded is off,
+        // so disabling the mode can't leave a stale cheaper price behind.
+        if (array_key_exists('prerecorded_price', $data) || array_key_exists('is_prerecorded_available', $data)) {
+            $effectivePrerecorded = array_key_exists('is_prerecorded_available', $data)
+                ? $data['is_prerecorded_available']
+                : (bool) $course->is_prerecorded_available;
+            if (! $effectivePrerecorded) {
+                $data['prerecorded_price'] = null;
+            }
         }
 
         $course->update($data);
@@ -1495,6 +1523,7 @@ class OwnerAdminController extends BaseLmsController
             'requirements' => $course->requirements,
             'price' => $course->price,
             'original_price' => $course->original_price,
+            'prerecorded_price' => $course->prerecorded_price,
             'cover_image_url' => $course->cover_image_url,
             'rating_average' => $card['rating_average'],
             'rating_count' => $card['rating_count'],

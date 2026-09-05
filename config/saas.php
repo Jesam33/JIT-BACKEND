@@ -38,6 +38,27 @@ return [
     // LMS_FEATURE_ENABLED=true in the live .env to turn the portal on.
     'lms_feature_enabled' => filter_var(env('LMS_FEATURE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 
+    // On/off for the public course-intake + registration/payment API (course
+    // catalog, register, pay) and the Jorsas-primary training-registration flow.
+    // Every intake endpoint is gated by ensureIntakeEnabled() /
+    // ensureTrainingFeatureEnabled(); when false those endpoints 404. Resolved HERE
+    // via config — NOT env() at the call site — so it survives `php artisan
+    // config:cache` in production. (Reading env() directly in the controller returned
+    // false once the config was cached, which silently 404'd course registration on
+    // live.) Defaults ON — it's the core revenue path; TRAINING_FEATURE_ENABLED=false
+    // hides it.
+    'training_feature_enabled' => filter_var(env('TRAINING_FEATURE_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+
+    // Whether the training/agent intake sends its transactional emails (registration
+    // submitted/approved, agent application submitted/approved). Same config-not-env
+    // rule so it survives config:cache. Opt-in (default off) — turn on once MAIL_* is
+    // configured for the environment.
+    'training_email_enabled' => filter_var(env('TRAINING_EMAIL_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+    // On/off for the public marketing content API (FrontendContentController::home()).
+    // Same config-not-env rule so it survives config:cache. Opt-in (default off).
+    'frontend_api_enabled' => filter_var(env('FRONTEND_API_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
     // Public URL of the Next.js frontend, used to build links in outgoing emails
     // (staff/student invites, password resets, payment callbacks, owner setup).
     // Resolved here — via config, NOT env() at the call sites — so the value
@@ -142,6 +163,9 @@ return [
                 'courses' => (int) env('PLAN_FREE_MAX_COURSES', 3),
                 'students' => (int) env('PLAN_FREE_MAX_STUDENTS', 1),
                 'staff' => (int) env('PLAN_FREE_MAX_STAFF', 1),
+                // No separate per-class cap on Free — the 1-student academy cap
+                // already dominates (each course is effectively capped at 1).
+                'per_course' => null,
             ],
             // `free` MUST list every feature key (all false): planConfig() merges
             // each plan over `free`, so higher tiers only override the trues.
@@ -169,8 +193,12 @@ return [
             'commission_percent' => (float) env('PLAN_BASIC_COMMISSION', 3),
             'limits' => [
                 'courses' => (int) env('PLAN_BASIC_MAX_COURSES', 10),
-                'students' => (int) env('PLAN_BASIC_MAX_STUDENTS', 100),
+                // Unlimited platform students from Basic up (null = unlimited);
+                // the cap that actually bites is per-class, below.
+                'students' => null,
                 'staff' => (int) env('PLAN_BASIC_MAX_STAFF', 5),
+                // Max students per class (per course) on Basic.
+                'per_course' => (int) env('PLAN_BASIC_MAX_PER_COURSE', 30),
             ],
             'features' => [
                 'live_classes' => true,
@@ -193,8 +221,11 @@ return [
             'commission_percent' => (float) env('PLAN_PRO_COMMISSION', 0),
             'limits' => [
                 'courses' => (int) env('PLAN_PRO_MAX_COURSES', 50),
-                'students' => (int) env('PLAN_PRO_MAX_STUDENTS', 1000),
+                // Unlimited platform students (null); the per-class cap bites.
+                'students' => null,
                 'staff' => (int) env('PLAN_PRO_MAX_STAFF', 25),
+                // Max students per class (per course) on Pro.
+                'per_course' => (int) env('PLAN_PRO_MAX_PER_COURSE', 250),
             ],
             'features' => [
                 'live_classes' => true,
@@ -223,6 +254,8 @@ return [
                 'courses' => null,
                 'students' => null,
                 'staff' => null,
+                // Uncapped per class too (top tier).
+                'per_course' => null,
             ],
             'features' => [
                 'live_classes' => true,

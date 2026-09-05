@@ -899,8 +899,8 @@ class AdminController extends BaseLmsController
             'password' => bcrypt($password),
         ]);
 
-        if (filter_var(env('TRAINING_EMAIL_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
-            $baseUrl = rtrim(env('LMS_BASE_URL', 'http://127.0.0.1:3000'), '/');
+        if (config('saas.training_email_enabled')) {
+            $baseUrl = config('saas.frontend_url');
             try {
                 \Illuminate\Support\Facades\Mail::to($agent->email)
                     ->send(new \App\Mail\AgentApplicationApprovedMail(

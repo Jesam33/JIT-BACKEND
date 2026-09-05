@@ -30,7 +30,11 @@ class LmsIntakeController extends BaseLmsController
 {
     private function ensureIntakeEnabled(): void
     {
-        if (! filter_var(env('TRAINING_FEATURE_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+        // Read via config (bound in config/saas.php) — NOT env() directly — so the
+        // flag still resolves after `php artisan config:cache` on live. Reading
+        // env() here returned false under cached config and 404'd course
+        // registration + the whole intake/payment flow. Mirrors ensureLmsEnabled().
+        if (! config('saas.training_feature_enabled')) {
             throw new NotFoundHttpException();
         }
     }
@@ -186,7 +190,13 @@ class LmsIntakeController extends BaseLmsController
         }
 
         $referredByAgentId = null;
-        $price = (float) $course->price;
+        // Pre-recorded (on-demand) is cheaper when the course sets a distinct
+        // prerecorded_price; otherwise both modes charge the live price. This base
+        // amount is what the referral discount + currency freeze below operate on,
+        // and what ultimately settles to Paystack/commissions via course_price.
+        $price = ($validated['learning_mode'] === 'pre_recorded' && $course->prerecorded_price !== null)
+            ? (float) $course->prerecorded_price
+            : (float) $course->price;
         if (! empty($validated['referral_code'])) {
             $agent = \App\Models\Agent::where('referral_code', $validated['referral_code'])
                 ->where('status', 'approved')
@@ -440,6 +450,7 @@ class LmsIntakeController extends BaseLmsController
             [
                 'first_name' => $registration->first_name,
                 'last_name' => $registration->last_name,
+                'phone' => $registration->phone_number,
                 'selected_course_id' => $registration->course_id,
                 'learning_mode' => $registration->learning_mode,
                 'onboarding_completed' => false,
@@ -577,6 +588,7 @@ class LmsIntakeController extends BaseLmsController
                 'training_registration_id' => $registration->id,
                 'first_name' => $registration->first_name,
                 'last_name' => $registration->last_name,
+                'phone' => $registration->phone_number,
                 'selected_course_id' => $registration->course_id,
                 'learning_mode' => $registration->learning_mode,
                 'onboarding_completed' => false,

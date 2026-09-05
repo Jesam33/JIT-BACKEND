@@ -9,7 +9,9 @@ class FrontendContentController extends Controller
 {
     public function home(): JsonResponse
     {
-        if (! filter_var(env('FRONTEND_API_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+        // Config-bound (config/saas.php), NOT env() — survives `php artisan
+        // config:cache` on live.
+        if (! config('saas.frontend_api_enabled')) {
             throw new NotFoundHttpException();
         }
 

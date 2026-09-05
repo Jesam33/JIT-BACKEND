@@ -20,7 +20,10 @@ class TrainingRegistrationController extends Controller
 {
     private function ensureTrainingFeatureEnabled(): void
     {
-        if (! filter_var(env('TRAINING_FEATURE_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+        // Config-bound (config/saas.php), NOT env() — survives `php artisan
+        // config:cache` on live, which otherwise blanks the direct env() read and
+        // 404s the whole training-registration flow. Mirrors ensureLmsEnabled().
+        if (! config('saas.training_feature_enabled')) {
             throw new NotFoundHttpException();
         }
     }
@@ -76,7 +79,7 @@ class TrainingRegistrationController extends Controller
             'referred_by_agent_id' => $referredByAgentId,
         ]);
 
-        if (filter_var(env('TRAINING_EMAIL_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+        if (config('saas.training_email_enabled')) {
             $adminEmail = env('TRAINING_ADMIN_EMAIL');
 
             if ($adminEmail) {
@@ -154,7 +157,7 @@ class TrainingRegistrationController extends Controller
 
         $emailSent = false;
         $emailError = null;
-        if (filter_var(env('TRAINING_EMAIL_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+        if (config('saas.training_email_enabled')) {
             try {
                 Mail::to($registration->email)->send(new TrainingRegistrationApprovedMail($registration, $lmsLink));
                 $emailSent = true;

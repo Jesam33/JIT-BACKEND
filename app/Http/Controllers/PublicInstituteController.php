@@ -218,7 +218,10 @@ class PublicInstituteController extends Controller
             'name' => $tenant->name,
             'slug' => $tenant->slug,
             'show_powered_by' => ! $tenant->planFeature('remove_branding'),
-            'show_agent_program' => $tenant->planFeature('admission_marketer'),
+            // The Admission-Marketer Network is a customer-academy offering: the
+            // "Become an agent" banner shows on a non-primary academy whose plan
+            // includes it, never on the Jorsas primary storefront.
+            'show_agent_program' => ! $tenant->isPrimary() && $tenant->planFeature('admission_marketer'),
             'entity_label' => $label['singular'],
             'entity_label_plural' => $label['plural'],
         ];
@@ -294,6 +297,23 @@ class PublicInstituteController extends Controller
         // non-primary institute that hasn't linked a payout account yet.
         $purchasable = ! ($price > 0 && $ctx['block_unlinked']);
 
+        // Pre-recorded is only actually offered when the per-course toggle AND the
+        // plan feature both allow it. A separate (cheaper) pre-recorded price is
+        // surfaced only in that case, and localized through the SAME FX path as the
+        // live price so both sit in one currency. Null ⇒ the frontend charges the
+        // live price for the pre-recorded mode too (no cheaper option).
+        $prerecordedAvailable = $course->is_prerecorded_available && ($ctx['plan_prerecorded'] ?? true);
+        $prerecordedPrice = ($prerecordedAvailable && $course->prerecorded_price !== null)
+            ? (float) $course->prerecorded_price
+            : null;
+        $prerecordedPriceDisplay = null;
+        if ($prerecordedPrice !== null) {
+            $pd = $ctx['forced_currency']
+                ? $ctx['fx']->displayInCurrency($prerecordedPrice, $ctx['forced_currency'])
+                : $ctx['fx']->displayFor($prerecordedPrice, $ctx['country']);
+            $prerecordedPriceDisplay = $pd['amount'];
+        }
+
         $payload = [
             'id' => $course->id,
             'slug' => $course->slug,
@@ -321,7 +341,11 @@ class PublicInstituteController extends Controller
             'is_live_available' => $course->is_live_available,
             // Pre-recorded requires BOTH the per-course toggle AND a plan that
             // unlocks pre-recorded video, so a Free academy never offers it.
-            'is_prerecorded_available' => $course->is_prerecorded_available && ($ctx['plan_prerecorded'] ?? true),
+            'is_prerecorded_available' => $prerecordedAvailable,
+            // Separate (cheaper) pre-recorded price + its localized display. Null
+            // when there's no distinct pre-recorded price (falls back to `price`).
+            'prerecorded_price' => $prerecordedPrice,
+            'prerecorded_price_display' => $prerecordedPriceDisplay,
         ];
 
         if ($detail) {
