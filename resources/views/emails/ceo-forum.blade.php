@@ -17,7 +17,7 @@
   @else
     <h1 style="margin:0 0 12px;font-size:21px;line-height:1.3;color:#1a1a1a;font-weight:700;">You're invited to a CEO's Forum</h1>
     <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#444;">
-      Jorsas Tech is hosting a live session for institute owners. Here are the details.
+      Jorsas Tech is hosting a live session for academy owners. Here are the details.
     </p>
   @endif
 
@@ -44,5 +44,5 @@
 @endsection
 
 @section('footer')
-  <p style="margin:0;">You're receiving this because you own an institute on Jorsas Tech.</p>
+  <p style="margin:0;">You're receiving this because you own an academy on Jorsas Tech.</p>
 @endsection

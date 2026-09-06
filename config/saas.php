@@ -55,6 +55,12 @@ return [
     // configured for the environment.
     'training_email_enabled' => filter_var(env('TRAINING_EMAIL_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 
+    // Where the "new agent application" admin notice is sent, and the admin
+    // panel path used to build its review link. Read via config (not env()) at
+    // the call sites so both survive `php artisan config:cache` in production.
+    'training_admin_email' => env('TRAINING_ADMIN_EMAIL'),
+    'admin_dir' => env('ADMIN_DIR', 'admin'),
+
     // On/off for the public marketing content API (FrontendContentController::home()).
     // Same config-not-env rule so it survives config:cache. Opt-in (default off).
     'frontend_api_enabled' => filter_var(env('FRONTEND_API_ENABLED', false), FILTER_VALIDATE_BOOLEAN),

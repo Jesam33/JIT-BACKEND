@@ -11,16 +11,23 @@ class PaystackWebhookController extends Controller
 {
     public function handle(Request $request)
     {
-        // Paystack sends JSON payloads. We verify signature if configured.
-        $signature = $request->header('x-paystack-signature');
-
+        // Verify EVERY webhook, fail-closed. Paystack signs the raw body with
+        // HMAC-SHA512 under our secret key; a missing secret, a missing header,
+        // or a non-matching signature is rejected here so execution NEVER falls
+        // through to the money-moving handlers below (activatePlan /
+        // activatePaidSignup). hash_equals keeps the compare constant-time.
         $secret = (string) config('services.paystack.secret_key', '');
-        if ($secret && $signature) {
-            $computed = hash_hmac('sha512', $request->getContent(), $secret);
-            if (! hash_equals($computed, $signature)) {
-                Log::warning('Paystack webhook signature mismatch');
-                return response()->json(['status' => false, 'message' => 'Invalid signature'], 400);
-            }
+        $signature = (string) $request->header('x-paystack-signature', '');
+
+        if ($secret === '') {
+            Log::error('Paystack webhook received but no secret configured; rejecting.');
+            return response()->json(['status' => false, 'message' => 'Webhook not configured'], 503);
+        }
+
+        $computed = hash_hmac('sha512', $request->getContent(), $secret);
+        if ($signature === '' || ! hash_equals($computed, $signature)) {
+            Log::warning('Paystack webhook signature missing or invalid');
+            return response()->json(['status' => false, 'message' => 'Invalid signature'], 401);
         }
 
         $payload = $request->json()->all();

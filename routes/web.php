@@ -2,7 +2,6 @@
 
 use App\Http\Controllers\LmsIntakeController;
 use App\Http\Controllers\Lms\AdminController;
-use App\Http\Controllers\Auth\SignupController;
 use Botble\Base\Facades\DashboardMenu;
 use Illuminate\Support\Facades\Route;
 
@@ -83,9 +82,9 @@ Route::middleware(['auth', 'tenant.primary'])->prefix(env('ADMIN_DIR', 'admin'))
 	Route::post('/plans/{id}/delete', [\App\Http\Controllers\Admin\PlanController::class, 'destroy'])->name('admin.plans.delete');
 });
 
-// Public signup route moved to API routes to ensure JSON responses and avoid
-// CSRF/web redirects during XHR from the Next.js frontend.
-// Route::post('/api/signup', [SignupController::class, 'signup']);
+// Public signup lives in routes/lms-api.php (TenantSignupController) so it
+// returns JSON and avoids CSRF/web redirects during XHR from the Next.js
+// frontend. The old Auth\SignupController has been removed.
 
 // Public test screens
 use App\Http\Controllers\PublicPagesController;

@@ -115,15 +115,28 @@ class AgentController extends BaseLmsController
             'password' => bcrypt($password),
         ]);
 
+        // The application row is already saved, so email is a best-effort side
+        // effect: a mail misconfiguration or an SMTP hiccup must NEVER turn a
+        // successful submission into a 500 (a header-less 500 also surfaces in
+        // the browser as a misleading CORS/network error). Each send is guarded
+        // and logged on its own so one failing recipient can't drop the other.
         if (config('saas.training_email_enabled')) {
-            $adminEmail = env('TRAINING_ADMIN_EMAIL');
+            $adminEmail = config('saas.training_admin_email');
             if ($adminEmail) {
-                $adminUrl = rtrim(env('APP_URL', 'http://127.0.0.1:8000'), '/')
-                    . '/' . trim(env('ADMIN_DIR', 'admin'), '/')
+                $adminUrl = rtrim((string) config('app.url'), '/')
+                    . '/' . trim((string) config('saas.admin_dir', 'admin'), '/')
                     . '/agents';
-                Mail::to($adminEmail)->send(new AgentApplicationSubmittedMail($agent, $adminUrl));
+                try {
+                    Mail::to($adminEmail)->send(new AgentApplicationSubmittedMail($agent, $adminUrl));
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('Agent application: admin notice email failed', ['agent_id' => $agent->id, 'error' => $e->getMessage()]);
+                }
             }
-            Mail::to($agent->email)->send(new \App\Mail\AgentApplicationAcknowledgedMail($agent));
+            try {
+                Mail::to($agent->email)->send(new AgentApplicationAcknowledgedMail($agent));
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Agent application: acknowledgement email failed', ['agent_id' => $agent->id, 'error' => $e->getMessage()]);
+            }
         }
 
         return response()->json(['message' => 'Application submitted successfully. You will receive an email once reviewed.']);
