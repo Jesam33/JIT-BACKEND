@@ -18,8 +18,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * The tenant is resolved explicitly from the {slug} in the URL (or from
  * Tenant::primary() for the apex /institute page) and bound as currentTenant,
  * so LmsCourse's global TenantScope filters to this one institute. That makes
- * scoping correct regardless of how the request arrived — a server-rendered
- * fetch carries no X-Tenant-Slug header — and regardless of the enforce_tenancy
+ * scoping correct regardless of how the request arrived, a server-rendered
+ * fetch carries no X-Tenant-Slug header, and regardless of the enforce_tenancy
  * flag (the scope filters whenever a tenant is bound). This closes the leak
  * where the old, unscoped catalog returned every tenant's courses at once.
  *
@@ -76,7 +76,7 @@ class PublicInstituteController extends Controller
     /**
      * The "Campuses" directory (jorsastech's own nav): every Pro-and-above
      * academy, shown as an avatar card that links to its storefront. Only Pro+
-     * academies are listed — the plan tier is the paid placement, so a Free/Basic
+     * academies are listed, the plan tier is the paid placement, so a Free/Basic
      * academy never appears here. The primary (Jorsas) is itself excluded: this
      * is a showcase of the customer academies built on the platform.
      *
@@ -208,7 +208,7 @@ class PublicInstituteController extends Controller
      * the "Powered by Jorsas" flag (off once a plan removes branding), whether
      * the Admission-Marketer Network is offered on this plan (so the storefront
      * hides "Become an agent" on plans without it), and the tenant's own entity
-     * label (what this academy calls itself — customer-facing text only).
+     * label (what this academy calls itself, customer-facing text only).
      */
     private function instituteMeta(Tenant $tenant): array
     {
@@ -231,7 +231,7 @@ class PublicInstituteController extends Controller
      * Per-request pricing context, computed once and reused for every course:
      * the localized DISPLAY currency (from a forwarded country / manual currency
      * selection) and whether paid courses are purchasable (a non-primary institute
-     * that hasn't linked a payout subaccount yet can't take money — see the
+     * that hasn't linked a payout subaccount yet can't take money, see the
      * matching backend gate in {@see LmsIntakeController::initializePayment}).
      *
      * @return array{fx:CurrencyService,country:?string,forced_currency:?string,charge_currency:string,block_unlinked:bool}
@@ -240,7 +240,7 @@ class PublicInstituteController extends Controller
     {
         // Country is a HINT only (never sets the amount). Forwarded by the Next.js
         // storefront as ?country= / X-Visitor-Country (Laravel can't see the real
-        // visitor IP — the storefront is server-rendered). A manual currency pick
+        // visitor IP, the storefront is server-rendered). A manual currency pick
         // arrives as ?currency= and overrides the country→currency mapping for display.
         $country = strtoupper(trim((string) ($request->query('country', $request->header('X-Visitor-Country', ''))))) ?: null;
         $forced = strtoupper(trim((string) $request->query('currency', ''))) ?: null;
@@ -279,7 +279,7 @@ class PublicInstituteController extends Controller
             ? $ctx['fx']->displayInCurrency($price, $ctx['forced_currency'])
             : $ctx['fx']->displayFor($price, $ctx['country']);
 
-        // Optional "was" price — the card struck-through renders it ONLY when it
+        // Optional "was" price, the card struck-through renders it ONLY when it
         // exceeds the current price (the frontend enforces this too). Display uses
         // the SAME FX path as price_display so both sit in the same currency.
         $originalPrice = $course->original_price !== null ? (float) $course->original_price : null;

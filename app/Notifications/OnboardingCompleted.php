@@ -27,7 +27,7 @@ class OnboardingCompleted extends Notification
     {
         // Prefer the frontend/base URL used by the Next.js app when generating links in emails.
         $frontend = config('saas.frontend_url');
-        // What this org calls itself in customer-facing copy — "Institute" for the
+        // What this org calls itself in customer-facing copy, "Institute" for the
         // primary (Jorsas), "Online Academy" (or the owner's override) otherwise.
         $label = $this->tenant ? $this->tenant->entityLabelArray()['singular'] : 'Online Academy';
 

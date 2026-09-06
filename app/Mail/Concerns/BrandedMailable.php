@@ -9,9 +9,9 @@ use Illuminate\Mail\Mailables\Envelope;
 /**
  * Per-institute identity for a transactional mailable that carries a
  * tenant-scoped model (a registration, an agent). Resolves the sender NAME,
- * brand accent COLOUR and REPLY-TO from the row's tenant_id — so a paying
+ * brand accent COLOUR and REPLY-TO from the row's tenant_id, so a paying
  * academy's payment/approval emails are stamped with THAT academy, never
- * "Jorsas" — and builds the branded Envelope the same way {@see \App\Mail\LmsNotificationMail}
+ * "Jorsas", and builds the branded Envelope the same way {@see \App\Mail\LmsNotificationMail}
  * does: the from-ADDRESS stays on the platform's verified domain (so SPF/DKIM/
  * DMARC pass and mail lands in inboxes) while only the display NAME + Reply-To
  * become the institute.

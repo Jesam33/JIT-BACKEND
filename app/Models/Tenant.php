@@ -45,16 +45,16 @@ class Tenant extends Model
 
         // Keep the Paystack payout split in step with the new plan's commission so
         // an upgrade/downgrade actually changes what the platform retains on this
-        // institute's course sales — otherwise the % frozen at subaccount creation
+        // institute's course sales, otherwise the % frozen at subaccount creation
         // would persist. Best-effort and only for a subaccount we manage; it never
-        // lets a gateway hiccup break plan activation. (No-op at signup — the bank
-        // is linked later — and for the primary, which has no subaccount.)
+        // lets a gateway hiccup break plan activation. (No-op at signup, the bank
+        // is linked later, and for the primary, which has no subaccount.)
         $this->syncPayoutCommission();
     }
 
     /**
      * Whether this tenant's linked Paystack subaccount is one the PLATFORM created
-     * from bank details (Path B in OwnerAdminController::updatePaymentSettings) —
+     * from bank details (Path B in OwnerAdminController::updatePaymentSettings), 
      * as opposed to a code the owner pasted in (Path A). Only a platform-managed
      * subaccount belongs to our integration and carries a split we set, so only it
      * is safe to re-sync on a plan change; a pasted code is the owner's own
@@ -79,7 +79,7 @@ class Tenant extends Model
      * Re-point this tenant's Paystack subaccount split at its current plan's
      * commission percent. No-op unless a platform-managed subaccount is linked
      * (a pasted code is left untouched). Best-effort: any failure is logged and
-     * swallowed so it never blocks plan activation — the split simply stays at its
+     * swallowed so it never blocks plan activation, the split simply stays at its
      * previous value until the next successful sync. On success the applied % is
      * recorded in settings so the owner payments UI reflects the live split.
      */
@@ -101,7 +101,7 @@ class Tenant extends Model
         try {
             $service = app(\App\Services\PaystackService::class);
             if (! $service->isConfigured()) {
-                return; // gateway off (local/test) — nothing to sync
+                return; // gateway off (local/test), nothing to sync
             }
 
             $result = $service->updateSubaccount($code, $commission);
@@ -131,7 +131,7 @@ class Tenant extends Model
 
     /**
      * Whether this is the platform's own primary institute (Jorsas). The primary
-     * is never limited or gated — it is always treated as the top plan.
+     * is never limited or gated, it is always treated as the top plan.
      */
     public function isPrimary(): bool
     {
@@ -180,7 +180,7 @@ class Tenant extends Model
 
     /**
      * A numeric plan limit (courses|students|staff), or null when unlimited.
-     * A missing key also reads as unlimited (null) — fail-open on config typos
+     * A missing key also reads as unlimited (null), fail-open on config typos
      * rather than accidentally capping at zero.
      */
     public function planLimit(string $key): ?int
@@ -282,7 +282,7 @@ class Tenant extends Model
     }
 
     /**
-     * What this tenant calls its own organisation, in customer-facing copy —
+     * What this tenant calls its own organisation, in customer-facing copy, 
      * the primary (Jorsas) is an "Institute"; every other academy defaults to
      * "Online Academy" and its owner can rename it in Customisation. This is
      * TEXT only: routes, columns, and identifiers never change. Depends on the
@@ -325,7 +325,7 @@ class Tenant extends Model
 
         return [
             // Rebuilt against the current host so a logo URL frozen at upload time
-            // (localhost → live, http → https) still resolves — and legacy absolute
+            // (localhost → live, http → https) still resolves, and legacy absolute
             // rows self-heal without a data migration (see App\Support\MediaUrl).
             'logo_url' => \App\Support\MediaUrl::url($b['logo_url'] ?? $d['logo_url']),
             'primary_color' => $b['primary_color'] ?? $d['primary_color'],
@@ -335,7 +335,7 @@ class Tenant extends Model
             // What the owner calls their organisation (customer-facing text only).
             'entity_label' => $label['singular'],
             'entity_label_plural' => $label['plural'],
-            // The academy's display name — customer-facing text. Public institute
+            // The academy's display name, customer-facing text. Public institute
             // pages (login / signup / agent) use it to title the browser tab with
             // the academy instead of leaking the platform's inherited "Jorsas
             // Tech". Empty when the tenant has no name; the client only applies it
@@ -345,7 +345,7 @@ class Tenant extends Model
     }
 
     /**
-     * The display NAME for this tenant's outgoing transactional mail — the
+     * The display NAME for this tenant's outgoing transactional mail, the
      * sender's from-NAME and the email header wordmark. A student invited by
      * "Perka Foundation Class" must see that academy, never "Jorsas". Falls back
      * to the platform mail name only when the tenant has no name of its own.
@@ -358,7 +358,7 @@ class Tenant extends Model
     }
 
     /**
-     * The accent colour for this tenant's outgoing transactional mail — the
+     * The accent colour for this tenant's outgoing transactional mail, the
      * email header background and the CTA button/link. Drawn from the same
      * white-label palette the portals theme off ({@see brandingArray()}), so an
      * academy's invite/reset emails match its storefront. Defaults to platform red.
@@ -375,7 +375,7 @@ class Tenant extends Model
      * from-ADDRESS stays on the platform's verified domain (deliverability), but a
      * reply belongs to the INSTITUTE: its published public contact email
      * (settings.profile.contact.email) when set + valid, else the owner's own
-     * login email (tenant_admins.role = owner). Null when neither is known — the
+     * login email (tenant_admins.role = owner). Null when neither is known, the
      * mailable then simply omits Reply-To. Mirrors the per-run map built in
      * SendNotificationEmails::replyToMap(), for the single-send invite/forgot paths.
      */
@@ -398,12 +398,12 @@ class Tenant extends Model
     }
 
     /**
-     * The full per-institute mail identity — sender NAME, accent COLOUR and
-     * REPLY-TO — as one array, with a platform fallback when no tenant resolves.
+     * The full per-institute mail identity, sender NAME, accent COLOUR and
+     * REPLY-TO, as one array, with a platform fallback when no tenant resolves.
      * The single source for both {@see \App\Http\Controllers\Lms\BaseLmsController::mailBranding()}
      * (callers that bind the recipient's tenant) and the model-carrying mailables
      * ({@see \App\Mail\Concerns\BrandedMailable}), which resolve their brand from
-     * the row's tenant_id — so a paying academy's payment/approval emails are
+     * the row's tenant_id, so a paying academy's payment/approval emails are
      * never stamped "Jorsas".
      *
      * @return array{name: string, color: string, reply_to: ?string}
@@ -426,7 +426,7 @@ class Tenant extends Model
     }
 
     /**
-     * {@see brandMailArray()} resolved from a tenant id — a mailable holds the
+     * {@see brandMailArray()} resolved from a tenant id, a mailable holds the
      * recipient row's tenant_id, not the model. Tenant carries no global scope,
      * so a plain find() reaches any academy; a null/zero id yields the fallback.
      */

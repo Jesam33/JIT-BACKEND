@@ -23,3 +23,10 @@ Schedule::command('lms:dispatch-announcements')
 Schedule::command('lms:send-notification-emails')
     ->everyMinute()
     ->withoutOverlapping();
+
+// CEO's Forum: invite owners when a forum is scheduled, remind ~1h before start,
+// and advance forum status (scheduled → live → ended). Per-forum stamps keep each
+// sweep idempotent, so running every minute never double-sends.
+Schedule::command('lms:send-ceo-forum-emails')
+    ->everyMinute()
+    ->withoutOverlapping();

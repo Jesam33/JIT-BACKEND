@@ -48,7 +48,7 @@ class StaffPortalController extends BaseLmsController
 
     /**
      * Announcements are keyed on Batch, but owner-provisioned cohorts are
-     * LmsTracks that never create one — so the "cohort" dropdown comes back
+     * LmsTracks that never create one, so the "cohort" dropdown comes back
      * empty and there's nothing to announce to. This lazily backfills a Batch
      * per track that lacks one (named after the cohort) and pins track.batch_id,
      * making the dropdown populate and announcements postable with no schema
@@ -194,7 +194,7 @@ class StaffPortalController extends BaseLmsController
             'type' => ['required', 'in:pdf,doc,video,link,other'],
             'file_url' => ['required', 'string', 'max:2048'],
             'session_id' => ['nullable', 'integer', 'exists:lms_classrooms,id'],
-            // Externally-hosted video (Bunny Stream) pointers — set by the client
+            // Externally-hosted video (Bunny Stream) pointers, set by the client
             // after a direct upload finishes. file_url carries the embed URL.
             'provider' => ['nullable', 'string', 'max:40'],
             'external_id' => ['nullable', 'string', 'max:255'],
@@ -321,7 +321,7 @@ class StaffPortalController extends BaseLmsController
         if (! $teacher) return response()->json(['message' => 'Unauthorized'], 401);
 
         // Backfill batches for this teacher's cohorts, then only allow posting to
-        // a batch that belongs to one of them — a staffer can't announce into
+        // a batch that belongs to one of them, a staffer can't announce into
         // another instructor's (or another tenant's) cohort by guessing an id.
         $trackIds = $this->getTrackIds($teacher);
         $this->ensureTrackBatches($trackIds);
@@ -356,7 +356,7 @@ class StaffPortalController extends BaseLmsController
         if (! $teacher) return response()->json(['message' => 'Unauthorized'], 401);
 
         // BatchAnnouncement is not TenantAware, so scope the delete to this
-        // teacher's own cohorts' batches — otherwise any staffer could delete any
+        // teacher's own cohorts' batches, otherwise any staffer could delete any
         // announcement in any tenant by guessing an id (mirrors createAnnouncement).
         $allowedBatchIds = LmsTrack::query()
             ->whereIn('id', $this->getTrackIds($teacher))

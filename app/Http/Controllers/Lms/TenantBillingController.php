@@ -21,7 +21,7 @@ use Illuminate\Support\Str;
  * These routes live inside `tenant.required`, but authorization here does NOT
  * trust the middleware-bound tenant: it derives the tenant from the owner's own
  * session row (tenant_id) and confirms tenant_admins membership, so a student or
- * staff bearer token — which also binds a tenant — cannot reach billing.
+ * staff bearer token, which also binds a tenant, cannot reach billing.
  */
 class TenantBillingController extends BaseLmsController
 {
@@ -61,8 +61,8 @@ class TenantBillingController extends BaseLmsController
     /**
      * Sanitise the browser-supplied return origin used for the Paystack callback.
      * Returns a bare "scheme://host[:port]" only when it is safe, else null (the
-     * caller then falls back to the configured frontend URL). A bare origin — no
-     * path/query/fragment — that is either a local dev host or the configured
+     * caller then falls back to the configured frontend URL). A bare origin, no
+     * path/query/fragment, that is either a local dev host or the configured
      * frontend host / a subdomain of its root domain, so this can never become an
      * open redirect to an attacker-chosen destination.
      */
@@ -79,7 +79,7 @@ class TenantBillingController extends BaseLmsController
         if (! in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
             return null;
         }
-        // An origin is scheme://host[:port] and nothing more — reject anything
+        // An origin is scheme://host[:port] and nothing more, reject anything
         // carrying a path, query, fragment or credentials.
         if ((isset($parts['path']) && $parts['path'] !== '' && $parts['path'] !== '/')
             || isset($parts['query']) || isset($parts['fragment'])
@@ -186,7 +186,7 @@ class TenantBillingController extends BaseLmsController
 
         $amount = (float) ($plans[$plan]['price'] ?? 0);
         if ($amount <= 0) {
-            // The free plan needs no payment — activate directly.
+            // The free plan needs no payment, activate directly.
             $tenant->activatePlan($plan);
 
             return response()->json([
@@ -211,8 +211,8 @@ class TenantBillingController extends BaseLmsController
         $reference = 'JORSAS-UPG-' . Str::upper(Str::random(16));
         // Return to the SAME origin the owner is on (sent by the billing page) so
         // their owner token (localStorage, per-origin) and tenant cookie survive
-        // the Paystack round-trip. Returning to a different host — the primary
-        // domain, or 127.0.0.1 when they're on localhost — drops both and bounces
+        // the Paystack round-trip. Returning to a different host, the primary
+        // domain, or 127.0.0.1 when they're on localhost, drops both and bounces
         // them to a bare "jorsas" login. Carry ?tenant={slug} so the verify page
         // re-pins THIS academy even if the cookie was lost. Falls back to the
         // configured URL (config(), not env(), so it survives config:cache) when
@@ -266,7 +266,7 @@ class TenantBillingController extends BaseLmsController
 
     /**
      * Confirm a returning Paystack transaction and activate the plan. Safe to call
-     * repeatedly — activation is idempotent and the plan is read from the verified
+     * repeatedly, activation is idempotent and the plan is read from the verified
      * transaction metadata, guarded to this owner's tenant.
      */
     public function verify(Request $request): JsonResponse
@@ -321,7 +321,7 @@ class TenantBillingController extends BaseLmsController
 
         $tenant->activatePlan($plan);
 
-        // Confirmed upgrade — record it in the platform revenue ledger (idempotent
+        // Confirmed upgrade, record it in the platform revenue ledger (idempotent
         // on the reference, so a racing webhook won't double-count). Best-effort.
         try {
             \App\Models\PlatformTransaction::markSuccess($tenant, $validated['reference'], 'plan_upgrade', $plan, $data);
@@ -338,15 +338,15 @@ class TenantBillingController extends BaseLmsController
     }
 
     /**
-     * The upgradeable plan catalogue from config, shaped for the billing UI —
+     * The upgradeable plan catalogue from config, shaped for the billing UI, 
      * price, per-plan commission, the three limits (null = unlimited) and the
-     * feature flags — so the page can render a full comparison from one call.
+     * feature flags, so the page can render a full comparison from one call.
      */
     protected function planCatalogue(): array
     {
         $default = config('saas.platform_commission_percent', 2);
 
-        // Every feature flag the plan model exposes, in display order — kept in
+        // Every feature flag the plan model exposes, in display order, kept in
         // sync with config/saas.php `features` and the billing UI's labels. `free`
         // lists them all (false), so data_get always resolves.
         $featureKeys = [
@@ -361,7 +361,7 @@ class TenantBillingController extends BaseLmsController
                 'slug' => $slug,
                 'name' => $plan['name'] ?? ucfirst($slug),
                 'label' => $plan['label'] ?? null,
-                // Enterprise has no self-serve price — it's a contact-sales tier,
+                // Enterprise has no self-serve price, it's a contact-sales tier,
                 // so price stays null (the UI renders "Contact sales", not ₦0).
                 'price' => array_key_exists('price', $plan) && $plan['price'] !== null ? (float) $plan['price'] : null,
                 'contact_sales' => (bool) ($plan['contact_sales'] ?? false),

@@ -53,7 +53,7 @@ class PaystackService
 
         $payload = [
             'email' => $email,
-            // `*100` is correct for both NGN (kobo) and USD (cents) — Paystack's
+            // `*100` is correct for both NGN (kobo) and USD (cents), Paystack's
             // smallest-unit convention is the same for the currencies we charge.
             'amount' => (int) round($amount * 100),
             'reference' => $reference,
@@ -69,7 +69,7 @@ class PaystackService
         }
 
         // Route the money to the institute's own Paystack subaccount (its bank),
-        // so course fees settle to the institute — not the platform. The split
+        // so course fees settle to the institute, not the platform. The split
         // (platform commission + who bears the Paystack fee) is defined on the
         // subaccount at creation. The fee bearer is a platform config knob
         // (`saas.paystack_fee_bearer`, default `subaccount` → the institute bears
@@ -110,7 +110,7 @@ class PaystackService
     }
 
     /**
-     * Update an existing subaccount's split — used to keep the platform commission
+     * Update an existing subaccount's split, used to keep the platform commission
      * in step when an institute changes plan (see Tenant::syncPayoutCommission()).
      * Only `percentage_charge` is sent; Paystack leaves the bank/name untouched.
      * `subaccountCode` is the stored ACCT_… code. Returns the raw Paystack response.
@@ -133,13 +133,13 @@ class PaystackService
     /**
      * Deactivate a subaccount when an institute disconnects its payout bank.
      * Paystack has no delete endpoint for subaccounts, so teardown is a
-     * `PUT /subaccount/:code` with `active:false` — the code stops accepting
+     * `PUT /subaccount/:code` with `active:false`, the code stops accepting
      * splits and drops out of the active list on the Paystack dashboard.
      *
      * Best-effort and NON-throwing: disconnect is a local settings change the
      * owner must always be able to make, so an unconfigured/unreachable gateway
      * (or a code Paystack no longer knows) never blocks it. Returns true only when
-     * Paystack confirms the deactivation, false otherwise — the caller clears its
+     * Paystack confirms the deactivation, false otherwise, the caller clears its
      * local record either way.
      */
     public function deactivateSubaccount(string $subaccountCode): bool
@@ -167,7 +167,7 @@ class PaystackService
     /**
      * List banks + their Paystack codes, for the institute's payout bank picker.
      * Defaults to Nigeria: Paystack subaccounts settle only to Nigerian banks, so
-     * Nigeria-only is correct for a Paystack payout — the parameter is future-proofing
+     * Nigeria-only is correct for a Paystack payout, the parameter is future-proofing
      * for a later multi-country payout provider. Returns [] when the gateway isn't
      * configured.
      */
@@ -188,7 +188,7 @@ class PaystackService
      * Resolve a bank account number to its account-holder name via Paystack
      * (`GET /bank/resolve`), so an owner can confirm the account before linking
      * their payout subaccount. Returns the raw `data` array (contains
-     * `account_name`, `account_number`) on success, or null on any failure —
+     * `account_name`, `account_number`) on success, or null on any failure, 
      * unconfigured gateway, an unresolvable account (Paystack 422/400), or a
      * transport error. Never throws: the owner page must not 500 over a typo.
      */
@@ -215,7 +215,7 @@ class PaystackService
             return null;
         } catch (\Throwable $e) {
             // client() uses ->throw(); an invalid account returns 422 and raises
-            // RequestException. Swallow it — the resolve is confirmatory, never blocking.
+            // RequestException. Swallow it, the resolve is confirmatory, never blocking.
             return null;
         }
     }

@@ -139,9 +139,9 @@ class SendNotificationEmails extends Command
      * The from-address stays on the platform's verified domain (deliverability),
      * but replies should reach the INSTITUTE, not the platform. Prefer the
      * institute's published public contact email (settings.profile.contact.email
-     * — what the owner deliberately exposes on their storefront); fall back to the
+     *, what the owner deliberately exposes on their storefront); fall back to the
      * owner's own login email (tenant_admins.role = owner). Built once per run
-     * (two queries) like the tenant name/slug maps — never per-row. Any address
+     * (two queries) like the tenant name/slug maps, never per-row. Any address
      * that is missing or invalid is simply absent; {@see LmsNotificationMail}
      * re-validates before it sets Reply-To, so a bad value just yields no Reply-To.
      *
@@ -149,7 +149,7 @@ class SendNotificationEmails extends Command
      */
     private function replyToMap(): array
     {
-        // Owner login email — the always-present fallback.
+        // Owner login email, the always-present fallback.
         $owners = DB::table('tenant_admins')
             ->join('users', 'users.id', '=', 'tenant_admins.user_id')
             ->where('tenant_admins.role', 'owner')
@@ -173,7 +173,7 @@ class SendNotificationEmails extends Command
      * [tenant_id => primary brand colour] for each institute's outgoing mail, so
      * a notification/announcement email's header + CTA match the academy's
      * storefront rather than the platform red. Built once per run (one query),
-     * like the name/slug/reply-to maps — never per-row. {@see Tenant::brandMailColor()}
+     * like the name/slug/reply-to maps, never per-row. {@see Tenant::brandMailColor()}
      * falls back to the platform red per-tenant, so every id resolves to a hex.
      *
      * @return array<int,string>

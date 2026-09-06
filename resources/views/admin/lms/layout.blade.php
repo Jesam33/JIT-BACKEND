@@ -434,6 +434,14 @@
                         <span>&rsaquo;</span>
                     </a>
 
+                    <a href="{{ route('admin.lms.forums.index') }}" class="nav-item {{ ($activeLmsPage ?? '') === 'forums' ? 'active' : '' }}">
+                        <div class="nav-left">
+                            <div class="nav-icon">🎥</div>
+                            <span>CEO's Forum</span>
+                        </div>
+                        <span>&rsaquo;</span>
+                    </a>
+
                     <a href="{{ route('admin.lms.transactions.index') }}" class="nav-item {{ ($activeLmsPage ?? '') === 'transactions' ? 'active' : '' }}">
                         <div class="nav-left">
                             <div class="nav-icon">₦</div>

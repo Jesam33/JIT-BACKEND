@@ -92,7 +92,7 @@ class OwnerOnboardingController extends BaseLmsController
         $failed = [];
 
         // Resolve the academy's mail identity ONCE (its name/colour/reply-to) and
-        // reuse it for every invite — so each email is branded as this academy,
+        // reuse it for every invite, so each email is branded as this academy,
         // not "Jorsas", without re-querying the reply-to per recipient.
         $brand = $this->mailBranding($tenant);
 
@@ -117,7 +117,7 @@ class OwnerOnboardingController extends BaseLmsController
                     'email' => $email,
                     'first_name' => Str::before($email, '@'),
                     'last_name' => '',
-                    // Unusable placeholder — the invitee sets their real password
+                    // Unusable placeholder, the invitee sets their real password
                     // via the emailed reset link. Random (and never disclosed) so
                     // the account cannot be signed into until then, and it satisfies
                     // the NOT NULL password column.
@@ -129,7 +129,7 @@ class OwnerOnboardingController extends BaseLmsController
             }
 
             // Reuse the student password-reset flow as a "set your password"
-            // invite — the emailed link lands on the tenant's reset page, which
+            // invite, the emailed link lands on the tenant's reset page, which
             // resolves the organisation from the subdomain/tenant header.
             try {
                 $token = $this->createPasswordResetToken('student', $email);
@@ -243,7 +243,7 @@ class OwnerOnboardingController extends BaseLmsController
         try {
             $token = $this->createPasswordResetToken('staff', $email);
             // Land the invitee on the staff activation (set-password) page, not
-            // the login form — they have no credentials yet; the owner issues
+            // the login form, they have no credentials yet; the owner issues
             // access and they set their own password here.
             $link = $this->buildSetupLink('staff', $email, $token);
             $brand = $this->mailBranding($tenant);
@@ -263,7 +263,7 @@ class OwnerOnboardingController extends BaseLmsController
         ]);
 
         // The account exists either way, so the caller still gets 200 and refreshes
-        // its list — but we report honestly whether the invite email actually went
+        // its list, but we report honestly whether the invite email actually went
         // out. A failed send used to be swallowed into the log and shown as success.
         return response()->json([
             'invited' => $email,

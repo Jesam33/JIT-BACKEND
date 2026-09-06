@@ -91,7 +91,7 @@ class PaystackWebhookController extends Controller
                         // Record the confirmed payment in the platform revenue
                         // ledger. Idempotent on the reference, so this never
                         // double-counts against the synchronous verify paths that
-                        // may have already marked it — whichever confirms first wins.
+                        // may have already marked it, whichever confirms first wins.
                         if (in_array($purpose, ['plan_upgrade', 'tenant_signup'], true) && $reference) {
                             try {
                                 \App\Models\PlatformTransaction::markSuccess(

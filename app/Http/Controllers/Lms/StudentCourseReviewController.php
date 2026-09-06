@@ -10,9 +10,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * A student rates the course they're enrolled in (1–5 stars, optional comment).
+ * A student rates the course they're enrolled in (1 to 5 stars, optional comment).
  *
- * Gate: the student may only rate the course they are actually tied to — the
+ * Gate: the student may only rate the course they are actually tied to, the
  * one resolved by the canonical enrollment pattern (selected_course_id, else
  * their enrollment's track → course). One rating per student per course; a
  * re-rate updates the same row (updateOrCreate + the unique index), so the

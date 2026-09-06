@@ -87,7 +87,7 @@ class StaffModuleController extends BaseLmsController
 
         $module = LmsModule::create($validated);
 
-        // A published module is immediately visible to students — let them know
+        // A published module is immediately visible to students, let them know
         // (in-app now; emailed by the lms:send-notification-emails sweep). Drafts
         // stay silent until they are published (see update()).
         if ($module->status === 'published') {
@@ -202,7 +202,7 @@ class StaffModuleController extends BaseLmsController
             'content_url' => 'nullable|string',
             'content_body' => 'nullable|string',
             'sort_order' => 'nullable|integer',
-            // Externally-hosted video (Bunny Stream) pointers — set by the client
+            // Externally-hosted video (Bunny Stream) pointers, set by the client
             // after a direct upload finishes. content_url carries the embed URL.
             'provider' => 'nullable|string|max:40',
             'external_id' => 'nullable|string|max:255',
@@ -212,7 +212,7 @@ class StaffModuleController extends BaseLmsController
         ]);
 
         // Pre-recorded video lessons are a paid feature (Basic+). Only the video
-        // content type is gated — slides/pdf/link/text/code are on every plan.
+        // content type is gated, slides/pdf/link/text/code are on every plan.
         if (($validated['type'] ?? null) === 'video') {
             PlanGate::ensureFeature($this->currentTenantOrPrimary(), 'pre_recorded_video');
         }
@@ -246,7 +246,7 @@ class StaffModuleController extends BaseLmsController
 
         // Turning an existing non-video item INTO a video is a new video lesson,
         // so it's gated like a create. Editing a video that already exists (e.g.
-        // a plan downgrade left it) is left alone — never break existing rows.
+        // a plan downgrade left it) is left alone, never break existing rows.
         if (($validated['type'] ?? null) === 'video' && $content->type !== 'video') {
             PlanGate::ensureFeature($this->currentTenantOrPrimary(), 'pre_recorded_video');
         }

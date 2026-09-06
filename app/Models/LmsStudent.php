@@ -49,7 +49,7 @@ class LmsStudent extends Model
         // Every student needs a stable @handle for chat mentions. SaaS students
         // are provisioned via updateOrCreate() without one, which broke the
         // @mention dropdown, insertion and notification chain (all keyed on the
-        // username). Fill it on create — this runs AFTER TenantAware has stamped
+        // username). Fill it on create, this runs AFTER TenantAware has stamped
         // tenant_id, so the handle is only made unique WITHIN the institute.
         static::creating(function (self $student): void {
             if (empty($student->username)) {
@@ -62,7 +62,7 @@ class LmsStudent extends Model
      * Build a dotless, per-tenant-unique @handle from the student's name (falling
      * back to the email local-part). Dotless so it is a single \w+ token: the
      * mention parser, the inline renderer and the notification lookup all key on
-     * \w+, so "@ada.bloom" would only ever match "ada" — "adabloom" is safe.
+     * \w+, so "@ada.bloom" would only ever match "ada", "adabloom" is safe.
      */
     protected static function generateUsername(self $student): string
     {

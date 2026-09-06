@@ -6,13 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * A single institute→platform payment (paid signup or plan upgrade) — the host's
+ * A single institute→platform payment (paid signup or plan upgrade), the host's
  * own revenue ledger. NOT tenant-scoped (no TenantAware): it's the super-admin's
  * cross-tenant view of what the platform has been paid. See the migration for how
  * this differs from the tenant-scoped course-fee `payments` table.
  *
- * All writes go through {@see recordPending()} / {@see markSuccess()} — both keyed
- * on the unique `reference` — so the signup-verify, billing-verify and webhook
+ * All writes go through {@see recordPending()} / {@see markSuccess()}, both keyed
+ * on the unique `reference`, so the signup-verify, billing-verify and webhook
  * paths can each call them, in any order, any number of times, without ever
  * double-counting revenue.
  */
@@ -57,7 +57,7 @@ class PlatformTransaction extends Model
 
         $existing = static::where('reference', $reference)->first();
         if ($existing && $existing->status !== 'pending') {
-            return; // already resolved — don't downgrade a confirmed row
+            return; // already resolved, don't downgrade a confirmed row
         }
 
         static::updateOrCreate(

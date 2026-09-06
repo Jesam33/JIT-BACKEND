@@ -100,7 +100,7 @@ class OwnerAuthController extends BaseLmsController
 
         // Now that the owner has a password + session, tell them their institute
         // is ready. Deliberately sent HERE (not during paid-signup provisioning)
-        // so it arrives AFTER the "set up your account" invite — and its
+        // so it arrives AFTER the "set up your account" invite, and its
         // "Go to dashboard" link now actually works. Best-effort and fully
         // decoupled from the transaction above: a mail failure must never fail
         // setup or roll it back.

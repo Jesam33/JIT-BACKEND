@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Adapter for the Gamma Generate API (developers.gamma.app) — the Pro+ AI
+ * Adapter for the Gamma Generate API (developers.gamma.app), the Pro+ AI
  * training-material generator. This is the SOLE place the Gamma wire contract
  * lives, so any future API drift (field names, the version segment) is a
  * one-file change.
@@ -20,13 +20,13 @@ use Illuminate\Support\Facades\Log;
  *               gammaUrl (editable doc), exportUrl? (pdf/pptx; ~1-week expiry),
  *               credits{deducted,remaining}, error{message,statusCode}}.
  *
- * Credentials come from config('services.gamma.*') — NEVER env() at the call
- * site — so they still resolve after `php artisan config:cache` on live (the
+ * Credentials come from config('services.gamma.*'), NEVER env() at the call
+ * site, so they still resolve after `php artisan config:cache` on live (the
  * same trap that once 404'd LMS login when a flag was read via env() under a
  * cached config).
  *
  * Failure policy (see GammaException): an unset key → 503 ("not configured");
- * every other upstream failure is logged and re-thrown as a generic 502 — never
+ * every other upstream failure is logged and re-thrown as a generic 502, never
  * 402, so a Gamma credit exhaustion can't trip the owner's plan UpgradeModal.
  */
 class GammaService
@@ -88,8 +88,8 @@ class GammaService
     /**
      * Run one Gamma call, mapping every failure mode to a GammaException with a
      * clean, non-leaking message. A GammaException raised while building the
-     * client (unset key → 503) passes straight through; anything else — a
-     * transport error or a non-2xx upstream response — is logged with its detail
+     * client (unset key → 503) passes straight through; anything else, a
+     * transport error or a non-2xx upstream response, is logged with its detail
      * and surfaced as a generic 502.
      */
     private function send(callable $call, string $failureMessage): array

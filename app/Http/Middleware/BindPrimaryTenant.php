@@ -11,7 +11,7 @@ class BindPrimaryTenant
 {
     /**
      * Bind the primary (JIT) organisation for back-office routes that live
-     * outside the tenant-resolving lms-api group — chiefly the Botble admin
+     * outside the tenant-resolving lms-api group, chiefly the Botble admin
      * Blade panel. Its TenantAware reads/writes would otherwise fail closed
      * under enforcement (no tenant header, no LmsSession bearer token). JIT is
      * the sole organisation today, so binding primary is correct; platform-

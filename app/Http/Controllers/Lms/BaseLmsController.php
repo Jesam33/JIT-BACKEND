@@ -22,7 +22,7 @@ abstract class BaseLmsController extends Controller
 {
     protected function ensureLmsEnabled(): void
     {
-        // Read via config (bound in config/saas.php) — NOT env() directly — so the
+        // Read via config (bound in config/saas.php), NOT env() directly, so the
         // flag still resolves after `php artisan config:cache` on live. Reading
         // env() here returned null under cached config and 404'd every LMS login.
         if (! config('saas.lms_feature_enabled')) {
@@ -73,8 +73,8 @@ abstract class BaseLmsController extends Controller
 
     /**
      * Bind currentTenant from a model's tenant_id. Used by unauthenticated
-     * bootstrap flows (invite/signup/setup) where a token or invite — not a
-     * header — is the authoritative proof of which organisation the request
+     * bootstrap flows (invite/signup/setup) where a token or invite, not a
+     * header, is the authoritative proof of which organisation the request
      * belongs to. No-op when the model has no tenant_id (legacy rows).
      */
     protected function bindTenantFromModel($model): void
@@ -93,7 +93,7 @@ abstract class BaseLmsController extends Controller
      * Return the currently-bound tenant, or fall back to the primary (JIT)
      * tenant and bind it. Used by public self-service flows (e.g. agent
      * application) that must attribute a new row to an organisation even when
-     * no tenant header is present — on the bare primary domain that
+     * no tenant header is present, on the bare primary domain that
      * organisation is JIT. Prevents the TenantAware creating-guard from
      * throwing on the public path once enforcement is on.
      */
@@ -115,7 +115,7 @@ abstract class BaseLmsController extends Controller
     /**
      * The per-institute identity for an outgoing transactional email
      * (invite / password-reset): sender display name, brand accent colour and
-     * reply-to — resolved from the given tenant, else the currently-bound one.
+     * reply-to, resolved from the given tenant, else the currently-bound one.
      * Keeps every LmsPasswordResetMail call site branded from a single source,
      * so an academy's emails never fall back to the platform's "Jorsas" red.
      * Callers bind the recipient's tenant (bindTenantFromModel / owner context)
@@ -211,7 +211,7 @@ abstract class BaseLmsController extends Controller
      * This is the registration/payment → staff-visibility bridge: a student is
      * only visible to a staffer through an LmsEnrollment on a track that staffer
      * teaches, so a paid student who is never enrolled stays invisible. Idempotent
-     * (upsert keyed by student_id — one active track per student, matching the
+     * (upsert keyed by student_id, one active track per student, matching the
      * signup/setup path). No-op when the course has no track yet; the owner
      * assigning an instructor later backfills it via syncTrackEnrollments().
      */
@@ -259,7 +259,7 @@ abstract class BaseLmsController extends Controller
             ->get()
             ->keyBy('student_id');
 
-        // Course of each track a student is already enrolled in — to detect a
+        // Course of each track a student is already enrolled in, to detect a
         // student who is already in a cohort of THIS course.
         $trackCourse = LmsTrack::query()
             ->whereIn('id', $existing->pluck('track_id')->filter()->unique()->values())
@@ -271,7 +271,7 @@ abstract class BaseLmsController extends Controller
             $enrollment = $existing->get($studentId);
 
             if ($enrollment && ($trackCourse[$enrollment->track_id] ?? null) === $track->course_id) {
-                // Already placed in a cohort of this same course — leave it.
+                // Already placed in a cohort of this same course, leave it.
                 continue;
             }
 
@@ -294,7 +294,7 @@ abstract class BaseLmsController extends Controller
             ? app('currentTenant')->id
             : null;
 
-        // Only clear a prior token for THIS institute — a same-email account at
+        // Only clear a prior token for THIS institute, a same-email account at
         // another institute keeps its own pending invite/reset. When the tenant
         // is unknown (legacy/primary path) fall back to clearing by role+email.
         LmsPasswordReset::query()
@@ -369,7 +369,7 @@ abstract class BaseLmsController extends Controller
     /**
      * Identity of the currently-bound institute for a login/auth JSON response:
      * the client pins the `tenant` cookie from `slug` so every later portal
-     * request (branding, me, dashboard) — and any inactivity → login redirect —
+     * request (branding, me, dashboard), and any inactivity → login redirect, 
      * resolves THIS institute instead of falling back to the primary slug
      * (`jorsas`). `plan` lets the portal shells gate paid-only features (chat)
      * without a second round-trip. Null when no tenant is bound (legacy path).
@@ -390,10 +390,10 @@ abstract class BaseLmsController extends Controller
     }
 
     /**
-     * Plan slug for the current request — used by portal `me` endpoints so the
+     * Plan slug for the current request, used by portal `me` endpoints so the
      * shells can gate paid-only features (chat). Prefers the bound tenant
      * (ResolveTenantFromSession binds it from the bearer token); falls back to
-     * the session's own tenant_id, then to 'free'. Never throws — a missing
+     * the session's own tenant_id, then to 'free'. Never throws, a missing
      * plan simply reads as 'free' (the fail-closed default).
      */
     protected function planForSession(?LmsSession $session = null): string
@@ -419,7 +419,7 @@ abstract class BaseLmsController extends Controller
 
     /**
      * Tenant descriptor for a portal `me` response so the frontend can re-pin
-     * its `tenant` cookie from the AUTHENTICATED session on every load — the
+     * its `tenant` cookie from the AUTHENTICATED session on every load, the
      * same self-heal the owner portal does. Without this the cookie is only set
      * at fresh-login and goes stale (7-day TTL / incognito / bearer-token
      * session recovery), so the inactivity → login redirect falls back to the
@@ -478,7 +478,7 @@ abstract class BaseLmsController extends Controller
     /**
      * Link for an INVITE (owner-issued account activation), as opposed to a
      * self-service reset. Lands the invitee on a "set your password" page framed
-     * as account activation — staff get a dedicated setup page rather than the
+     * as account activation, staff get a dedicated setup page rather than the
      * login form. Shares the reset token/endpoint underneath.
      */
     protected function buildSetupLink(string $role, string $email, string $token): string
@@ -495,7 +495,7 @@ abstract class BaseLmsController extends Controller
     }
 
     /**
-     * Link for a COURSE invite — an owner inviting a student straight into a
+     * Link for a COURSE invite, an owner inviting a student straight into a
      * course (Issue C). Unlike the reset/setup links above, which only set a
      * password on an already-provisioned account, this lands on the public
      * signup page: it carries the course and, for a paid invite, launches
@@ -565,7 +565,7 @@ abstract class BaseLmsController extends Controller
     }
 
     // ---------------------------------------------------------------------
-    // Live classes: 8x8 JaaS (managed Jitsi) token minting — shared by the
+    // Live classes: 8x8 JaaS (managed Jitsi) token minting, shared by the
     // student (participant) and staff (moderator) classroom controllers.
     // ---------------------------------------------------------------------
 
@@ -615,7 +615,12 @@ abstract class BaseLmsController extends Controller
         }
 
         $hash = substr(sha1(config('app.key') . '|' . $type . '|' . $model->id), 0, 12);
-        $room = 'jit-' . ($model->tenant_id ?? 0) . '-' . ($type === 'scheduled' ? 's' : 'c') . $model->id . '-' . $hash;
+        $prefix = match ($type) {
+            'scheduled' => 's',
+            'forum' => 'f',
+            default => 'c',
+        };
+        $room = 'jit-' . ($model->tenant_id ?? 0) . '-' . $prefix . $model->id . '-' . $hash;
 
         $model->meeting_id = $room;
         $model->save();
@@ -731,7 +736,7 @@ abstract class BaseLmsController extends Controller
 
     /**
      * Validate a reply target: return the parent id only when it exists, lives
-     * in the SAME chat, and isn't deleted — otherwise null. Stops a client from
+     * in the SAME chat, and isn't deleted, otherwise null. Stops a client from
      * threading a reply onto a message in another track/DM.
      */
     protected function resolveReplyToId($replyToId, string $chatType, int $chatId): ?int
@@ -821,7 +826,7 @@ abstract class BaseLmsController extends Controller
      * present), then broadcast the fresh aggregate to everyone on the chat's
      * channel and return the viewer-specific aggregate for the HTTP response.
      *
-     * The broadcast intentionally carries counts only — a reactor's own `mine`
+     * The broadcast intentionally carries counts only, a reactor's own `mine`
      * state is never changed by someone else's toggle, so each receiving client
      * keeps its own `mine` flags and only updates counts. The HTTP caller gets
      * the fully-resolved list (with `mine`) for its optimistic reconcile.

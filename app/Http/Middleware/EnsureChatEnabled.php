@@ -14,10 +14,10 @@ use Symfony\Component\HttpFoundation\Response;
  * unbound tenant reads as no-chat and is blocked.
  *
  * Reads the plan's `chat` feature flag (not a hardcoded slug) so the primary
- * institute — and any future plan tier that includes chat — resolves correctly
+ * institute, and any future plan tier that includes chat, resolves correctly
  * through the single source of truth in config/saas.php.
  *
- * Applied only to the messaging endpoints — NOT the unread-count endpoints,
+ * Applied only to the messaging endpoints, NOT the unread-count endpoints,
  * which also carry notification counts the free portals still need.
  */
 class EnsureChatEnabled

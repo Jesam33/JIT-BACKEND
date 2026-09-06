@@ -34,7 +34,7 @@ class BroadcastingAuthController extends Controller
 
         // The token is the authoritative identity, so look it up unscoped, then
         // bind the session's tenant. This constrains every channel-entity check
-        // below to that organisation — a user can only authorize channels within
+        // below to that organisation, a user can only authorize channels within
         // their own tenant, and a cross-tenant channel id resolves to null → 403.
         $session = LmsSession::query()
             ->withoutGlobalScope(TenantScope::class)

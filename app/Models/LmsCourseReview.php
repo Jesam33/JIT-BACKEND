@@ -8,8 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Traits\TenantAware;
 
 /**
- * A student's rating of a course (1–5 stars, optional comment). One row per
- * (course, student) — the unique index + updateOrCreate keep re-ratings from
+ * A student's rating of a course (1 to 5 stars, optional comment). One row per
+ * (course, student), the unique index + updateOrCreate keep re-ratings from
  * inflating the count. Feeds the storefront card's ★ average + (count).
  */
 class LmsCourseReview extends Model

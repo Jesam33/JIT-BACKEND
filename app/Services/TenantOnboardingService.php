@@ -2,11 +2,9 @@
 
 namespace App\Services;
 
-use App\Models\Batch;
 use App\Models\LmsCourse;
 use App\Models\LmsModule;
 use App\Models\LmsModuleContent;
-use App\Models\LmsTrack;
 use App\Models\LmsTeacher;
 use App\Models\Tenant;
 use App\Models\User;
@@ -61,8 +59,8 @@ class TenantOnboardingService
         }
 
         // All seed rows below are created idempotently (firstOrCreate on a natural
-        // key). Provisioning can be safely retried — e.g. after a transient failure
-        // that reverted the tenant to `pending` — without piling up duplicates.
+        // key). Provisioning can be safely retried, e.g. after a transient failure
+        // that reverted the tenant to `pending`, without piling up duplicates.
         $module = LmsModule::firstOrCreate(
             ['course_id' => $course->id, 'title' => 'Introduction'],
             [
@@ -83,14 +81,14 @@ class TenantOnboardingService
             ]
         );
 
-        $teacherId = null;
         if ($owner) {
-            // lms_teachers carries tenant_id and is now unique per (tenant, email),
-            // so the owner can be a lecturer here even when the same email already
-            // teaches at another institute they own. firstOrCreate (auto-scoped to
-            // the bound tenant) also lets a re-run reuse the existing row instead of
-            // colliding on a second insert.
-            $teacher = LmsTeacher::firstOrCreate(
+            // Seed the owner as a lecturer so they're immediately assignable as a
+            // cohort instructor. lms_teachers carries tenant_id and is now unique per
+            // (tenant, email), so the owner can be a lecturer here even when the same
+            // email already teaches at another institute they own. firstOrCreate
+            // (auto-scoped to the bound tenant) lets a re-run reuse the existing row
+            // instead of colliding on a second insert.
+            LmsTeacher::firstOrCreate(
                 ['email' => $owner->email],
                 [
                     'name' => $owner->name,
@@ -99,36 +97,18 @@ class TenantOnboardingService
                     'password' => Hash::make(\Illuminate\Support\Str::random(12)),
                 ]
             );
-            $teacherId = $teacher->id;
         }
 
-        // Default track keyed on (course, name). A batch is minted only when the
-        // track doesn't yet exist, so retries never leave orphan duplicate batches
-        // (Batch is not tenant-scoped, so it can't be keyed on the tenant here).
-        $track = LmsTrack::where('course_id', $course->id)->where('name', 'Default Track')->first();
-        if (! $track) {
-            $batch = Batch::create([
-                'name' => 'Default Batch',
-                'registration_starts_at' => now()->subDays(7),
-                'registration_ends_at' => now()->addYear(),
-            ]);
-            $track = LmsTrack::create([
-                'name' => 'Default Track',
-                'instructor_id' => $teacherId,
-                'batch_id' => $batch->id,
-                'course_id' => $course->id,
-            ]);
-        } elseif ($teacherId && ! $track->instructor_id) {
-            // A partial earlier run created the track without an instructor; wire it.
-            $track->update(['instructor_id' => $teacherId]);
-        }
+        // No demo cohort is seeded. A "Default Track" placeholder used to be minted
+        // here so a new academy wasn't empty, but it read like a system artifact and
+        // pointed at no real intake. The guided course to cohort flow now walks the
+        // owner through creating a genuine cohort (with its own instructor and dates),
+        // so a fresh institute starts with zero cohorts and is nudged to make its own.
 
         $results = [
-            'batch_id' => $track->batch_id,
             'course_id' => $course->id,
             'module_id' => $module->id,
             'content_id' => $content->id,
-            'track_id' => $track->id,
         ];
 
         // Record an audit row
@@ -147,11 +127,11 @@ class TenantOnboardingService
             Log::warning('Failed to write onboarding audit', ['err' => $e->getMessage()]);
         }
 
-        // Notify the owner their institute is ready — but ONLY when the caller
+        // Notify the owner their institute is ready, but ONLY when the caller
         // asks for it. The pay-first signup flow passes $notify=false: at
         // provisioning time the owner has no password/session yet, so a
         // "Go to dashboard" link would be dead. That flow sends OnboardingCompleted
-        // later — from OwnerAuthController::setup(), once the password is set.
+        // later, from OwnerAuthController::setup(), once the password is set.
         try {
             if ($owner && $notify) {
                 $owner->notify(new OnboardingCompleted($tenant));
@@ -167,8 +147,8 @@ class TenantOnboardingService
      * Activate a tenant whose signup payment has just cleared, then provision it.
      *
      * Pay-first invariant: a tenant is created `pending` at signup and nothing is
-     * provisioned until money confirms. Both confirmation paths — the synchronous
-     * browser verify and the asynchronous Paystack webhook — call this, possibly
+     * provisioned until money confirms. Both confirmation paths, the synchronous
+     * browser verify and the asynchronous Paystack webhook, call this, possibly
      * concurrently. The `pending -> active` transition is a single atomic UPDATE,
      * so exactly one caller sees affected=1 and runs the (non-idempotent) invite +
      * onboarding; the loser is a no-op. Safe to call repeatedly.
@@ -185,7 +165,7 @@ class TenantOnboardingService
         // Plan chosen at signup lives in settings until activation makes it real.
         $plan = data_get($tenant->settings, 'plan', 'free');
         if ($plan && isset(config('saas.plans', [])[$plan])) {
-            $tenant->activatePlan($plan); // idempotent — safe on redelivery
+            $tenant->activatePlan($plan); // idempotent, safe on redelivery
         }
 
         if (! $isFirst) {
@@ -212,7 +192,7 @@ class TenantOnboardingService
         // activated" and the institute would never get provisioned. Revert to
         // `pending` and rethrow so the next verify()/webhook call genuinely retries.
         try {
-            // Suppress the "institute is ready" email here — the owner still has
+            // Suppress the "institute is ready" email here, the owner still has
             // no password/session, so its dashboard link would be dead. It is sent
             // from OwnerAuthController::setup() after the owner sets a password,
             // which also guarantees it arrives AFTER the setup invitation below.

@@ -68,6 +68,12 @@ Route::middleware(['auth', 'tenant.primary'])->prefix(env('ADMIN_DIR', 'admin'))
 	Route::get('/lms/announcements', [AdminController::class, 'platformAnnouncementsPage'])->name('admin.lms.announcements.index');
 	Route::post('/lms/announcements', [AdminController::class, 'createPlatformAnnouncement'])->name('admin.lms.announcements.store');
 
+	// CEO's Forum (host schedules live meetings for every institute owner)
+	Route::get('/lms/forums', [AdminController::class, 'ceoForumsPage'])->name('admin.lms.forums.index');
+	Route::post('/lms/forums', [AdminController::class, 'createCeoForum'])->name('admin.lms.forums.store');
+	Route::post('/lms/forums/{id}/update', [AdminController::class, 'updateCeoForum'])->name('admin.lms.forums.update');
+	Route::post('/lms/forums/{id}/cancel', [AdminController::class, 'cancelCeoForum'])->name('admin.lms.forums.cancel');
+
 	// Platform revenue ledger (institute→platform subscription payments + live per-institute course earnings/commission)
 	Route::get('/lms/transactions', [AdminController::class, 'transactionsPage'])->name('admin.lms.transactions.index');
 

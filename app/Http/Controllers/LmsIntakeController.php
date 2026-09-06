@@ -30,7 +30,7 @@ class LmsIntakeController extends BaseLmsController
 {
     private function ensureIntakeEnabled(): void
     {
-        // Read via config (bound in config/saas.php) — NOT env() directly — so the
+        // Read via config (bound in config/saas.php), NOT env() directly, so the
         // flag still resolves after `php artisan config:cache` on live. Reading
         // env() here returned false under cached config and 404'd course
         // registration + the whole intake/payment flow. Mirrors ensureLmsEnabled().
@@ -61,8 +61,8 @@ class LmsIntakeController extends BaseLmsController
     /**
      * Bind currentTenant from a resolved record's tenant_id. Payment
      * verification and the Paystack webhook arrive with no tenant header (and
-     * the webhook has no session at all), so the payment row — found by its
-     * globally-unique reference — is the authoritative proof of the tenant.
+     * the webhook has no session at all), so the payment row, found by its
+     * globally-unique reference, is the authoritative proof of the tenant.
      */
     protected function bindTenantFromModel($model): void
     {
@@ -178,7 +178,7 @@ class LmsIntakeController extends BaseLmsController
 
         // Plan student cap. Money-safe by design: this never throws (a self-enrolling
         // visitor can't upgrade the institute's plan) and never blocks an existing
-        // student re-enrolling in another course — only a brand-new student email at
+        // student re-enrolling in another course, only a brand-new student email at
         // an institute that has hit its seat cap is turned away, with a neutral
         // message. The primary institute is unlimited, so this is a no-op there.
         $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
@@ -209,7 +209,7 @@ class LmsIntakeController extends BaseLmsController
 
         // Freeze the CHARGE currency + amount. The referral discount is applied to
         // the base NGN above; the charge currency is resolved from the visitor's
-        // country: NGN for Nigeria (and — while USD charging is disabled — for
+        // country: NGN for Nigeria (and, while USD charging is disabled, for
         // everyone). Only when USD charging is enabled AND the buyer is outside
         // Nigeria is the NGN amount converted to USD and frozen in USD. If FX is
         // unavailable at that moment we fall back to charging NGN rather than guess.
@@ -268,7 +268,7 @@ class LmsIntakeController extends BaseLmsController
         // The registration row (stamped when it was created) is the source of
         // truth for the tenant here. This call can arrive carrying the primary
         // tenant's header from a /i/{slug} storefront, so bind from the row
-        // instead — the Payment created below (and, on the free path, the
+        // instead, the Payment created below (and, on the free path, the
         // LmsStudent / commission rows) are then stamped for the right
         // institute. Mirrors the verify/webhook binding.
         $this->bindTenantFromModel($registration);
@@ -282,7 +282,7 @@ class LmsIntakeController extends BaseLmsController
         // into the PLATFORM account. Block paid checkout until they link a bank;
         // the storefront reflects this upfront via `purchasable`, so this is the
         // defense-in-depth path (e.g. a stale page). Free courses (≤ 0) never reach
-        // here, and the primary institute is exempt — it legitimately settles to
+        // here, and the primary institute is exempt, it legitimately settles to
         // the platform account. Mirrors the primary-slug idiom used below at the
         // callback branch.
         if ((float) $registration->course_price > 0) {
@@ -527,7 +527,7 @@ class LmsIntakeController extends BaseLmsController
     private function completePayment(Payment $payment, ?array $gatewayData = null): JsonResponse
     {
         // The payment (found by its globally-unique reference) is the source of
-        // truth for the tenant here — verify/webhook may run with no header, so
+        // truth for the tenant here, verify/webhook may run with no header, so
         // bind it before touching any TenantAware relation or create below.
         $this->bindTenantFromModel($payment);
 
@@ -539,7 +539,7 @@ class LmsIntakeController extends BaseLmsController
 
         // Reconciliation: before approving, confirm the gateway actually collected
         // the amount + currency we expected (Paystack returns amount in minor units
-        // — kobo/cents). A mismatch (tampering, a partial charge, FX drift) is held
+        //, kobo/cents). A mismatch (tampering, a partial charge, FX drift) is held
         // for manual review instead of silently granting access. Only runs when the
         // caller supplied the gateway payload (verify + webhook); a missing payload
         // preserves the previous behavior.

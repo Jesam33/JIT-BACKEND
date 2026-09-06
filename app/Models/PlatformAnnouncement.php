@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
  * super-admin, then fanned out into per-recipient notification rows across every
  * tenant by the `lms:dispatch-announcements` command.
  *
- * Deliberately NOT TenantAware — this belongs to the platform, not an institute.
+ * Deliberately NOT TenantAware, this belongs to the platform, not an institute.
  */
 class PlatformAnnouncement extends Model
 {

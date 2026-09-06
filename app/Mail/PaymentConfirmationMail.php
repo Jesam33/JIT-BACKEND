@@ -19,13 +19,13 @@ class PaymentConfirmationMail extends Mailable
         public string $setupLink,
     ) {
         // Brand the email as the academy the student paid, resolved from the
-        // registration's tenant_id — never the platform "Jorsas".
+        // registration's tenant_id, never the platform "Jorsas".
         $this->resolveBrand($registration->tenant_id);
     }
 
     public function envelope(): Envelope
     {
-        return $this->brandedEnvelope('Registration Accepted — Set Up Your LMS Account');
+        return $this->brandedEnvelope('Registration Accepted, Set Up Your LMS Account');
     }
 
     public function content(): Content

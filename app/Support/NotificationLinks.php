@@ -12,7 +12,7 @@ use App\Models\Tenant;
  * The path map mirrors the frontend `notificationHref` maps (student
  * src/app/lms/app/notifications, staff src/app/lms/staff/notifications) so the
  * email link and the in-app click target agree. Every branch resolves to a
- * route that exists — unknown reference types fall back to the recipient's
+ * route that exists, unknown reference types fall back to the recipient's
  * notifications page, which always exists, so an emailed link can never 404.
  */
 class NotificationLinks

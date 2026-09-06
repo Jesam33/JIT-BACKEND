@@ -23,7 +23,7 @@ use Illuminate\Validation\Rule;
  * generates a document/deck asynchronously, the page polls for the result, and
  * the owner saves the finished Gamma link into one of their courses or modules.
  *
- * Authorization mirrors OwnerAdminController exactly — the tenant is derived
+ * Authorization mirrors OwnerAdminController exactly, the tenant is derived
  * from the owner's OWN session row (never the middleware-bound tenant, since a
  * student/staff token also binds one) and confirmed against tenant_admins; once
  * confirmed we (re)bind that tenant so every TenantAware read/write below is
@@ -43,7 +43,7 @@ class OwnerGammaController extends BaseLmsController
     /**
      * Resolve the authenticated owner + tenant from the bearer session and bind
      * the tenant. Returns [Tenant, User] or null when the caller is not an owner
-     * of a tenant. (Copy of OwnerAdminController::ownerContext — kept local so
+     * of a tenant. (Copy of OwnerAdminController::ownerContext, kept local so
      * the two owner controllers don't couple through a shared parent method.)
      */
     protected function ownerContext(Request $request): ?array
@@ -102,7 +102,7 @@ class OwnerGammaController extends BaseLmsController
             'audience' => ['nullable', 'string', 'max:120'],
             // Optional downloadable export. When the owner doesn't pick a format
             // we still request one (default PDF, below) so save() can always store
-            // a real downloadable file — the editable gammaUrl is returned too.
+            // a real downloadable file, the editable gammaUrl is returned too.
             'export_as' => ['nullable', Rule::in(['pdf', 'pptx'])],
         ]);
 
@@ -153,7 +153,7 @@ class OwnerGammaController extends BaseLmsController
     /**
      * Poll a generation. Returns a normalised, non-leaking envelope: the status
      * (pending|completed|failed), the editable gammaUrl when done, the ephemeral
-     * export URL (if the owner requested one — expires ~1 week, so it's for an
+     * export URL (if the owner requested one, expires ~1 week, so it's for an
      * immediate download only, never persisted), and any failure message.
      */
     public function status(Request $request, string $id): JsonResponse
@@ -186,7 +186,7 @@ class OwnerGammaController extends BaseLmsController
 
     /**
      * Persist a finished generation into the owner's LMS as the durable Gamma
-     * link (never the export URL — that expires in ~1 week). Course-level →
+     * link (never the export URL, that expires in ~1 week). Course-level →
      * LmsMaterial(type:link); module-level → LmsModuleContent(type:link) appended
      * after the module's existing content. Exactly one target is required; the
      * course/module is resolved through the TenantAware scope, so a foreign id
@@ -217,7 +217,7 @@ class OwnerGammaController extends BaseLmsController
 
         if (! empty($data['course_id']) && ! empty($data['module_id'])) {
             return response()->json([
-                'message' => 'Choose a single destination — either a course or a module, not both.',
+                'message' => 'Choose a single destination, either a course or a module, not both.',
             ], 422);
         }
 
@@ -230,7 +230,7 @@ class OwnerGammaController extends BaseLmsController
                 ->max('sort_order') ?? 0) + 1;
 
             // Default (no export, or a failed download): store the editable Gamma
-            // link itself as a `link` content — the pre-existing behaviour.
+            // link itself as a `link` content, the pre-existing behaviour.
             $attributes = [
                 'module_id' => $module->id,
                 'title' => $data['title'],
@@ -240,12 +240,12 @@ class OwnerGammaController extends BaseLmsController
             ];
 
             // When the generation produced a downloadable export, fetch the bytes
-            // now (the export URL is ephemeral — Gamma expires it ~1 week out) and
+            // now (the export URL is ephemeral, Gamma expires it ~1 week out) and
             // store OUR OWN copy as the module material: content_url points at the
             // stored file so the student's "Open pdf/slides" downloads the real
             // file, file_path records it for cleanup on delete (mirrors the staff
             // upload flow), and the durable editable Gamma link is preserved in
-            // content_body so it's never lost. Best-effort — any failure falls back
+            // content_body so it's never lost. Best-effort, any failure falls back
             // to the link content above rather than aborting the save.
             if (! empty($data['export_url'])) {
                 $format = $data['format'] ?? 'pdf';

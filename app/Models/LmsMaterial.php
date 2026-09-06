@@ -17,7 +17,7 @@ class LmsMaterial extends Model
         'type',
         'file_url',
         'session_id',
-        // Externally-hosted video (Bunny Stream) pointers — bytes never on our server.
+        // Externally-hosted video (Bunny Stream) pointers, bytes never on our server.
         'provider',
         'external_id',
         'thumbnail_url',

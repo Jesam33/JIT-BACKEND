@@ -177,6 +177,11 @@ Route::middleware('tenant.required')->group(function () {
     Route::get('/api/frontend/lms/owner/tracks', [OwnerAdminController::class, 'tracks']);
     Route::get('/api/frontend/lms/owner/notifications', [OwnerAdminController::class, 'notifications']);
 
+    // CEO's Forum (platform-hosted live meetings for institute owners): list the
+    // upcoming/past sessions, and mint a participant token to join in-portal.
+    Route::get('/api/frontend/lms/owner/forums', [OwnerAdminController::class, 'forums']);
+    Route::post('/api/frontend/lms/owner/forums/{id}/token', [OwnerAdminController::class, 'forumToken']);
+
     // Owner course management (create / edit / delete — set description, price,
     // capacity, delivery mode). Tenant-scoped writes, authorized via owner session.
     Route::post('/api/frontend/lms/owner/courses', [OwnerAdminController::class, 'storeCourse']);

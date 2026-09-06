@@ -20,7 +20,7 @@ class PublicPagesController extends Controller
         return view('public.onboarding');
     }
 
-    // simple JSON endpoint for available plans — sourced from config/saas.php
+    // simple JSON endpoint for available plans, sourced from config/saas.php
     // (the plans DB table + admin CRUD are dormant; config is the source of truth)
     public function plansJson()
     {

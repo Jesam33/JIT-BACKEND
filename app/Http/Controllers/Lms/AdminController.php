@@ -15,6 +15,7 @@ use App\Models\LmsTeacher;
 use App\Models\LmsTrack;
 use App\Models\Payment;
 use App\Models\PlatformAnnouncement;
+use App\Models\CeoForum;
 use App\Models\TrainingRegistration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -408,12 +409,12 @@ class AdminController extends BaseLmsController
     /**
      * Host revenue view. Two ledgers, both live off real funds:
      *
-     *  1. Platform revenue — what Jorsas has been paid by institutes (paid signups
+     *  1. Platform revenue, what Jorsas has been paid by institutes (paid signups
      *     + plan upgrades). Read straight from `platform_transactions` (the ledger
      *     the signup/billing/webhook confirmation paths all write, idempotent on
      *     reference), so the "success" total reconciles 1:1 against Paystack.
      *
-     *  2. Per-institute course earnings — what each institute has earned from
+     *  2. Per-institute course earnings, what each institute has earned from
      *     student course fees, and the platform commission owed on that, derived
      *     LIVE from the tenant-scoped `payments` table (successful rows only) times
      *     each tenant's per-plan commission percent. Nothing is stored/duplicated:
@@ -531,7 +532,7 @@ class AdminController extends BaseLmsController
             }
         }
 
-        // perform delete (hard delete) — consider soft delete if required
+        // perform delete (hard delete), consider soft delete if required
         $tenant->delete();
 
         if ($request->expectsJson() || $request->wantsJson()) {
@@ -726,7 +727,7 @@ class AdminController extends BaseLmsController
     }
 
     /**
-     * Platform announcements — the jorsastech host broadcasts a single message to
+     * Platform announcements, the jorsastech host broadcasts a single message to
      * everybody (students, staff, agents) across EVERY institute. This page only
      * enqueues the announcement; the `lms:dispatch-announcements` command fans it
      * out into per-recipient notifications (which the email sweep then delivers).
@@ -784,6 +785,128 @@ class AdminController extends BaseLmsController
         return redirect()
             ->route('admin.lms.announcements.index')
             ->with('status', $message);
+    }
+
+    /**
+     * CEO's Forum, the platform-hosted live meetings for institute owners. This
+     * page lists upcoming + past forums and holds the create form. Emails (invite
+     * + reminder) are sent by the `lms:send-ceo-forum-emails` command, not here,
+     * so the request stays fast and the send is retry-safe.
+     */
+    public function ceoForumsPage(Request $request)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $forums = CeoForum::query()
+            ->orderByDesc('scheduled_at')
+            ->limit(100)
+            ->get();
+
+        return view('admin.lms.forums.index', array_merge($this->adminShellData(), [
+            'activeLmsPage' => 'forums',
+            'forums' => $forums,
+        ]));
+    }
+
+    public function createCeoForum(Request $request)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'topic' => ['nullable', 'string', 'max:5000'],
+            'scheduled_at' => ['required', 'date'],
+            'duration_minutes' => ['required', 'integer', 'min:5', 'max:1440'],
+            'host_name' => ['nullable', 'string', 'max:255'],
+            'recording_url' => ['nullable', 'url', 'max:2048'],
+            'cover_image' => ['nullable', 'url', 'max:2048'],
+        ]);
+
+        $user = $request->user();
+
+        CeoForum::query()->create([
+            'title' => $validated['title'],
+            'topic' => $validated['topic'] ?? null,
+            'scheduled_at' => $validated['scheduled_at'],
+            'duration_minutes' => $validated['duration_minutes'],
+            'host_name' => $validated['host_name'] ?? ($user?->name ?? 'Jorsas Tech'),
+            'recording_url' => $validated['recording_url'] ?? null,
+            'cover_image' => $validated['cover_image'] ?? null,
+            'status' => CeoForum::STATUS_SCHEDULED,
+            'created_by' => $user?->getKey(),
+            'created_by_name' => $user?->name ?? $user?->email ?? 'Platform',
+        ]);
+
+        $message = 'Forum scheduled. Every institute owner will be emailed an invitation within a minute, and a reminder about an hour before it starts.';
+
+        if ($request->expectsJson() || $request->wantsJson()) {
+            return response()->json(['message' => $message], 201);
+        }
+
+        return redirect()
+            ->route('admin.lms.forums.index')
+            ->with('status', $message);
+    }
+
+    public function updateCeoForum(Request $request, int $id)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $forum = CeoForum::query()->findOrFail($id);
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'topic' => ['nullable', 'string', 'max:5000'],
+            'scheduled_at' => ['required', 'date'],
+            'duration_minutes' => ['required', 'integer', 'min:5', 'max:1440'],
+            'host_name' => ['nullable', 'string', 'max:255'],
+            'recording_url' => ['nullable', 'url', 'max:2048'],
+            'cover_image' => ['nullable', 'url', 'max:2048'],
+        ]);
+
+        // If the start time moved, let the reminder fire again for the new time.
+        $rescheduled = $forum->scheduled_at
+            && $forum->scheduled_at->ne(\Illuminate\Support\Carbon::parse($validated['scheduled_at']));
+
+        $forum->fill([
+            'title' => $validated['title'],
+            'topic' => $validated['topic'] ?? null,
+            'scheduled_at' => $validated['scheduled_at'],
+            'duration_minutes' => $validated['duration_minutes'],
+            'host_name' => $validated['host_name'] ?? $forum->host_name,
+            'recording_url' => $validated['recording_url'] ?? null,
+            'cover_image' => $validated['cover_image'] ?? null,
+        ]);
+
+        if ($rescheduled) {
+            $forum->reminder_sent_at = null;
+            if ($forum->status === CeoForum::STATUS_ENDED) {
+                $forum->status = CeoForum::STATUS_SCHEDULED;
+            }
+        }
+
+        $forum->save();
+
+        return redirect()
+            ->route('admin.lms.forums.index')
+            ->with('status', 'Forum updated.');
+    }
+
+    public function cancelCeoForum(Request $request, int $id)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $forum = CeoForum::query()->findOrFail($id);
+        $forum->status = CeoForum::STATUS_CANCELLED;
+        $forum->save();
+
+        return redirect()
+            ->route('admin.lms.forums.index')
+            ->with('status', 'Forum cancelled.');
     }
 
 

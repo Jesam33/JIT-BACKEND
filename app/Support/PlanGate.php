@@ -11,8 +11,8 @@ use App\Models\Tenant;
 /**
  * Plan-limit enforcement for the per-institute caps (courses / staff / students).
  *
- * Every count is taken with the explicit `withTenant()` scope — bypassing the
- * ambient TenantScope and pinning tenant_id — so a check is correct regardless
+ * Every count is taken with the explicit `withTenant()` scope, bypassing the
+ * ambient TenantScope and pinning tenant_id, so a check is correct regardless
  * of which tenant happens to be bound on the request. A null limit means the
  * plan is unlimited for that resource (every check short-circuits to allow).
  *
@@ -76,7 +76,7 @@ class PlanGate
      *
      * Returns the limit when full (so the caller can build a message), or null
      * when there is room / the plan is unlimited. The public enrolment path uses
-     * this instead of throwing — a self-enrolling visitor cannot upgrade a plan.
+     * this instead of throwing, a self-enrolling visitor cannot upgrade a plan.
      */
     public static function studentLimitReached(Tenant $tenant, ?string $email = null): ?int
     {

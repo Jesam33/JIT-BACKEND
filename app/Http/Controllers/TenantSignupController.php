@@ -18,11 +18,11 @@ class TenantSignupController extends Controller
 {
     /**
      * Institute signup. A FREE plan provisions immediately (no payment); a paid
-     * plan is pay-first — this endpoint only:
+     * plan is pay-first, this endpoint only:
      *   1. creates a `pending` tenant + owner user (no LMS content, no invite),
      *   2. initializes a Paystack transaction, and
      *   3. returns the authorization_url for the browser to redirect to.
-     * Paid provisioning happens later — in verify() or the webhook — once money
+     * Paid provisioning happens later, in verify() or the webhook, once money
      * confirms. Free signups are activated + provisioned inline here, reusing the
      * same idempotent {@see TenantOnboardingService::activatePaidSignup()}.
      */
@@ -30,7 +30,7 @@ class TenantSignupController extends Controller
     {
         // Self-serve plans only (free/basic/pro). Enterprise is contact-sales:
         // its price is null and `contact_sales` is set, so it must NEVER be
-        // provisioned through signup — otherwise the null price would read as
+        // provisioned through signup, otherwise the null price would read as
         // "free" ((float) null <= 0) and hand out an unlimited academy at no
         // charge. Enterprise goes through the contact path instead.
         $selfServePlans = array_keys(array_filter(
@@ -50,7 +50,7 @@ class TenantSignupController extends Controller
             'slug' => ['nullable', 'string', 'max:100', 'regex:/^[a-z0-9-]+$/', Rule::notIn(config('saas.reserved_slugs', []))],
             'admin_name' => ['required', 'string', 'max:255'],
             'admin_email' => ['required', 'email', 'max:255'],
-            // No password at signup — the owner sets it later on the emailed setup
+            // No password at signup, the owner sets it later on the emailed setup
             // link (/lms/admin/setup), so registration only collects who they are.
             'plan' => ['required', 'string', Rule::in($selfServePlans)],
         ], [
@@ -80,7 +80,7 @@ class TenantSignupController extends Controller
         //      → genuinely registered; tell them to sign in.
         //   3. Neither → an ORPHANED owner row: the `users` row survives but every
         //      institute it owned is gone (the classic case: a database reset wipes
-        //      the tenant-scoped tables — tenant_admins, tenants — but NOT the core
+        //      the tenant-scoped tables, tenant_admins, tenants, but NOT the core
         //      `users` table, which has no tenant_id). Reuse the row for a fresh
         //      signup instead of locking the person out with "already registered".
         // This replaces the plain `unique:users,email` rule.
@@ -96,7 +96,7 @@ class TenantSignupController extends Controller
 
             $pendingTenantId = optional($ownerLinks->firstWhere('status', 'pending'))->id;
             $ownsLiveTenant = $ownerLinks->contains(fn ($l) => $l->status !== 'pending');
-            // super_user is the Botble host admin flag — never let signup adopt or
+            // super_user is the Botble host admin flag, never let signup adopt or
             // clobber that account, even if it somehow owns no tenant.
             $isSuperAdmin = (bool) ($existingUser->super_user ?? false);
 
@@ -107,7 +107,7 @@ class TenantSignupController extends Controller
             }
 
             if (! $pendingTenantId) {
-                // Case 3 — orphan. Fall through to the fresh-signup transaction
+                // Case 3, orphan. Fall through to the fresh-signup transaction
                 // below, reusing this user row rather than creating a duplicate.
                 $reuseUserId = $existingUser->id;
             }
@@ -139,7 +139,7 @@ class TenantSignupController extends Controller
             ], 201);
         }
 
-        // Fresh signup — create the pending tenant, owner user and admin link in
+        // Fresh signup, create the pending tenant, owner user and admin link in
         // a transaction. Nothing is provisioned here.
         $tenant = null;
         $user = null;
@@ -163,13 +163,13 @@ class TenantSignupController extends Controller
             ]);
 
             [$first, $last] = array_pad(explode(' ', $validated['admin_name'], 2), 2, '');
-            // Unusable placeholder — the owner sets a real password via the emailed
+            // Unusable placeholder, the owner sets a real password via the emailed
             // setup link (OwnerAuthController::setup). Random so it can never be
             // signed into until then, and it satisfies NOT NULL.
             $placeholderPassword = Hash::make(Str::random(40));
 
             if ($reuseUserId) {
-                // Case 3 — adopt the orphaned owner row (its institutes are gone)
+                // Case 3, adopt the orphaned owner row (its institutes are gone)
                 // rather than creating a duplicate. Refresh the name and reset the
                 // password to an unusable placeholder so the setup link is again the
                 // only way in. username left as-is (it's already this email).
@@ -226,7 +226,7 @@ class TenantSignupController extends Controller
     }
 
     /**
-     * Provision a FREE-plan signup immediately — no payment. Mirrors verify()'s
+     * Provision a FREE-plan signup immediately, no payment. Mirrors verify()'s
      * success path: activation + provisioning is idempotent and self-healing
      * (activatePaidSignup reverts the tenant to `pending` and rethrows on failure),
      * so we surface a 503 "finalizing" the frontend can retry rather than a raw 500.
@@ -255,7 +255,7 @@ class TenantSignupController extends Controller
             'status' => 'success',
             'free' => true,
             'resumed' => $resumed,
-            'message' => 'Your institute is ready — check your email for your setup link.',
+            'message' => 'Your institute is ready, check your email for your setup link.',
             'front_door' => $this->frontDoor($tenant),
             'tenant' => $tenant->only(['id', 'name', 'slug']),
         ], 201);
@@ -264,7 +264,7 @@ class TenantSignupController extends Controller
     /**
      * Confirm a signup payment and, on success, activate + provision the tenant.
      * Public (no auth): the reference maps to exactly one pending tenant. Safe to
-     * hit repeatedly and races the webhook — activation is idempotent.
+     * hit repeatedly and races the webhook, activation is idempotent.
      */
     public function verify(Request $request, TenantOnboardingService $onboarding, PaystackService $paystack)
     {
@@ -282,7 +282,7 @@ class TenantSignupController extends Controller
         }
 
         // Already activated (e.g. the webhook returned before the browser did).
-        // Idempotent success — do not re-verify or re-provision.
+        // Idempotent success, do not re-verify or re-provision.
         if ($tenant->status === 'active') {
             return response()->json([
                 'status' => 'success',
@@ -301,7 +301,7 @@ class TenantSignupController extends Controller
             ], 402);
         }
 
-        // Confirmed — record it in the platform revenue ledger (idempotent on the
+        // Confirmed, record it in the platform revenue ledger (idempotent on the
         // reference, so a racing webhook won't double-count). Best-effort.
         try {
             \App\Models\PlatformTransaction::markSuccess(
@@ -318,7 +318,7 @@ class TenantSignupController extends Controller
         // Payment is confirmed. Activation + provisioning is idempotent and
         // self-healing: on failure it reverts the tenant to `pending` and rethrows,
         // so a repeat verify() (or the webhook) retries cleanly. We surface a 503
-        // "finalizing" rather than a raw 500 — the money went through, so we must
+        // "finalizing" rather than a raw 500, the money went through, so we must
         // never imply the payment failed, and the frontend can poll "Check again".
         try {
             $onboarding->activatePaidSignup($tenant);
@@ -331,14 +331,14 @@ class TenantSignupController extends Controller
 
             return response()->json([
                 'status' => 'pending',
-                'message' => 'Payment received — we are finalizing your institute. This can take a moment; please click Check again.',
+                'message' => 'Payment received, we are finalizing your institute. This can take a moment; please click Check again.',
             ], 503);
         }
         $tenant->refresh();
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Payment confirmed. Your institute is ready — check your email for your setup link.',
+            'message' => 'Payment confirmed. Your institute is ready, check your email for your setup link.',
             'front_door' => $this->frontDoor($tenant),
             'tenant' => $tenant->only(['id', 'name', 'slug']),
         ]);
@@ -383,7 +383,7 @@ class TenantSignupController extends Controller
         $tenant->update(['paystack_init_reference' => $reference]);
 
         // Record a pending row in the platform revenue ledger. Marked success once
-        // the charge confirms (verify or webhook). Best-effort — a ledger hiccup
+        // the charge confirms (verify or webhook). Best-effort, a ledger hiccup
         // must never block the owner's checkout.
         try {
             \App\Models\PlatformTransaction::recordPending($tenant, $reference, $amount, 'tenant_signup', $plan);

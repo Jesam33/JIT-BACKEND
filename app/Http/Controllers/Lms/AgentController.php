@@ -53,7 +53,7 @@ class AgentController extends BaseLmsController
     {
         // referral_code is GLOBALLY unique (its index spans all academies, unlike
         // the now per-academy email), so the collision check must ignore the
-        // tenant scope — otherwise a code already taken by another academy would
+        // tenant scope, otherwise a code already taken by another academy would
         // pass this check and then hit the DB unique index as a 500.
         do {
             $code = 'AGENT-' . strtoupper(Str::random(6));
@@ -68,13 +68,13 @@ class AgentController extends BaseLmsController
     {
         // Agents are per-academy: resolve the academy FIRST (from the tenant
         // header, or JIT on the bare primary domain) so the email-uniqueness rule
-        // can be scoped to it — the SAME person may apply to be an agent at
+        // can be scoped to it, the SAME person may apply to be an agent at
         // several academies with one email.
         $tenant = $this->currentTenantOrPrimary();
 
         // The Admission-Marketer Network is a paid feature (Basic+). On an academy
         // whose plan doesn't include it the public application path is closed with
-        // a neutral message — a visitor can't upgrade the academy, so (unlike the
+        // a neutral message, a visitor can't upgrade the academy, so (unlike the
         // owner-side management endpoints) this never raises the upgrade modal.
         if ($tenant && ! $tenant->planFeature('admission_marketer')) {
             return response()->json([
@@ -353,7 +353,7 @@ class AgentController extends BaseLmsController
             'agent_id' => $agent->id,
             'type' => 'student_registered',
             'title' => 'Student Registered',
-            'body' => "Registration created for {$registration->first_name} {$registration->last_name} — {$course->title}.",
+            'body' => "Registration created for {$registration->first_name} {$registration->last_name}, {$course->title}.",
             'reference_type' => 'registration',
             'reference_id' => $registration->id,
         ]);
@@ -493,7 +493,7 @@ class AgentController extends BaseLmsController
             \Illuminate\Support\Facades\Mail::to($adminEmail)
                 ->send(new \App\Mail\AgentWithdrawalRequestedMail($agent, $amount, $adminUrl));
         } catch (\Throwable $e) {
-            // silently log — email must not break the withdrawal
+            // silently log, email must not break the withdrawal
         }
     }
 
@@ -600,8 +600,8 @@ class AgentController extends BaseLmsController
 
         // Agent emails are unique PER ACADEMY. Prefer the explicitly-requested
         // academy (?tenant= → requestedTenantSlug), else fall back across
-        // academies (newest first). bindTenantFromModel then stamps the token —
-        // and the emailed link's ?tenant= — with the account's own academy, so the
+        // academies (newest first). bindTenantFromModel then stamps the token, 
+        // and the emailed link's ?tenant=, with the account's own academy, so the
         // reset and the subsequent login both stay on it.
         $agent = app()->bound('requestedTenantSlug')
             ? Agent::query()->where('email', $email)->first()

@@ -29,7 +29,7 @@ class StudentProfileController extends BaseLmsController
         // Merge the tenant plan so the student shell can gate paid-only features
         // (chat) without a second round-trip, plus a `tenant` descriptor so the
         // portal re-pins its `tenant` cookie from THIS authenticated session on
-        // every load — otherwise the inactivity → login redirect falls back to
+        // every load, otherwise the inactivity → login redirect falls back to
         // the primary slug and re-login hits the wrong institute. The model is
         // returned as-is otherwise, preserving every field the frontend reads.
         return response()->json(array_merge($student->toArray(), [

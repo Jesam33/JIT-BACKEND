@@ -136,7 +136,7 @@ class StaffChatController extends BaseLmsController
         if ($content) {
             // Notify @mentioned students. Match on the username OR the full name so
             // it works whether the sender picked from the dropdown (inserts the
-            // @username) or typed the person's name — and regardless of whether the
+            // @username) or typed the person's name, and regardless of whether the
             // student's username was ever set. Scoped to this track's roster.
             $enrolledStudents = LmsEnrollment::query()
                 ->where('track_id', $track->id)
@@ -559,7 +559,7 @@ class StaffChatController extends BaseLmsController
 
     /**
      * Add or remove the teacher's reaction (one emoji) on a message in a chat
-     * they own — a group chat of one of their tracks, or a DM thread where they
+     * they own, a group chat of one of their tracks, or a DM thread where they
      * are the instructor. Returns the message's full re-aggregated reactions.
      */
     public function toggleReaction(Request $request, int $id): JsonResponse

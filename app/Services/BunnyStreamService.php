@@ -8,15 +8,15 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Adapter for Bunny Stream (video.bunnycdn.com) — the external host for
+ * Adapter for Bunny Stream (video.bunnycdn.com), the external host for
  * pre-recorded lesson videos and video materials. This is the SOLE place the
  * Bunny wire contract lives, so any future API drift is a one-file change.
  *
  * The whole point of Bunny is that the video BYTES never touch our server or
  * DB: the browser uploads directly to Bunny over a signed TUS session, and we
  * persist only the video guid, a thumbnail URL and the player embed URL. So this
- * service does two small server-side jobs — (1) create the video record to get a
- * guid, and (2) mint a short-lived TUS upload signature — plus a status poll and
+ * service does two small server-side jobs, (1) create the video record to get a
+ * guid, and (2) mint a short-lived TUS upload signature, plus a status poll and
  * a few URL builders. The large transfer is the browser's, not ours.
  *
  * Contract (Bunny Stream API + TUS, verified against bunny.net/docs):
@@ -34,12 +34,12 @@ use Illuminate\Support\Facades\Log;
  *             <iframe>, NOT an <video> tag).
  *  - CDN   → https://{cdn_hostname}/{guid}/thumbnail.jpg and …/playlist.m3u8.
  *
- * Credentials come from config('services.bunny_stream.*') — NEVER env() at the
- * call site — so they still resolve after `php artisan config:cache` on live.
+ * Credentials come from config('services.bunny_stream.*'), NEVER env() at the
+ * call site, so they still resolve after `php artisan config:cache` on live.
  *
  * Failure policy (see BunnyStreamException): unset library/key → 503 ("not
  * configured"); every other upstream failure is logged and re-thrown as a
- * generic 502 — never 402, so a Bunny outage can't trip the owner's plan
+ * generic 502, never 402, so a Bunny outage can't trip the owner's plan
  * UpgradeModal (the pre-recorded-video plan gate runs separately, before Bunny).
  */
 class BunnyStreamService
@@ -158,7 +158,7 @@ class BunnyStreamService
         );
     }
 
-    /** The player embed URL — always an <iframe> src (Bunny serves HLS, not a file). */
+    /** The player embed URL, always an <iframe> src (Bunny serves HLS, not a file). */
     public function embedUrl(string $videoId): string
     {
         return self::PLAYER_BASE . '/embed/' . $this->libraryId . '/' . $videoId;
@@ -185,7 +185,7 @@ class BunnyStreamService
     /**
      * Run one Bunny management call, mapping every failure mode to a
      * BunnyStreamException with a clean, non-leaking message. Identical policy to
-     * GammaService::send — a notConfigured() 503 passes straight through; a
+     * GammaService::send, a notConfigured() 503 passes straight through; a
      * transport error or non-2xx upstream response is logged and surfaced as 502.
      */
     private function send(callable $call, string $failureMessage): array

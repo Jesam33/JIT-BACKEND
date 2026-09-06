@@ -17,11 +17,11 @@ use Illuminate\Http\Request;
  * "auth is gone" and bounces to the login screen. A plan-limit hit is NOT an auth
  * failure, so reusing 403 logged the owner out the moment they crossed a cap.
  * 402 is semantically correct here and, crucially, is NOT swept up by any
- * `status === 401 || status === 403` guard — the client intercepts it explicitly
+ * `status === 401 || status === 403` guard, the client intercepts it explicitly
  * and shows the upgrade prompt instead of destroying the session.
  *
  * The public student-enrolment path does NOT throw this (a visitor can't upgrade
- * anyone's plan) — it reads App\Support\PlanGate::studentLimitReached() and
+ * anyone's plan), it reads App\Support\PlanGate::studentLimitReached() and
  * surfaces its own neutral "institute is full" message instead.
  */
 class PlanLimitException extends \Exception
@@ -42,7 +42,7 @@ class PlanLimitException extends \Exception
         $message = match ($resource) {
             'staff' => "You've reached your {$planName} plan limit of {$limit} staff member"
                 . ($limit === 1 ? '' : 's') . '. Upgrade your plan to add more team members.',
-            // PDF wording — the cap counts enrolled ("Active") students.
+            // PDF wording, the cap counts enrolled ("Active") students.
             'students' => "You've reached your Active Student limit."
                 . ' Upgrade your plan to enrol more Students.',
             default => "You've reached your {$planName} plan limit of {$limit} courses."
@@ -54,7 +54,7 @@ class PlanLimitException extends \Exception
 
     /**
      * A paid-feature gate hit (chat, ai_materials, pre_recorded_video,
-     * admission_marketer, …). No numeric limit — the message names the feature
+     * admission_marketer, …). No numeric limit, the message names the feature
      * and prompts an upgrade. Still HTTP 402 + upgrade_required, so the owner
      * client's maybeUpgrade()/UpgradeModal handle it exactly like a cap hit.
      */

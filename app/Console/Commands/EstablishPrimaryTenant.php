@@ -52,7 +52,7 @@ class EstablishPrimaryTenant extends Command
                 $tenant = Tenant::create(['slug' => $slug, 'name' => $name, 'status' => 'active']);
                 $this->info("Created primary tenant #{$tenant->id} ({$slug}).");
             } else {
-                // 2. Rename in place — the same primary key already owns all legacy
+                // 2. Rename in place, the same primary key already owns all legacy
                 //    rows by tenant_id, so no FK re-pointing is needed.
                 $tenant->update(['slug' => $slug, 'name' => $name, 'status' => 'active']);
                 $this->info("Primary tenant is #{$tenant->id} ({$slug}).");
@@ -63,7 +63,7 @@ class EstablishPrimaryTenant extends Command
             $backfillNew = ! $multiTenant || $this->option('force');
 
             if ($multiTenant && ! $this->option('force')) {
-                $this->warn('More than one tenant exists — skipping backfill of newly-added columns ('
+                $this->warn('More than one tenant exists, skipping backfill of newly-added columns ('
                     . implode(', ', $this->newTables)
                     . '). Re-run with --force only if every NULL row in those tables belongs to the primary org.');
             }

@@ -8,17 +8,17 @@ use App\Models\LmsTeacher;
 use App\Models\LmsTrack;
 
 /**
- * Batch-computes the honestly-derived signals a Udemy-style course card needs —
- * star ratings, the instructor line, and the "Bestseller" badge — for a set of
+ * Batch-computes the honestly-derived signals a Udemy-style course card needs, 
+ * star ratings, the instructor line, and the "Bestseller" badge, for a set of
  * course ids, in a handful of queries (no per-course N+1). Shared by the public
  * storefront serializer (PublicInstituteController) and the owner course list
  * (OwnerAdminController) so both agree on how a card is derived.
  *
- * Every value is real or an honest fallback — nothing is fabricated:
- *   - ratings     — AVG/COUNT over real lms_course_reviews rows (0/0 when none)
- *   - instructors — the course's track(s) → teacher name(s); the institute name
+ * Every value is real or an honest fallback, nothing is fabricated:
+ *   - ratings, AVG/COUNT over real lms_course_reviews rows (0/0 when none)
+ *   - instructors, the course's track(s) → teacher name(s); the institute name
  *                   is the fallback, never a placeholder person
- *   - bestseller  — the single most-enrolled ACTIVE course in the institute, and
+ *   - bestseller, the single most-enrolled ACTIVE course in the institute, and
  *                   only once its real registered_count clears the configured
  *                   floor (config saas.bestseller_min_enrollments)
  *

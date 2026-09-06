@@ -38,7 +38,7 @@ class StudentAuthController extends BaseLmsController
         // A pending invite that carries a fee is a PAID owner invite (Issue C):
         // the signup page must collect payment before provisioning, not offer a
         // set-password form. Only owner course-invites ever combine a token with
-        // a pending status — public pending registrations have no invite_token —
+        // a pending status, public pending registrations have no invite_token, 
         // so this can't expose a public checkout to the free signup path.
         $requiresPayment = $registration->status === 'pending' && (float) $registration->course_price > 0;
 
@@ -257,12 +257,12 @@ class StudentAuthController extends BaseLmsController
      *  - when the request carries an explicit institute (subdomain / header /
      *    ?org=), the global TenantScope already limits the lookup to it;
      *  - otherwise (bare domain / local dev) search across institutes and
-     *    authenticate whichever same-email account's password matches — newest
-     *    first — so a non-primary student can still log in without a subdomain.
+     *    authenticate whichever same-email account's password matches, newest
+     *    first, so a non-primary student can still log in without a subdomain.
      *
      * Returns [student|null, reason]. `reason` is null on success, 'not_found'
      * when no account exists for that email, or 'invalid_password' when one or
-     * more accounts exist but none matched the password — so the caller can give
+     * more accounts exist but none matched the password, so the caller can give
      * a distinct, more helpful message for each case.
      *
      * @return array{0: ?LmsStudent, 1: ?string}
@@ -308,7 +308,7 @@ class StudentAuthController extends BaseLmsController
         // Prefer the explicitly-requested institute (mirrors login); otherwise
         // fall back across institutes so a student on the wrong portal or the
         // bare domain still gets helped. bindTenantFromModel then stamps the
-        // token — and the emailed link — with the account's OWN institute, so
+        // token, and the emailed link, with the account's OWN institute, so
         // the reset and the subsequent login both stay on it.
         $email = $validated['email'];
 

@@ -15,7 +15,7 @@ class ResolveTenantFromSession
 {
     /**
      * If the request carries a valid bearer token, the tenant is derived from
-     * that session/agent-session and becomes authoritative — overriding any
+     * that session/agent-session and becomes authoritative, overriding any
      * header- or subdomain-derived tenant. A header that resolved to a DIFFERENT
      * real tenant than the session is rejected as a cross-tenant attempt.
      *

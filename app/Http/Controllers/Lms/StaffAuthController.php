@@ -33,7 +33,7 @@ class StaffAuthController extends BaseLmsController
         }
 
         // A suspended staff member keeps their record (and any cohort they lead)
-        // but cannot sign in — the reversible counterpart to removal, toggled by
+        // but cannot sign in, the reversible counterpart to removal, toggled by
         // the owner on the Staff Accounts page (OwnerAdminController::setStaffActive).
         if (! $teacher->is_active) {
             return response()->json([
@@ -247,10 +247,10 @@ class StaffAuthController extends BaseLmsController
         $validated = $request->validate(['email' => ['required', 'email']]);
 
         // Prefer the explicitly-requested institute (a staffer resetting from
-        // their own portal) — mirrors login. Otherwise fall back across
+        // their own portal), mirrors login. Otherwise fall back across
         // institutes so someone who landed on the wrong portal, or is on the
         // bare domain, still gets helped. Either way bindTenantFromModel stamps
-        // the token — and the emailed link — with the account's OWN institute,
+        // the token, and the emailed link, with the account's OWN institute,
         // so the reset and the subsequent login both stay on it.
         $email = $validated['email'];
 
@@ -294,7 +294,7 @@ class StaffAuthController extends BaseLmsController
         // The token row carries the issuing institute; bind it so the account
         // lookup resolves the right tenant even on the bare domain. This same
         // endpoint backs both the reset page and the staff activation (setup)
-        // page — an owner-invited teacher's link lands here.
+        // page, an owner-invited teacher's link lands here.
         $reset = $this->resolveResetToken('staff', $validated['email'], $validated['token']);
 
         if (! $reset) {

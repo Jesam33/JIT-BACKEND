@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Lms;
 
 use App\Mail\LmsPasswordResetMail;
 use App\Mail\StudentCourseInviteMail;
+use App\Models\CeoForum;
 use App\Models\LmsCourse;
 use App\Models\LmsCertificate;
 use App\Models\LmsEnrollment;
@@ -35,7 +36,7 @@ use Illuminate\Support\Str;
  * Like TenantBillingController these routes sit inside `tenant.required`, but
  * authorization does NOT trust the middleware-bound tenant. Each request derives
  * the tenant from the owner's own session row (tenant_id) and confirms
- * tenant_admins membership — a student or staff bearer token also binds a tenant,
+ * tenant_admins membership, a student or staff bearer token also binds a tenant,
  * so binding alone is not authorization. Once the owner is confirmed we (re)bind
  * that exact tenant into the container so every TenantAware query below is scoped
  * to their organisation.
@@ -82,7 +83,7 @@ class OwnerAdminController extends BaseLmsController
 
     /**
      * Dashboard overview: headline counts, plan/subscription state, and the most
-     * recent students — everything the landing dashboard card grid needs.
+     * recent students, everything the landing dashboard card grid needs.
      */
     public function overview(Request $request): JsonResponse
     {
@@ -131,7 +132,7 @@ class OwnerAdminController extends BaseLmsController
     }
 
     /**
-     * Real analytics for the owner dashboard (fix #1 — no dummy data). Every query
+     * Real analytics for the owner dashboard (fix #1, no dummy data). Every query
      * below is tenant-scoped by ownerContext() binding currentTenant, so these
      * aggregates cover ONLY this institute:
      *  - 6-month series: new students, new enrolments, successful-payment revenue
@@ -147,7 +148,7 @@ class OwnerAdminController extends BaseLmsController
 
         [$tenant] = $context;
 
-        // Snapshot totals + the registration funnel are STANDARD analytics — every
+        // Snapshot totals + the registration funnel are STANDARD analytics, every
         // plan sees them. The 6-month trend charts (students/enrollments/revenue
         // over time) are ADVANCED analytics, a Pro+ feature: skip those queries
         // and return empty series on plans without it, so the dashboard can show
@@ -287,7 +288,7 @@ class OwnerAdminController extends BaseLmsController
     }
 
     /**
-     * Re-send the "set your password" invite to a student — the same
+     * Re-send the "set your password" invite to a student, the same
      * password-reset link the bulk importer emails, so it lands on this
      * tenant's student setup page. Best-effort: the caller is told honestly
      * whether the email actually went out (mirrors inviteStaff).
@@ -329,14 +330,14 @@ class OwnerAdminController extends BaseLmsController
      * Invite one or more students straight into a specific course (Issue C).
      *
      * Unlike the bulk importer (which creates course-less accounts and emails a
-     * bare set-password link), every invite here attaches a course — so the
-     * student knows exactly what they're joining — and the owner decides per
+     * bare set-password link), every invite here attaches a course, so the
+     * student knows exactly what they're joining, and the owner decides per
      * invite whether it's paid:
      *
      *  - Paid (toggle on + a course fee > 0): a PENDING TrainingRegistration is
      *    created and the email links to the signup page, which launches payment
      *    through the academy's own Paystack subaccount. The account is
-     *    provisioned — and the seat counted — only after Paystack confirms
+     *    provisioned, and the seat counted, only after Paystack confirms
      *    (completePayment), the exact pay-first pipeline the public storefront
      *    uses, so payment can't be bypassed.
      *  - Comped / free (toggle off, or a free course): the student is enrolled
@@ -345,8 +346,8 @@ class OwnerAdminController extends BaseLmsController
      *
      * Money safety: a non-primary academy that hasn't linked its payout bank yet
      * is refused a PAID invite up front, so fees can't land in the platform
-     * account. Plan caps are honoured — the platform student cap holds new
-     * accounts and a full course holds further comped seats — and a partial
+     * account. Plan caps are honoured, the platform student cap holds new
+     * accounts and a full course holds further comped seats, and a partial
      * invite still processes everyone who fits, reporting what was held back.
      */
     public function inviteStudentToCourse(Request $request): JsonResponse
@@ -366,7 +367,7 @@ class OwnerAdminController extends BaseLmsController
             'requires_payment' => ['nullable', 'boolean'],
         ]);
 
-        // Resolve the course inside the owner's tenant — ownerContext bound the
+        // Resolve the course inside the owner's tenant, ownerContext bound the
         // current tenant, so the global TenantScope stops another institute's id
         // from resolving here.
         $course = LmsCourse::query()->find($validated['course_id']);
@@ -451,7 +452,7 @@ class OwnerAdminController extends BaseLmsController
             // Upsert the student. A new account gets an unusable random password
             // (set for real via the emailed link) and stays un-onboarded; an
             // existing account only has its current course/mode pointed at this
-            // invite — never its password or onboarding flag reset.
+            // invite, never its password or onboarding flag reset.
             $attrs = [
                 'selected_course_id' => $course->id,
                 'learning_mode' => $mode,
@@ -470,7 +471,7 @@ class OwnerAdminController extends BaseLmsController
 
             // One TrainingRegistration per invite carries the course + a fresh
             // invite_token. Paid → pending (provisioned on payment); comped/free →
-            // approved now. course_price is frozen for the paid charge, in NGN —
+            // approved now. course_price is frozen for the paid charge, in NGN, 
             // the academy's settlement currency (its Paystack subaccount is a
             // Nigerian bank).
             $registration = TrainingRegistration::query()->create([
@@ -580,13 +581,13 @@ class OwnerAdminController extends BaseLmsController
             $parts[] = "No invites were sent for {$course}";
         }
         if ($limited > 0) {
-            $parts[] = "{$limited} held back — you've reached your plan's student limit";
+            $parts[] = "{$limited} held back, you've reached your plan's student limit";
         }
         if ($courseFull > 0) {
-            $parts[] = "{$courseFull} held back — this course is full";
+            $parts[] = "{$courseFull} held back, this course is full";
         }
         if (! empty($failed)) {
-            $parts[] = count($failed) . ' email(s) failed to send — check your mail settings';
+            $parts[] = count($failed) . ' email(s) failed to send, check your mail settings';
         }
 
         return implode('. ', $parts) . '.';
@@ -624,7 +625,7 @@ class OwnerAdminController extends BaseLmsController
      * Remove a staff member (teacher/admin) from the institute.
      *
      * SAFETY: lms_tracks.instructor_id is a NOT-NULL foreign key with
-     * cascadeOnDelete — deleting a teacher who still leads a cohort would
+     * cascadeOnDelete, deleting a teacher who still leads a cohort would
      * silently cascade-delete that cohort (and, in turn, its enrolments, DM
      * threads and group chat). So we refuse while the teacher is assigned to any
      * cohort and tell the owner to reassign it first (Tracks & Cohorts page).
@@ -655,7 +656,7 @@ class OwnerAdminController extends BaseLmsController
     }
 
     /**
-     * Re-send the "set your password" invite to a staff member — the same setup
+     * Re-send the "set your password" invite to a staff member, the same setup
      * link OwnerOnboardingController::inviteStaff emails, so it lands on this
      * tenant's staff activation page. Best-effort: the caller is told honestly
      * whether the email actually went out (mirrors resendStudentInvite).
@@ -696,7 +697,7 @@ class OwnerAdminController extends BaseLmsController
     /**
      * Enable or suspend a staff member. is_active gates staff login
      * (StaffAuthController::login), so suspending immediately blocks their portal
-     * access WITHOUT deleting anything — the reversible alternative to removal,
+     * access WITHOUT deleting anything, the reversible alternative to removal,
      * and the only way to bench an instructor who still leads a cohort.
      */
     public function setStaffActive(Request $request, int $id): JsonResponse
@@ -829,6 +830,111 @@ class OwnerAdminController extends BaseLmsController
     }
 
     /**
+     * CEO's Forum feed for the owner portal: the next upcoming session (with a
+     * server-side `joinable` flag + the server clock for the countdown) plus the
+     * archive of past sessions. Any confirmed owner of any active tenant may see
+     * these; the forums are a platform-wide perk, not tenant-scoped.
+     */
+    public function forums(Request $request): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        $map = fn (CeoForum $f) => [
+            'id' => $f->id,
+            'title' => $f->title,
+            'topic' => $f->topic,
+            'scheduled_at' => optional($f->scheduled_at)->toIso8601String(),
+            'duration_minutes' => (int) $f->duration_minutes,
+            'host_name' => $f->host_name,
+            'status' => $f->status,
+            'cover_image' => $f->cover_image,
+            'recording_url' => $f->recording_url,
+            'joinable' => $f->isJoinable(),
+        ];
+
+        $upcoming = CeoForum::query()
+            ->whereIn('status', [CeoForum::STATUS_SCHEDULED, CeoForum::STATUS_LIVE])
+            ->orderBy('scheduled_at')
+            ->get()
+            ->reject(fn (CeoForum $f) => $f->isPast())
+            ->values()
+            ->map($map);
+
+        $past = CeoForum::query()
+            ->where(function ($q) {
+                $q->where('status', CeoForum::STATUS_ENDED)
+                    ->orWhereNotNull('recording_url');
+            })
+            ->where('status', '!=', CeoForum::STATUS_CANCELLED)
+            ->orderByDesc('scheduled_at')
+            ->limit(50)
+            ->get()
+            ->map($map);
+
+        return response()->json([
+            'now' => now()->toIso8601String(),
+            'upcoming' => $upcoming,
+            'past' => $past,
+        ]);
+    }
+
+    /**
+     * Mint a participant JaaS token for an owner to join a forum in-portal.
+     * Gated on the join window (opens 10 min before start, closes after the
+     * end + grace) so tokens are only handed out when the room is live.
+     */
+    public function forumToken(Request $request, int $id): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        [$tenant, $owner] = $context;
+
+        $forum = CeoForum::find($id);
+        if (! $forum || $forum->status === CeoForum::STATUS_CANCELLED) {
+            return response()->json(['message' => 'Forum not found.'], 404);
+        }
+
+        if (! $forum->isJoinable()) {
+            return response()->json([
+                'message' => 'The forum room opens 10 minutes before the start time.',
+            ], 403);
+        }
+
+        $cfg = $this->jitsiConfig();
+        if (! $cfg) {
+            return response()->json([
+                'message' => 'Live meetings are not configured yet. Please try again later.',
+            ], 503);
+        }
+
+        $room = $this->ensureRoom($forum, 'forum');
+
+        $userName = trim(($owner?->first_name ?? '') . ' ' . ($owner?->last_name ?? ''))
+            ?: ($owner?->email ?? 'Owner');
+
+        $jwt = $this->mintJaasToken($cfg, $room, [
+            'id' => 'owner-' . ($owner?->id ?? '0'),
+            'name' => $userName,
+            'email' => $owner?->email ?? '',
+        ], false);
+
+        return response()->json([
+            'room' => $room,
+            'jwt' => $jwt,
+            'domain' => $cfg['domain'],
+            'app_id' => $cfg['appId'],
+            'user_name' => $userName,
+            'moderator' => false,
+        ]);
+    }
+
+    /**
      * Current white-label branding for this institute.
      */
     public function branding(Request $request): JsonResponse
@@ -851,7 +957,7 @@ class OwnerAdminController extends BaseLmsController
      * Update branding (colors / font / logo removal) and, optionally, the
      * institute's display name. Branding is stored in the tenant's `settings`
      * JSON blob under `branding`; the name lives on the tenant row. The `slug`
-     * is deliberately frozen — it's the public web address students already
+     * is deliberately frozen, it's the public web address students already
      * have, so renaming never breaks existing links.
      */
     public function updateBranding(Request $request): JsonResponse
@@ -872,7 +978,7 @@ class OwnerAdminController extends BaseLmsController
             'remove_logo' => ['nullable', 'boolean'],
             'remove_background' => ['nullable', 'boolean'],
             // What this academy calls itself (e.g. "Institute", "Academy",
-            // "School"). Customer-facing label only — never touches identifiers.
+            // "School"). Customer-facing label only, never touches identifiers.
             'entity_label' => ['nullable', 'string', 'max:40'],
             'entity_label_plural' => ['nullable', 'string', 'max:40'],
         ]);
@@ -896,7 +1002,7 @@ class OwnerAdminController extends BaseLmsController
 
         // Entity label: an empty submitted value reverts to the plan default
         // (Institute for the primary, Online Academy for everyone else); a
-        // skipped key preserves what's stored. Plural is optional — when blank,
+        // skipped key preserves what's stored. Plural is optional, when blank,
         // entityLabelArray() derives it from the singular via Str::plural.
         foreach (['entity_label', 'entity_label_plural'] as $key) {
             if ($request->has($key)) {
@@ -974,7 +1080,7 @@ class OwnerAdminController extends BaseLmsController
     }
 
     /**
-     * Update the institute's public profile — the content shown on its /i/{slug}
+     * Update the institute's public profile, the content shown on its /i/{slug}
      * mini-site. Stored in the tenant's `settings` JSON blob under `profile`
      * (no dedicated columns), mirroring updateBranding(). Empty strings are
      * normalised to null so cleared fields disappear from the public page.
@@ -1091,7 +1197,7 @@ class OwnerAdminController extends BaseLmsController
      * Paystack subaccount (the institute's own bank) is linked, and the bank
      * picker data the UI needs. When a subaccount is linked, course fees settle
      * to the institute's bank (minus the platform commission) instead of the
-     * platform account — this is the "institute collects the money, not Jorsas"
+     * platform account, this is the "institute collects the money, not Jorsas"
      * setting. Stored in the tenant's `settings` JSON under `paystack`.
      */
     public function paymentSettings(Request $request): JsonResponse
@@ -1130,7 +1236,7 @@ class OwnerAdminController extends BaseLmsController
             'platform_commission_percent' => $tenant->commissionPercent(),
             'gateway_ready' => $gatewayReady,
             // The bank picker only needs codes when linking a fresh subaccount, and
-            // the list is a live Paystack round-trip — only fetch it when the
+            // the list is a live Paystack round-trip, only fetch it when the
             // gateway is configured and no subaccount is linked yet.
             'banks' => ($gatewayReady && empty($paystack['subaccount_code'])) ? $service->listBanks() : [],
         ]);
@@ -1141,7 +1247,7 @@ class OwnerAdminController extends BaseLmsController
      * to its own bank. Two ways in: paste an existing `subaccount_code` directly,
      * or supply bank_code + account_number + the owner's legal first/last name and
      * we create the subaccount via Paystack (platform commission from config). The
-     * legal name — not a free-text business name — is what we register as the
+     * legal name, not a free-text business name, is what we register as the
      * subaccount name so it matches the settlement account and Paystack can
      * auto-verify it. Mirrors updateBranding's read-merge-save on the `settings`
      * JSON blob so nothing else stored there is disturbed.
@@ -1178,7 +1284,7 @@ class OwnerAdminController extends BaseLmsController
             // doesn't linger as an active subaccount on the dashboard. Only for
             // subaccounts WE created (managed): a pasted code may live on the
             // owner's own Paystack account and be used elsewhere, so we never
-            // touch it. Best-effort and non-throwing — the local disconnect must
+            // touch it. Best-effort and non-throwing, the local disconnect must
             // succeed even if the gateway is down or already forgot the code.
             $existingCode = $paystack['subaccount_code'] ?? null;
             if ($existingCode && ! empty($paystack['managed'])) {
@@ -1192,9 +1298,9 @@ class OwnerAdminController extends BaseLmsController
             return response()->json(['message' => 'Payout account disconnected. Course fees will settle to the platform account.', 'configured' => false]);
         }
 
-        // Path A — a subaccount code was pasted directly. Trust it as-is. Marked
+        // Path A, a subaccount code was pasted directly. Trust it as-is. Marked
         // unmanaged: it may live on another Paystack account and carries whatever
-        // split the owner set there, so a plan change must never rewrite it — and
+        // split the owner set there, so a plan change must never rewrite it, and
         // we don't know its %, so clear any recorded split.
         if (! empty($validated['subaccount_code'])) {
             $paystack['subaccount_code'] = trim($validated['subaccount_code']);
@@ -1204,7 +1310,7 @@ class OwnerAdminController extends BaseLmsController
                 $paystack['business_name'] = trim($validated['business_name']);
             }
         } else {
-            // Path B — create a subaccount from bank details. We send the owner's
+            // Path B, create a subaccount from bank details. We send the owner's
             // LEGAL name (first + last) as the subaccount name, not a free-text
             // business name: Paystack flags a subaccount for manual "verify" when
             // its name doesn't match the settlement account's bank record, so a name
@@ -1271,7 +1377,7 @@ class OwnerAdminController extends BaseLmsController
     /**
      * Resolve a bank account number to its holder name (Paystack /bank/resolve)
      * so the owner can CONFIRM the account before linking their payout subaccount.
-     * Confirmatory only — it links nothing and never 500s: an unresolvable account
+     * Confirmatory only, it links nothing and never 500s: an unresolvable account
      * (typo / wrong bank) comes back as {account_name: null} with a soft message,
      * and a down/unconfigured gateway degrades the same way so linking is never blocked.
      */
@@ -1304,7 +1410,7 @@ class OwnerAdminController extends BaseLmsController
         ]);
     }
 
-    // ─── Certificates (institute-issued, admin-only — moved off the staff
+    // ─── Certificates (institute-issued, admin-only, moved off the staff
     //     portal). Every read/write is tenant-scoped via ownerContext(). ──
 
     /**
@@ -1401,7 +1507,7 @@ class OwnerAdminController extends BaseLmsController
             'issued_at' => now(),
         ]);
 
-        // Let the student know in-app (best-effort — never block issuance on it).
+        // Let the student know in-app (best-effort, never block issuance on it).
         try {
             LmsNotification::query()->create([
                 'student_id' => $student->id,
@@ -1432,7 +1538,7 @@ class OwnerAdminController extends BaseLmsController
     }
 
     /**
-     * Revoke (delete) a certificate. Tenant-scoped findOrFail — an id belonging
+     * Revoke (delete) a certificate. Tenant-scoped findOrFail, an id belonging
      * to another institute 404s.
      */
     public function revokeCertificate(Request $request, int $id): JsonResponse
@@ -1459,13 +1565,13 @@ class OwnerAdminController extends BaseLmsController
      *
      * A single course can never seat more students than the plan allows for the
      * whole academy, so this returns min(requested, planCap). A requested value of
-     * 0 means "unlimited" — honoured only on an unlimited plan (null cap); on a
+     * 0 means "unlimited", honoured only on an unlimited plan (null cap); on a
      * capped plan 0 becomes the plan cap so it isn't silently unbounded.
      */
     private function capCourseCapacity(Tenant $tenant, int $requested): int
     {
         // A course seats no more than the tightest of the academy-wide student
-        // cap and the per-class cap — either may be null (unlimited). Resulting
+        // cap and the per-class cap, either may be null (unlimited). Resulting
         // per-class ceiling: Free = 1 (dominated by its 1-student academy cap),
         // Basic = 30, Pro = 250, Enterprise = unlimited.
         $limits = array_filter(
@@ -1498,7 +1604,7 @@ class OwnerAdminController extends BaseLmsController
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'requirements' => ['nullable', 'string'],
-            // Courses can't be free — the platform earns a commission % on each
+            // Courses can't be free, the platform earns a commission % on each
             // sale, so a ₦0 course would earn nothing and can't be sold.
             'price' => ['required', 'numeric', 'min:0.01'],
             'original_price' => ['nullable', 'numeric', 'min:0'],
@@ -1519,7 +1625,7 @@ class OwnerAdminController extends BaseLmsController
         // clamped down to the cap; unlimited plans keep the requested number.
         $maxStudents = $this->capCourseCapacity($tenant, (int) $validated['max_students']);
 
-        // Pre-recorded video is a Pro+ feature — never persist it as available on
+        // Pre-recorded video is a Pro+ feature, never persist it as available on
         // a plan that doesn't include it, regardless of what the client sent.
         $prerecorded = ($validated['is_prerecorded_available'] ?? false)
             && $tenant->planFeature('pre_recorded_video');
@@ -1566,7 +1672,7 @@ class OwnerAdminController extends BaseLmsController
             'title' => ['sometimes', 'required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'requirements' => ['nullable', 'string'],
-            // No free courses — the platform earns a commission % on each sale.
+            // No free courses, the platform earns a commission % on each sale.
             'price' => ['sometimes', 'required', 'numeric', 'min:0.01'],
             'original_price' => ['nullable', 'numeric', 'min:0'],
             'prerecorded_price' => ['nullable', 'numeric', 'min:0.01'],
@@ -1658,7 +1764,7 @@ class OwnerAdminController extends BaseLmsController
     }
 
     // ─── Track / cohort management (this is where staff get assigned to a
-    //     cohort via instructor_id — mirrors AdminController::apiCreateTrack) ──
+    //     cohort via instructor_id, mirrors AdminController::apiCreateTrack) ──
 
     /**
      * Create a cohort (track) under one of this institute's courses, optionally
@@ -1712,7 +1818,7 @@ class OwnerAdminController extends BaseLmsController
     }
 
     /**
-     * Update a cohort — rename it, move it to another course, or (re)assign the
+     * Update a cohort, rename it, move it to another course, or (re)assign the
      * instructor. All ids are validated against this tenant's scoped models.
      */
     public function updateTrack(Request $request, int $id): JsonResponse

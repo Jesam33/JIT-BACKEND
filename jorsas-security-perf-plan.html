@@ -1,0 +1,852 @@
+<title>Jorsas LMS Test Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --ground: #f4f6f9;
+    --surface: #ffffff;
+    --surface-2: #eef1f6;
+    --ink: #172033;
+    --ink-2: #47536b;
+    --ink-3: #6c7688;
+    --line: #dde3ec;
+    --line-2: #eaeef4;
+
+    --sec: #c1121f;         /* security accent — Jorsas red */
+    --sec-soft: #fbe9ea;
+    --sec-line: #f0c5c8;
+    --perf: #0d7d84;        /* performance accent — teal */
+    --perf-soft: #dcf1f2;
+    --perf-line: #b3dee0;
+    --rep: #5b4bc4;         /* reporting accent — indigo */
+    --rep-soft: #e9e6f8;
+
+    --crit: #b3121f;
+    --high: #c0620a;
+    --med:  #9a7a09;
+    --low:  #2c6bb0;
+    --ok:   #1f8a54;
+
+    --crit-bg: #fbe7e8;
+    --high-bg: #fbeede;
+    --med-bg:  #f8f2d8;
+    --low-bg:  #e4eef9;
+    --ok-bg:   #e0f2e8;
+
+    --shadow: 0 1px 2px rgba(23,32,51,.04), 0 8px 28px rgba(23,32,51,.06);
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --disp: "Archivo", var(--sans);
+  }
+
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --ground: #0e131c;
+      --surface: #161d29;
+      --surface-2: #1d2634;
+      --ink: #e8edf5;
+      --ink-2: #aab6c8;
+      --ink-3: #7d8798;
+      --line: #2a3546;
+      --line-2: #212b3a;
+
+      --sec: #ff6b73;
+      --sec-soft: #35191c;
+      --sec-line: #4d2226;
+      --perf: #4fc9cf;
+      --perf-soft: #10312f;
+      --perf-line: #1c4a48;
+      --rep: #9d90f0;
+      --rep-soft: #241f3d;
+
+      --crit: #ff8087;
+      --high: #f2a35b;
+      --med:  #e6c94e;
+      --low:  #7db4ec;
+      --ok:   #5fcf92;
+
+      --crit-bg: #351a1d;
+      --high-bg: #33240f;
+      --med-bg:  #322b0f;
+      --low-bg:  #14273a;
+      --ok-bg:   #12301f;
+
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0e131c;
+    --surface: #161d29;
+    --surface-2: #1d2634;
+    --ink: #e8edf5;
+    --ink-2: #aab6c8;
+    --ink-3: #7d8798;
+    --line: #2a3546;
+    --line-2: #212b3a;
+
+    --sec: #ff6b73;
+    --sec-soft: #35191c;
+    --sec-line: #4d2226;
+    --perf: #4fc9cf;
+    --perf-soft: #10312f;
+    --perf-line: #1c4a48;
+    --rep: #9d90f0;
+    --rep-soft: #241f3d;
+
+    --crit: #ff8087;
+    --high: #f2a35b;
+    --med:  #e6c94e;
+    --low:  #7db4ec;
+    --ok:   #5fcf92;
+
+    --crit-bg: #351a1d;
+    --high-bg: #33240f;
+    --med-bg:  #322b0f;
+    --low-bg:  #14273a;
+    --ok-bg:   #12301f;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.6;
+    font-size: 15.5px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1220px;
+    margin: 0 auto;
+    padding: 0 clamp(16px, 4vw, 40px);
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    gap: clamp(24px, 4vw, 56px);
+  }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+
+  /* ── Masthead ───────────────────────────────── */
+  .masthead {
+    grid-column: 1 / -1;
+    padding: clamp(36px, 6vw, 68px) 0 28px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 8px;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sec); box-shadow: 0 0 0 4px var(--sec-soft); }
+  .masthead h1 {
+    font-family: var(--disp);
+    font-weight: 800;
+    font-size: clamp(30px, 5.4vw, 52px);
+    line-height: 1.04;
+    letter-spacing: -0.02em;
+    margin: 18px 0 14px;
+    text-wrap: balance;
+    max-width: 20ch;
+  }
+  .masthead h1 .a-sec { color: var(--sec); }
+  .masthead h1 .a-perf { color: var(--perf); }
+  .lede {
+    font-size: clamp(16px, 2vw, 18.5px);
+    color: var(--ink-2);
+    max-width: 68ch;
+    margin: 0;
+  }
+  .stack-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 24px;
+  }
+  .tag {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 5px 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .tag b { color: var(--ink); font-weight: 600; }
+
+  /* ── Authorization banner ───────────────────── */
+  .authz {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    background: var(--sec-soft);
+    border: 1px solid var(--sec-line);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin: 22px 0 4px;
+  }
+  .authz .ic {
+    flex: none; width: 30px; height: 30px; border-radius: 8px;
+    display: grid; place-items: center; background: var(--sec); color: #fff;
+    font-family: var(--disp); font-weight: 800; font-size: 17px;
+  }
+  .authz h3 { margin: 0 0 4px; font-family: var(--disp); font-size: 16px; color: var(--sec); }
+  .authz p { margin: 0; font-size: 14px; color: var(--ink-2); }
+
+  /* ── Sidebar TOC ────────────────────────────── */
+  .toc {
+    position: sticky;
+    top: 22px;
+    align-self: start;
+    max-height: calc(100vh - 44px);
+    overflow-y: auto;
+    padding-right: 6px;
+  }
+  @media (max-width: 900px) {
+    .toc {
+      position: static; max-height: none;
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 12px; padding: 16px; margin-bottom: 8px;
+    }
+  }
+  .toc-group + .toc-group { margin-top: 20px; }
+  .toc-label {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; margin: 0 0 8px; padding-left: 12px;
+  }
+  .toc-label.s { color: var(--sec); }
+  .toc-label.p { color: var(--perf); }
+  .toc-label.r { color: var(--rep); }
+  .toc a {
+    display: block;
+    font-size: 13.5px;
+    color: var(--ink-2);
+    text-decoration: none;
+    padding: 5px 12px;
+    border-left: 2px solid var(--line);
+    line-height: 1.35;
+  }
+  .toc a:hover { color: var(--ink); border-left-color: var(--ink-3); background: var(--surface-2); }
+  .toc a .n { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); margin-right: 7px; }
+  .toc-prog {
+    margin-top: 22px; padding: 12px 12px 14px; border: 1px solid var(--line);
+    border-radius: 10px; background: var(--surface);
+  }
+  .toc-prog .cap { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+  .toc-prog .big { font-family: var(--disp); font-weight: 800; font-size: 26px; color: var(--ink); line-height: 1.1; margin-top: 3px; }
+  .bar { height: 6px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin-top: 9px; }
+  .bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--sec), var(--perf)); transition: width .35s ease; }
+  .toc-prog button {
+    margin-top: 12px; width: 100%; font-family: var(--mono); font-size: 11.5px;
+    padding: 7px; border: 1px solid var(--line); border-radius: 7px;
+    background: var(--surface-2); color: var(--ink-2); cursor: pointer;
+  }
+  .toc-prog button:hover { color: var(--ink); border-color: var(--ink-3); }
+
+  /* ── Main content ───────────────────────────── */
+  main { min-width: 0; padding-bottom: 80px; }
+
+  .part-head {
+    display: flex; align-items: baseline; gap: 14px;
+    margin: 52px 0 8px; padding-top: 8px;
+  }
+  .part-head:first-child { margin-top: 20px; }
+  .part-head .pk {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .14em;
+    text-transform: uppercase; padding: 4px 9px; border-radius: 6px; color: #fff;
+  }
+  .part-head.s .pk { background: var(--sec); }
+  .part-head.p .pk { background: var(--perf); }
+  .part-head.r .pk { background: var(--rep); }
+  .part-head h2 {
+    font-family: var(--disp); font-weight: 800; font-size: clamp(22px, 3vw, 30px);
+    letter-spacing: -0.015em; margin: 0; color: var(--ink);
+  }
+  .part-intro { color: var(--ink-2); margin: 0 0 8px; max-width: 72ch; font-size: 15px; }
+
+  section.card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: clamp(20px, 3vw, 30px);
+    margin-top: 20px;
+    box-shadow: var(--shadow);
+    scroll-margin-top: 18px;
+    border-left-width: 3px;
+  }
+  section.card.s { border-left-color: var(--sec); }
+  section.card.p { border-left-color: var(--perf); }
+  section.card.r { border-left-color: var(--rep); }
+
+  .sec-title { display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }
+  .sec-title .num {
+    font-family: var(--mono); font-weight: 600; font-size: 13px;
+    width: 30px; height: 30px; flex: none; border-radius: 8px;
+    display: grid; place-items: center;
+  }
+  .s .sec-title .num { background: var(--sec-soft); color: var(--sec); }
+  .p .sec-title .num { background: var(--perf-soft); color: var(--perf); }
+  .r .sec-title .num { background: var(--rep-soft); color: var(--rep); }
+  .sec-title h3 {
+    font-family: var(--disp); font-weight: 700; font-size: clamp(17px, 2.3vw, 21px);
+    margin: 0; letter-spacing: -0.01em; text-wrap: balance;
+  }
+  .sec-desc { color: var(--ink-2); font-size: 14.5px; margin: 0 0 6px; max-width: 74ch; }
+
+  h4.grp {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-3); margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 1px dashed var(--line);
+  }
+
+  /* checklist */
+  ul.checks { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  ul.checks li { margin: 0; }
+  ul.checks label {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 9px 10px; border-radius: 9px; cursor: pointer; line-height: 1.5;
+    transition: background .12s ease;
+  }
+  ul.checks label:hover { background: var(--surface-2); }
+  ul.checks input { flex: none; margin-top: 3px; width: 17px; height: 17px; accent-color: var(--sec); cursor: pointer; }
+  .p ul.checks input { accent-color: var(--perf); }
+  ul.checks .tx { font-size: 14.5px; color: var(--ink); }
+  ul.checks .tx .why { color: var(--ink-2); }
+  ul.checks input:checked + .tx { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--line); }
+  ul.checks input:checked + .tx .why { color: var(--ink-3); }
+
+  code, .m { font-family: var(--mono); font-size: .88em; }
+  .m {
+    background: var(--surface-2); padding: 1.5px 6px; border-radius: 5px;
+    color: var(--ink); border: 1px solid var(--line-2); white-space: nowrap;
+  }
+  .s .m.hot { color: var(--sec); border-color: var(--sec-line); background: var(--sec-soft); }
+  .p .m.hot { color: var(--perf); border-color: var(--perf-line); background: var(--perf-soft); }
+
+  .callout {
+    display: flex; gap: 11px; margin-top: 16px; padding: 13px 15px;
+    border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line);
+    font-size: 13.5px; color: var(--ink-2);
+  }
+  .callout b { color: var(--ink); }
+  .callout .k { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); flex: none; padding-top: 1px; }
+
+  /* tables */
+  .tbl-scroll { overflow-x: auto; margin-top: 14px; border: 1px solid var(--line); border-radius: 11px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 520px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+  thead th {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-3); background: var(--surface-2); font-weight: 600; white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td .m { white-space: normal; }
+  td b { font-weight: 600; }
+
+  .sev {
+    font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .04em;
+    padding: 3px 9px; border-radius: 999px; white-space: nowrap; display: inline-block;
+  }
+  .sev.crit { background: var(--crit-bg); color: var(--crit); }
+  .sev.high { background: var(--high-bg); color: var(--high); }
+  .sev.med  { background: var(--med-bg);  color: var(--med); }
+  .sev.low  { background: var(--low-bg);  color: var(--low); }
+  .sev.ok   { background: var(--ok-bg);   color: var(--ok); }
+
+  /* tool grid */
+  .tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 12px; margin-top: 14px; }
+  .tool {
+    border: 1px solid var(--line); border-radius: 11px; padding: 14px 15px; background: var(--surface);
+  }
+  .tool .nm { font-family: var(--disp); font-weight: 700; font-size: 15px; color: var(--ink); }
+  .tool .ph { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-top: 2px; }
+  .tool p { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+  .tool .free { font-family: var(--mono); font-size: 10.5px; color: var(--ok); margin-top: 8px; display: inline-block; }
+  .tool .paid { color: var(--med); }
+
+  /* scenario cards for load testing */
+  .scn { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-top: 16px; }
+  .scn .c { border: 1px solid var(--perf-line); border-radius: 12px; padding: 16px; background: var(--perf-soft); }
+  .scn .c h5 { font-family: var(--disp); font-weight: 700; font-size: 15px; margin: 0 0 4px; color: var(--ink); }
+  .scn .c .type { font-family: var(--mono); font-size: 11px; color: var(--perf); text-transform: uppercase; letter-spacing: .06em; }
+  .scn .c p { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); }
+  .scn .c .prof { font-family: var(--mono); font-size: 12px; color: var(--ink); margin-top: 10px; padding-top: 9px; border-top: 1px dashed var(--perf-line); }
+
+  footer {
+    grid-column: 1 / -1; border-top: 1px solid var(--line); margin-top: 40px;
+    padding: 26px 0 60px; color: var(--ink-3); font-size: 13px;
+    display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+  footer .m { background: none; border: none; padding: 0; color: var(--ink-3); }
+
+  .theme-btn {
+    position: fixed; top: 16px; right: 16px; z-index: 20;
+    width: 38px; height: 38px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink-2);
+    font-size: 16px; display: grid; place-items: center; box-shadow: var(--shadow);
+  }
+  .theme-btn:hover { color: var(--ink); }
+</style>
+
+<button class="theme-btn" id="themeBtn" aria-label="Toggle light and dark theme">◐</button>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow"><span class="dot"></span> Combined Test Plan &middot; Internal / Authorized Use</div>
+    <h1>Jorsas LMS <span class="a-sec">Penetration</span> &amp; <span class="a-perf">Scaling</span> Test Plan</h1>
+    <p class="lede">A methodology, tooling, and checklist reference for security and load testing the Jorsas Tech multi-tenant LMS against your own staging environment. No exploit code, no attack scripts &mdash; this is a plan you work through, not run.</p>
+    <div class="stack-row">
+      <span class="tag"><b>Backend</b> Laravel 12 &middot; MySQL</span>
+      <span class="tag"><b>Frontend</b> Next.js 16 &middot; React 19</span>
+      <span class="tag"><b>Auth</b> 3 bearer tokens &middot; LmsSession</span>
+      <span class="tag"><b>Tenancy</b> TenantScope multi-tenant</span>
+      <span class="tag"><b>Payments</b> Paystack + subaccount split</span>
+      <span class="tag"><b>Live</b> 8x8 JaaS &middot; RS256 JWT</span>
+      <span class="tag"><b>Infra</b> Shared host &middot; cron &middot; sync mail</span>
+      <span class="tag"><b>Data</b> PII &middot; payment &middot; academic records</span>
+    </div>
+  </header>
+
+  <div class="authz">
+    <div class="ic">!</div>
+    <div>
+      <h3>Test staging, and get it in writing first</h3>
+      <p>Run this against a <b>staging clone</b>, not live tenants &mdash; the every-minute cron sweeps send real email and the Paystack keys move real money. Before any test, hold written authorization naming the scope, the window, and the environment. Keep third-party infra (8x8 JaaS media servers, Paystack&rsquo;s own systems, the hosting provider&rsquo;s hardware) out of scope; you test your <em>integration</em> with them, never their platforms.</p>
+    </div>
+  </div>
+
+  <!-- ── SIDEBAR ── -->
+  <nav class="toc" aria-label="Contents">
+    <div class="toc-group">
+      <p class="toc-label s">Part A &middot; Security</p>
+      <a href="#s1"><span class="n">01</span>Recon &amp; information gathering</a>
+      <a href="#s2"><span class="n">02</span>Authentication &amp; sessions</a>
+      <a href="#s3"><span class="n">03</span>Authorization &amp; tenant isolation</a>
+      <a href="#s4"><span class="n">04</span>Input validation &amp; injection</a>
+      <a href="#s5"><span class="n">05</span>API-specific checks</a>
+      <a href="#s6"><span class="n">06</span>Infrastructure &amp; config</a>
+      <a href="#s7"><span class="n">07</span>Security tooling</a>
+    </div>
+    <div class="toc-group">
+      <p class="toc-label p">Part B &middot; Performance</p>
+      <a href="#p8"><span class="n">08</span>Load testing strategy</a>
+      <a href="#p9"><span class="n">09</span>Metrics to capture</a>
+      <a href="#p10"><span class="n">10</span>Bottleneck identification</a>
+      <a href="#p11"><span class="n">11</span>Performance tooling</a>
+      <a href="#p12"><span class="n">12</span>Scaling recommendations</a>
+    </div>
+    <div class="toc-group">
+      <p class="toc-label r">Part C &middot; Reporting</p>
+      <a href="#r13"><span class="n">13</span>Combined findings template</a>
+    </div>
+    <div class="toc-prog">
+      <span class="cap">Checklist progress</span>
+      <div class="big"><span id="progNum">0</span><span style="font-size:15px;color:var(--ink-3)">%</span></div>
+      <div class="bar"><i id="progBar"></i></div>
+      <button id="resetBtn" type="button">Reset all checks</button>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- ══════════ PART A ══════════ -->
+    <div class="part-head s">
+      <span class="pk">Part A</span>
+      <h2>Security</h2>
+    </div>
+    <p class="part-intro">The headline risk in this system is <b>cross-tenant data leakage</b>: one institute owner, staff member, or student reaching another institute&rsquo;s records. Everything below is weighted toward that, plus the payment webhook, the three bearer-token flows, and the hand-signed JaaS tokens.</p>
+
+    <!-- 1 -->
+    <section class="card s" id="s1">
+      <div class="sec-title"><span class="num">01</span><h3>Recon &amp; information gathering</h3></div>
+      <p class="sec-desc">Map the real attack surface before touching it. This app has three portals (<span class="m">/lms/app</span> student, <span class="m">/lms/staff</span>, <span class="m">/lms/admin</span> owner), a Botble super-admin panel, per-institute storefronts at <span class="m">/i/{slug}</span>, and a Laravel API the Next.js frontend calls.</p>
+
+      <h4 class="grp">Surface mapping</h4>
+      <ul class="checks" data-key="s1">
+        <li><label><input type="checkbox"><span class="tx">Enumerate all route groups from <span class="m hot">routes/web.php</span>, <span class="m hot">routes/lms-api.php</span>, and console routes &mdash; catalogue every <span class="m">/api/frontend/lms/*</span> endpoint and which token guards it.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Distinguish the three portals and their tokens: <span class="m">lms_token</span>, <span class="m">lms_staff_token</span>, <span class="m">lms_owner_token</span>. Note which endpoints each is <span class="why">supposed</span> to reach.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Fingerprint versions: confirm <span class="m">APP_DEBUG=false</span> on staging/prod so Laravel&rsquo;s stack traces and Ignition page are not exposed.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Enumerate tenant slugs via public storefronts (<span class="m">/i/{slug}</span>) and the <span class="m">?tenant=</span> parameter; build a list of live tenants for later isolation testing.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Inspect the Next.js build for leaked secrets: only <span class="m">NEXT_PUBLIC_*</span> should reach the client bundle. Grep the built JS for keys, internal URLs, and the API base.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Review public docs / this repo&rsquo;s <span class="m">AGENTS.md</span> for disclosed infra details (JaaS domain, cron cadence, config knobs) an outsider could infer.</span></label></li>
+      </ul>
+      <div class="callout"><span class="k">Note</span><span>The frontend lives in a <b>separate gitignored repo</b> (<span class="m">jorsas-tech-v2/</span>). Recon it as its own artifact &mdash; its source-map exposure and env handling are independent of the Laravel root.</span></div>
+    </section>
+
+    <!-- 2 -->
+    <section class="card s" id="s2">
+      <div class="sec-title"><span class="num">02</span><h3>Authentication &amp; session management</h3></div>
+      <p class="sec-desc">Auth is bearer-token based via <span class="m">LmsSession</span>, with a deep-link flow that pins a tenant from <span class="m">?tenant=</span> and forwards to login with <span class="m">?next=</span>. Both the token lifecycle and the redirect handling need scrutiny.</p>
+
+      <h4 class="grp">Credential &amp; token flows</h4>
+      <ul class="checks" data-key="s2">
+        <li><label><input type="checkbox"><span class="tx">Test login rate limiting on <b>all three</b> login endpoints (student, staff, owner) plus <span class="m">forgot-password</span>. Confirm throttling exists &mdash; billing has <span class="m">throttle:10,1</span>; verify auth does too.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Verify password reset + setup tokens are single-use, expiring, tenant-scoped, and invalidated after use (the reset token carries <span class="m">tenant_id</span> &mdash; confirm it&rsquo;s enforced, not just stored).</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Check token entropy and storage: are <span class="m">LmsSession</span> tokens cryptographically random, and are they hashed at rest in the DB rather than stored in plaintext?</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Confirm logout / inactivity-logout actually invalidates the server session, and that a captured token stops working afterward.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Test session-to-tenant binding: a token issued for tenant A must never resolve tenant B, even if a <span class="m">?tenant=</span> or host header says otherwise.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Enumerate account existence: do login and forgot-password responses differ for real vs fake emails? Per-tenant uniqueness means a timing or message oracle can leak membership.</span></label></li>
+      </ul>
+
+      <h4 class="grp">Deep-link redirect flow</h4>
+      <ul class="checks" data-key="s2b">
+        <li><label><input type="checkbox"><span class="tx">Attempt open-redirect via <span class="m hot">?next=</span>: confirm <span class="m">isSafeNextPath()</span> rejects absolute URLs, protocol-relative <span class="m">//host</span>, and auth pages &mdash; only same-origin <span class="m">/lms/</span> paths should pass.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Verify a logged-out tap on an emailed link cannot be coerced to pin a <em>different</em> tenant than the one the recipient belongs to.</span></label></li>
+      </ul>
+    </section>
+
+    <!-- 3 -->
+    <section class="card s" id="s3">
+      <div class="sec-title"><span class="num">03</span><h3>Authorization &amp; tenant isolation</h3></div>
+      <p class="sec-desc">This is the section that matters most. The app relies on Laravel&rsquo;s <span class="m">TenantScope</span> global scope plus per-request tenant binding. Every place that binding is dropped (<span class="m">withoutGlobalScope</span>), or an ID is trusted from the request, is a candidate for cross-tenant IDOR.</p>
+
+      <h4 class="grp">Cross-tenant IDOR (horizontal)</h4>
+      <ul class="checks" data-key="s3">
+        <li><label><input type="checkbox"><span class="tx">As owner of tenant A, request every <span class="m">/owner/*</span> resource by tenant B&rsquo;s IDs: courses, tracks, students, staff, certificates, forums, payments. Each must 404/403, never return B&rsquo;s row.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Repeat for the student and staff portals: can a student read another cohort&rsquo;s modules, tasks, submissions, chat, or attendance by ID?</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Audit every controller path that calls <span class="m hot">withoutGlobalScope(TenantScope::class)</span> (announcement fan-out, email sweeps, roster lookups) &mdash; confirm each re-scopes or bulk-writes correctly and never returns cross-tenant data to a user.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Test id-smuggling on writes: submit another tenant&rsquo;s <span class="m">course_id</span>/<span class="m">track_id</span> in create/update bodies (course invite, cohort assign) &mdash; confirm the documented smuggling defense holds.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Check the shared <span class="m">CeoForum</span> feature: it is deliberately <b>not</b> tenant-scoped. Confirm <span class="m">forumToken</span> only mints for confirmed owners and that the join-window gate (<span class="m">isJoinable()</span>) can&rsquo;t be bypassed to mint early.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Verify the primary tenant (<span class="m">id=1</span>, jorsas) invariant can&rsquo;t be assumed by a non-primary tenant to escalate reach.</span></label></li>
+      </ul>
+
+      <h4 class="grp">Privilege escalation (vertical)</h4>
+      <ul class="checks" data-key="s3b">
+        <li><label><input type="checkbox"><span class="tx">Attempt student token &rarr; staff endpoint, staff token &rarr; owner endpoint, owner token &rarr; Botble super-admin. Each guard boundary must reject cross-role use.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Confirm <span class="m">ensureSuperAdmin()</span> (<span class="m">isSuperUser()</span>) actually gates all host-only actions: platform announcements, CEO forum CRUD, institute delete/resend, plans admin.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Verify a suspended staff account (<span class="m">is_active=false</span>) is refused at login <em>and</em> on every already-authenticated call, not just the login screen.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Test the agent/withdrawal flow: can an agent approve their own payout, or read another agent&rsquo;s commission ledger?</span></label></li>
+      </ul>
+    </section>
+
+    <!-- 4 -->
+    <section class="card s" id="s4">
+      <div class="sec-title"><span class="num">04</span><h3>Input validation &amp; injection</h3></div>
+      <p class="sec-desc">Eloquent parameterizes SQL by default, so raw-query paths and <span class="m">DB::raw</span> usages are the SQLi candidates. XSS surfaces split between React (largely auto-escaped) and the Blade admin panels.</p>
+
+      <h4 class="grp">Injection</h4>
+      <ul class="checks" data-key="s4">
+        <li><label><input type="checkbox"><span class="tx">Grep for <span class="m hot">DB::raw</span>, <span class="m">whereRaw</span>, <span class="m">selectRaw</span>, <span class="m">orderByRaw</span> and any string-interpolated query; fuzz those inputs (search, filters, sort params) for SQLi.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Test sort/filter parameters that map to column names (e.g. <span class="m">orderBy($request-&gt;sort)</span>) for column/direction injection.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Probe any endpoint that shells out or builds file paths (favicon/logo generation, storage paths) for command or path-traversal injection.</span></label></li>
+      </ul>
+
+      <h4 class="grp">XSS &amp; content rendering</h4>
+      <ul class="checks" data-key="s4b">
+        <li><label><input type="checkbox"><span class="tx">Store XSS payloads in every owner-editable field that renders elsewhere: course titles, storefront hero/about, institute name, announcement body, chat messages, forum topic. Check both the React portal and the Blade admin list views.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Hunt for <span class="m hot">dangerouslySetInnerHTML</span> in the frontend and <span class="m">{!! !!}</span> unescaped output in Blade &mdash; these bypass default escaping.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Test file uploads (logo, course cover, profile cover): enforce MIME/extension allowlist, size caps, and that stored files can&rsquo;t be served as HTML/SVG with active script.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Verify emailed content (notification titles/bodies, forum invites) can&rsquo;t carry HTML injection into the mail template.</span></label></li>
+      </ul>
+    </section>
+
+    <!-- 5 -->
+    <section class="card s" id="s5">
+      <div class="sec-title"><span class="num">05</span><h3>API-specific checks</h3></div>
+      <p class="sec-desc">The payment webhook and the JaaS token endpoints are the highest-value API targets, alongside the usual mass-assignment and rate-limit gaps.</p>
+
+      <h4 class="grp">Payments &amp; webhooks</h4>
+      <ul class="checks" data-key="s5">
+        <li><label><input type="checkbox"><span class="tx">Verify the Paystack webhook validates the <span class="m hot">x-paystack-signature</span> HMAC against the raw body before trusting any event &mdash; forge an unsigned/mis-signed event and confirm it&rsquo;s rejected.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Test payment idempotency: replay a valid <span class="m">charge.success</span> webhook and confirm it can&rsquo;t double-provision an enrolment or double-credit an agent.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Confirm amount/currency and subaccount split are validated server-side against the plan, not taken from the client (the split % now syncs on <span class="m">activatePlan()</span> &mdash; verify a tampered checkout can&rsquo;t alter it).</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Check the pay-first signup: confirm provisioning only happens after verified payment, and a spoofed <span class="m">verify?reference=</span> can&rsquo;t provision for free.</span></label></li>
+      </ul>
+
+      <h4 class="grp">Live-class (JaaS) tokens</h4>
+      <ul class="checks" data-key="s5b">
+        <li><label><input type="checkbox"><span class="tx">Confirm the <span class="m">moderator</span> claim is server-set per role &mdash; a student/participant token must never be mintable with <span class="m">moderator:"true"</span>.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Review the <span class="m">room:"*"</span> claim: understand that one token is valid for any room the SDK joins, and confirm room names aren&rsquo;t guessable enough to let a non-member join another institute&rsquo;s class.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Verify token TTL (<span class="m">exp</span>) is short and that the private key is never exposed to the client or logs.</span></label></li>
+      </ul>
+
+      <h4 class="grp">Mass assignment &amp; endpoint hygiene</h4>
+      <ul class="checks" data-key="s5c">
+        <li><label><input type="checkbox"><span class="tx">Test mass assignment: POST extra fields (<span class="m">tenant_id</span>, <span class="m">role</span>, <span class="m">is_active</span>, <span class="m">plan</span>, <span class="m">status</span>, price) to owner create/update endpoints &mdash; confirm <span class="m">$fillable</span> excludes privilege/ownership columns.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Rate-limit the expensive/abusable endpoints: invite/resend (sends email), AI material generation (Gamma, costs money), bank-account resolve, file uploads.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Confirm error responses don&rsquo;t leak internals: no SQL, no stack traces, no other-tenant data in validation messages.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Check the frontend&rsquo;s <span class="m">!ok</span> handling can&rsquo;t be weaponized &mdash; ensure server enforces auth even where the client &ldquo;swallows&rdquo; errors.</span></label></li>
+      </ul>
+    </section>
+
+    <!-- 6 -->
+    <section class="card s" id="s6">
+      <div class="sec-title"><span class="num">06</span><h3>Infrastructure &amp; configuration</h3></div>
+      <p class="sec-desc">Shared-hosting Laravel with <span class="m">config:cache</span>, cron-driven work, and a Next.js frontend. Several documented traps live here &mdash; the <span class="m">env()</span>-vs-<span class="m">config()</span> gotcha and the wildcard CORS being the sharpest.</p>
+
+      <ul class="checks" data-key="s6">
+        <li><label><input type="checkbox"><span class="tx">Lock CORS before prod: <span class="m hot">config/cors.php</span> ships <span class="m">allowed_origins =&gt; ['*']</span>. Confirm it&rsquo;s narrowed to the real frontend origin(s), especially with credentialed requests.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Verify security headers on both apps: <span class="m">Strict-Transport-Security</span>, <span class="m">X-Content-Type-Options</span>, <span class="m">X-Frame-Options</span>/frame-ancestors CSP, and a Content-Security-Policy (mind the JaaS iframe origin).</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Confirm no runtime <span class="m hot">env()</span> reads on cached config paths &mdash; feature flags and Paystack keys must come from <span class="m">config()</span> or they blank out under <span class="m">config:cache</span> (documented live-404 / payment-503 traps).</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Audit secret handling: <span class="m">JITSI_PRIVATE_KEY</span>, Paystack keys, <span class="m">GAMMA_API_KEY</span>, mail creds &mdash; env-only, never committed, never in the client bundle or error output.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Confirm <span class="m">.env</span>, <span class="m">storage/</span>, <span class="m">.git/</span>, and <span class="m">/vendor</span> are not web-reachable; <span class="m">APP_KEY</span> is set and unique per environment.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Review CI/CD (GitHub Actions): secrets stored as encrypted repo/environment secrets, not echoed to logs; the gitignored frontend repo has its own secret hygiene.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Confirm the scheduler is driven by a single <span class="m">schedule:run</span> cron and that <span class="m">withoutOverlapping()</span> guards actually prevent a slow sweep from stacking (also a perf concern &mdash; see &sect;10).</span></label></li>
+        <li><label><input type="checkbox"><span class="tx">Check storage/public file URLs aren&rsquo;t directory-listable and that uploaded media is served with a safe content-type.</span></label></li>
+      </ul>
+    </section>
+
+    <!-- 7 -->
+    <section class="card s" id="s7">
+      <div class="sec-title"><span class="num">07</span><h3>Recommended security tooling</h3></div>
+      <p class="sec-desc">Open-source first. Match each tool to the phase it serves rather than running everything at once.</p>
+      <div class="tools">
+        <div class="tool"><div class="nm">OWASP ZAP</div><div class="ph">Recon &middot; scanning</div><p>Proxy, spider, and passive/active scan the API and both portals. Good baseline for headers, XSS, and injection surfacing.</p><span class="free">free / open-source</span></div>
+        <div class="tool"><div class="nm">Burp Suite (Community)</div><div class="ph">Manual testing</div><p>Repeater/Intruder for the manual IDOR and tenant-isolation work that scanners miss. The core of &sect;3 testing.</p><span class="free">free tier</span></div>
+        <div class="tool"><div class="nm">Postman / Hoppscotch</div><div class="ph">API mapping</div><p>Build a collection of every endpoint per token; script the &ldquo;same request, other tenant&rsquo;s ID&rdquo; matrix for IDOR.</p><span class="free">free / open-source</span></div>
+        <div class="tool"><div class="nm">Nuclei</div><div class="ph">Config &middot; CVE</div><p>Template-driven checks for exposed <span class="m">.env</span>, debug pages, misconfig, and known-CVE fingerprints.</p><span class="free">free / open-source</span></div>
+        <div class="tool"><div class="nm">Semgrep</div><div class="ph">SAST</div><p>Static rules for <span class="m">DB::raw</span>, <span class="m">dangerouslySetInnerHTML</span>, missing tenant scopes, and mass-assignment in Laravel + React.</p><span class="free">free / open-source</span></div>
+        <div class="tool"><div class="nm">Laravel Enlightn</div><div class="ph">Framework audit</div><p>Laravel-specific security + config analyzer: catches the <span class="m">env()</span>/config, CORS, and header issues named in &sect;6.</p><span class="free">free tier</span></div>
+        <div class="tool"><div class="nm">npm audit / OSV-Scanner</div><div class="ph">Dependencies</div><p>SCA for the Next.js and Composer trees. OSV-Scanner covers both ecosystems from one tool.</p><span class="free">free / open-source</span></div>
+        <div class="tool"><div class="nm">testssl.sh</div><div class="ph">TLS</div><p>Verify TLS config, HSTS, and cert chain on every host (API, frontend, storefront subdomains).</p><span class="free">free / open-source</span></div>
+      </div>
+    </section>
+
+    <!-- ══════════ PART B ══════════ -->
+    <div class="part-head p">
+      <span class="pk">Part B</span>
+      <h2>Scaling &amp; Performance</h2>
+    </div>
+    <p class="part-intro">The constraint that shapes everything: <b>shared hosting, a single MySQL, and synchronous mail sent by an every-minute cron</b> with no queue worker. Load testing here is less about a huge concurrent-user number and more about which of those three chokes first &mdash; and what happens when a marketing push, a renewal season, or a scheduled CEO Forum lands all at once.</p>
+
+    <!-- 8 -->
+    <section class="card p" id="p8">
+      <div class="sec-title"><span class="num">08</span><h3>Load testing strategy</h3></div>
+      <p class="sec-desc">Four test shapes, each mapped to a real Jorsas scenario. Always run against a staging clone with production-shaped data volume (seed realistic tenant/student/enrolment counts &mdash; an empty DB hides every N+1).</p>
+      <div class="scn">
+        <div class="c"><div class="type">Baseline</div><h5>Normal weekday</h5><p>Establish the reference: dashboard loads, materials/timetable fetches, chat polling (5s student, 15s staff), a trickle of logins.</p><div class="prof">Steady, ~expected DAU concurrency, 15&ndash;30 min</div></div>
+        <div class="c"><div class="type">Stress</div><h5>Enrolment surge</h5><p>Ramp signups + pay-first checkouts + course invites until error rate climbs or latency breaks threshold. Find the ceiling.</p><div class="prof">Ramp to breakpoint, hold, observe failure mode</div></div>
+        <div class="c"><div class="type">Soak</div><h5>Renewal season</h5><p>Sustained moderate load for hours. Surfaces connection leaks, memory growth, and cron sweeps falling behind their backlog.</p><div class="prof">60&ndash;70% of breakpoint, 2&ndash;8 hours</div></div>
+        <div class="c"><div class="type">Spike</div><h5>Forum + announcement</h5><p>All institute owners join a CEO Forum at once (token mint burst) while a platform announcement fans out email to every tenant.</p><div class="prof">Sudden step to peak, recover, re-measure</div></div>
+      </div>
+      <div class="callout"><span class="k">Isolate</span><span>The 8x8 JaaS <b>media</b> load is out of scope (it&rsquo;s their infrastructure). What you load test is your server&rsquo;s <b>token minting</b> under a join burst &mdash; the RS256 signing and the DB reads around it, not the video conference itself.</span></div>
+    </section>
+
+    <!-- 9 -->
+    <section class="card p" id="p9">
+      <div class="sec-title"><span class="num">09</span><h3>Key metrics to capture</h3></div>
+      <p class="sec-desc">Capture client-side latency <em>and</em> server-side resource metrics together &mdash; a fast p50 with a saturated DB pool is a system about to fall over. Suggested starting thresholds below; tune to your SLA.</p>
+      <div class="tbl-scroll">
+        <table>
+          <thead><tr><th>Metric</th><th>Where</th><th>Healthy target</th><th>Investigate past</th></tr></thead>
+          <tbody>
+            <tr><td><b>Response time p50</b></td><td>Load tool</td><td>&lt; 200 ms</td><td class="m">&gt; 400 ms</td></tr>
+            <tr><td><b>Response time p95</b></td><td>Load tool</td><td>&lt; 800 ms</td><td class="m">&gt; 1.5 s</td></tr>
+            <tr><td><b>Response time p99</b></td><td>Load tool</td><td>&lt; 1.5 s</td><td class="m">&gt; 3 s</td></tr>
+            <tr><td><b>Error rate</b></td><td>Load tool</td><td>&lt; 0.1%</td><td class="m">&gt; 1%</td></tr>
+            <tr><td><b>Throughput</b></td><td>Load tool</td><td>meets target RPS</td><td class="m">plateaus under ramp</td></tr>
+            <tr><td><b>DB connections</b></td><td>MySQL</td><td>&lt; 70% of <span class="m">max_connections</span></td><td class="m">nearing limit / &ldquo;too many connections&rdquo;</td></tr>
+            <tr><td><b>Slow queries</b></td><td>MySQL slow log</td><td>none &gt; 100 ms</td><td class="m">repeated &gt; 500 ms</td></tr>
+            <tr><td><b>CPU / memory</b></td><td>Host</td><td>&lt; 70% sustained</td><td class="m">&gt; 85% sustained</td></tr>
+            <tr><td><b>Cron sweep duration</b></td><td>Scheduler log</td><td>&lt; 60 s (fits its minute)</td><td class="m">approaching / exceeding 60 s</td></tr>
+            <tr><td><b>Email queue depth</b></td><td><span class="m">emailed_at IS NULL</span></td><td>drains each tick</td><td class="m">backlog grows run over run</td></tr>
+            <tr><td><b>Frontend cold start</b></td><td>Next.js host</td><td>rare / &lt; 1 s</td><td class="m">frequent on spike</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 10 -->
+    <section class="card p" id="p10">
+      <div class="sec-title"><span class="num">10</span><h3>Bottleneck identification</h3></div>
+      <p class="sec-desc">Where this specific architecture tends to break, roughly in the order you&rsquo;ll hit them under load.</p>
+
+      <ul class="checks" data-key="p10">
+        <li><label><input type="checkbox"><span class="tx"><b>Synchronous mail is the first wall.</b> Mail sends inline within the per-minute sweep (batch cap ~120/table). Under an announcement fan-out to every tenant, the sweep can exceed its 60 s window and back up. Measure sweep duration and backlog growth directly.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx"><b>N+1 queries.</b> A perf pass already batched chat, notifications, and the staff-modules waterfall &mdash; re-verify with query logging under load, and check newer endpoints (owner forums feed, analytics) for regressions.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx"><b>Single MySQL connection saturation.</b> On shared hosting <span class="m">max_connections</span> is low. Chat/notification polling from many concurrent users multiplies open connections &mdash; watch the pool during the soak test.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx"><b>Polling amplification.</b> Student chat polls every 5 s, staff dashboard every 15 s. Model realistic concurrent pollers &mdash; N users &times; poll frequency is constant background RPS before any real traffic.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx"><b>JaaS token-mint burst.</b> A scheduled forum makes every owner mint at once; RS256 signing is CPU work. Confirm it doesn&rsquo;t starve request handlers.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx"><b>Announcement fan-out transaction.</b> Bulk insert across all tenants in one transaction &mdash; measure lock time and its effect on concurrent reads as tenant count grows.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx"><b>Cache effectiveness.</b> Verify the CurrencyService 2-tier cache and any config/route caches are actually hitting under load rather than recomputing per request.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx"><b>Frontend cold starts.</b> If Next.js is serverless-hosted, spikes trigger cold starts; if it&rsquo;s a long-running node process, watch its memory instead.</span></label></li>
+      </ul>
+    </section>
+
+    <!-- 11 -->
+    <section class="card p" id="p11">
+      <div class="sec-title"><span class="num">11</span><h3>Recommended performance tooling</h3></div>
+      <p class="sec-desc">A load generator plus server-side observability &mdash; you need both halves to read the results in &sect;9.</p>
+      <div class="tools">
+        <div class="tool"><div class="nm">k6</div><div class="ph">Load generation</div><p>Scriptable in JS, great p95/p99 output, models the ramp/soak/spike profiles cleanly. Strong default choice here.</p><span class="free">free / open-source</span></div>
+        <div class="tool"><div class="nm">Locust</div><div class="ph">Load generation</div><p>Python scenarios &mdash; ideal for modelling the stateful token-then-poll user journeys and the chat polling behaviour.</p><span class="free">free / open-source</span></div>
+        <div class="tool"><div class="nm">Artillery</div><div class="ph">Load generation</div><p>YAML-driven, quick to stand up for API-focused runs and CI smoke-load checks.</p><span class="free">free / open-source</span></div>
+        <div class="tool"><div class="nm">Apache JMeter</div><div class="ph">Load generation</div><p>Heavyweight but thorough; useful if you want a GUI and detailed per-request reporting.</p><span class="free">free / open-source</span></div>
+        <div class="tool"><div class="nm">Laravel Telescope</div><div class="ph">Query profiling</div><p>Per-request query counts and timings on staging &mdash; the fastest way to catch N+1 under real load. Disable on prod.</p><span class="free">free / open-source</span></div>
+        <div class="tool"><div class="nm">MySQL slow query log</div><div class="ph">DB profiling</div><p>Set a low <span class="m">long_query_time</span> on staging; pair with <span class="m">EXPLAIN</span> to find missing indexes.</p><span class="free">built-in</span></div>
+        <div class="tool"><div class="nm">Percona PMM</div><div class="ph">DB monitoring</div><p>Connection saturation, query analytics, and buffer-pool health during the soak and spike tests.</p><span class="free">free / open-source</span></div>
+        <div class="tool"><div class="nm">Blackfire / Clockwork</div><div class="ph">PHP profiling</div><p>Call-graph profiling to find the CPU hot spots (e.g. RS256 minting, serialization) under the forum spike.</p><span class="paid">free tier / OSS</span></div>
+      </div>
+    </section>
+
+    <!-- 12 -->
+    <section class="card p" id="p12">
+      <div class="sec-title"><span class="num">12</span><h3>Scaling recommendations</h3></div>
+      <p class="sec-desc">Ordered by leverage for this architecture &mdash; the first item alone removes the biggest documented constraint.</p>
+
+      <ul class="checks" data-key="p12">
+        <li><label><input type="checkbox"><span class="tx"><b>Move mail off the request/cron path onto a real queue.</b> A Redis/database queue with a worker (or a transactional email API) turns the synchronous sweep into async dispatch &mdash; the single highest-impact change. Removes the 60 s-window backlog risk entirely.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx"><b>Add a caching layer (Redis).</b> Cache dashboard aggregates, branding, currency, and plan lookups. Cuts DB reads that the polling traffic multiplies, and gives the queue a home.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx"><b>Right-size the DB first (vertical), then add read replicas.</b> On a single MySQL, raise <span class="m">max_connections</span>/buffer pool and index hot queries before scaling out. Then route reporting/analytics and read-heavy polling to a replica.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx"><b>Horizontal app scaling behind a load balancer.</b> Laravel is stateless given bearer tokens + shared cache/session store &mdash; add app instances once mail and cache are externalized.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx"><b>Queue the spike work.</b> Announcement fan-out and forum-invite blasts should enqueue per-recipient jobs rather than run in one long transaction/loop &mdash; smooths the spike and makes it retryable.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx"><b>Reduce polling pressure.</b> Longer intervals with backoff, or move chat/notifications to SSE/websockets, to cut the constant background RPS from &sect;10.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx"><b>CDN + edge cache the frontend and public storefronts.</b> Static assets and <span class="m">/i/{slug}</span> pages cache well; measure cache-hit ratio and push it up.</span></label></li>
+        <li><label><input type="checkbox"><span class="tx"><b>Define autoscaling triggers.</b> Scale app instances on sustained CPU &gt; 70% or p95 &gt; threshold; alert on DB connections &gt; 70% and email backlog growth.</span></label></li>
+      </ul>
+    </section>
+
+    <!-- ══════════ PART C ══════════ -->
+    <div class="part-head r">
+      <span class="pk">Part C</span>
+      <h2>Reporting</h2>
+    </div>
+    <p class="part-intro">One template that carries both disciplines so remediation can be prioritized on a single list &mdash; a critical auth flaw and a system-breaking latency cliff should compete for the same top slot.</p>
+
+    <!-- 13 -->
+    <section class="card r" id="r13">
+      <div class="sec-title"><span class="num">13</span><h3>Combined findings template</h3></div>
+
+      <h4 class="grp">Security severity scale</h4>
+      <div class="tbl-scroll">
+        <table>
+          <thead><tr><th>Severity</th><th>Meaning for this system</th><th>Example</th><th>Target fix</th></tr></thead>
+          <tbody>
+            <tr><td><span class="sev crit">CRITICAL</span></td><td>Cross-tenant data breach, auth bypass, or money movement</td><td>Tenant A owner reads tenant B student PII; forged webhook provisions free enrolment</td><td class="m">&lt; 24&ndash;48 h</td></tr>
+            <tr><td><span class="sev high">HIGH</span></td><td>Privilege escalation or sensitive data exposure, single-tenant</td><td>Staff token reaches owner endpoint; stored XSS in shared field</td><td class="m">&lt; 1 week</td></tr>
+            <tr><td><span class="sev med">MEDIUM</span></td><td>Exploitable with preconditions or limited impact</td><td>Missing rate limit on invite/email; account enumeration oracle</td><td class="m">&lt; 1 month</td></tr>
+            <tr><td><span class="sev low">LOW</span></td><td>Hardening / defense-in-depth</td><td>Missing security header; verbose non-sensitive error</td><td class="m">backlog</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4 class="grp">Performance threshold breaches</h4>
+      <div class="tbl-scroll">
+        <table>
+          <thead><tr><th>Class</th><th>Breach condition</th><th>Example</th><th>Priority</th></tr></thead>
+          <tbody>
+            <tr><td><span class="sev crit">P1 &middot; Breaking</span></td><td>System fails or errors under expected peak</td><td>DB &ldquo;too many connections&rdquo; during enrolment surge; sweep backlog never drains</td><td class="m">block launch / peak event</td></tr>
+            <tr><td><span class="sev high">P2 &middot; Degrading</span></td><td>SLA threshold breached under realistic load</td><td>p95 &gt; 1.5 s during soak; error rate &gt; 1% on spike</td><td class="m">before next peak</td></tr>
+            <tr><td><span class="sev med">P3 &middot; Inefficient</span></td><td>Wasteful but within SLA</td><td>N+1 adding avoidable queries; low cache-hit ratio</td><td class="m">planned sprint</td></tr>
+            <tr><td><span class="sev low">P4 &middot; Watch</span></td><td>Trending toward a limit</td><td>Memory creep over long soak; connections at 60% and rising</td><td class="m">monitor + capacity plan</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4 class="grp">Per-finding record</h4>
+      <p class="sec-desc">Log every finding &mdash; security or performance &mdash; with the same fields so they rank on one combined remediation list:</p>
+      <div class="tbl-scroll">
+        <table>
+          <thead><tr><th>Field</th><th>What to record</th></tr></thead>
+          <tbody>
+            <tr><td><b>ID &amp; title</b></td><td>Stable ref (e.g. <span class="m">SEC-003</span> / <span class="m">PERF-002</span>) and a one-line summary</td></tr>
+            <tr><td><b>Type &amp; severity</b></td><td>Security severity or performance class from the scales above</td></tr>
+            <tr><td><b>Component</b></td><td>Endpoint, portal, controller, or scenario affected</td></tr>
+            <tr><td><b>Evidence</b></td><td>Request/response (redacted), metric chart, query log, or repro steps &mdash; no live PII</td></tr>
+            <tr><td><b>Impact</b></td><td>Who/what is affected and the business consequence (tenants breached, users blocked at peak)</td></tr>
+            <tr><td><b>Likelihood / trigger</b></td><td>Preconditions to exploit, or the load level that triggers the breach</td></tr>
+            <tr><td><b>Remediation</b></td><td>Concrete fix + owner + target date from the fix-window columns</td></tr>
+            <tr><td><b>Status</b></td><td>Open &rarr; In progress &rarr; Fixed &rarr; Retested &amp; verified</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout"><span class="k">Priority</span><span>Rank the two scales on <b>one list</b> by real-world consequence, not by discipline. A <span class="sev crit">CRITICAL</span> tenant-isolation break and a <span class="sev crit">P1</span> connection-exhaustion cliff are peers &mdash; both can stop the platform &mdash; and should be triaged together, above every HIGH/P2 regardless of which half of the audit found them.</span></div>
+    </section>
+
+  </main>
+
+  <footer>
+    <span class="m">Jorsas LMS &middot; combined security + scaling test plan</span>
+    <span class="m">Authorized internal testing only &middot; staging environment</span>
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    "use strict";
+    var STORE = "jorsas-testplan-checks-v1";
+    var THEME = "jorsas-testplan-theme";
+
+    // ── Theme toggle ──
+    var root = document.documentElement;
+    var btn = document.getElementById("themeBtn");
+    function readTheme() { try { return localStorage.getItem(THEME); } catch (e) { return null; } }
+    var saved = readTheme();
+    if (saved === "dark" || saved === "light") root.setAttribute("data-theme", saved);
+    btn.addEventListener("click", function () {
+      var cur = root.getAttribute("data-theme");
+      if (!cur) {
+        cur = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      var next = cur === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem(THEME, next); } catch (e) {}
+    });
+
+    // ── Checklist persistence ──
+    var boxes = Array.prototype.slice.call(document.querySelectorAll("ul.checks input[type=checkbox]"));
+    // give each a stable id from its list key + index
+    boxes.forEach(function (b, i) {
+      var list = b.closest("ul.checks");
+      var key = (list && list.getAttribute("data-key")) || "x";
+      var idx = Array.prototype.indexOf.call(list.querySelectorAll("input[type=checkbox]"), b);
+      b.dataset.cid = key + ":" + idx;
+    });
+
+    function load() {
+      try {
+        var raw = localStorage.getItem(STORE);
+        return raw ? JSON.parse(raw) : {};
+      } catch (e) { return {}; }
+    }
+    function save(state) {
+      try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {}
+    }
+
+    var state = load();
+    boxes.forEach(function (b) { if (state[b.dataset.cid]) b.checked = true; });
+
+    var progNum = document.getElementById("progNum");
+    var progBar = document.getElementById("progBar");
+    function updateProgress() {
+      var done = boxes.filter(function (b) { return b.checked; }).length;
+      var pct = boxes.length ? Math.round((done / boxes.length) * 100) : 0;
+      progNum.textContent = pct;
+      progBar.style.width = pct + "%";
+    }
+
+    boxes.forEach(function (b) {
+      b.addEventListener("change", function () {
+        state[b.dataset.cid] = b.checked;
+        save(state);
+        updateProgress();
+      });
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", function () {
+      boxes.forEach(function (b) { b.checked = false; });
+      state = {};
+      save(state);
+      updateProgress();
+    });
+
+    updateProgress();
+  })();
+</script>

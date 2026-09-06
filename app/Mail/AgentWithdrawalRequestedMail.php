@@ -19,7 +19,7 @@ class AgentWithdrawalRequestedMail extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Withdrawal Requested — ' . $this->agent->name);
+        return new Envelope(subject: 'Withdrawal Requested, ' . $this->agent->name);
     }
 
     public function content(): Content

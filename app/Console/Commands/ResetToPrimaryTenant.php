@@ -15,8 +15,8 @@ use App\Models\Tenant;
  *   - The PRIMARY tenant (Jorsas) is kept as an empty shell: all operational
  *     data is wiped (courses, staff, agents, students, enrolments, payments,
  *     chats, materials, certificates, invitations, audits, …) but its owner
- *     login (tenant_admins + tenant_users) and its `tenants` row — which carries
- *     branding/settings in the `settings` JSON — are preserved untouched.
+ *     login (tenant_admins + tenant_users) and its `tenants` row, which carries
+ *     branding/settings in the `settings` JSON, are preserved untouched.
  *
  * Safe by default: prints a plan and changes nothing unless --force is given.
  * Tenant-scoped tables are DISCOVERED at runtime (any table with a `tenant_id`
@@ -30,7 +30,7 @@ class ResetToPrimaryTenant extends Command
 
     /**
      * Tables that hold the PRIMARY owner's login and must survive the wipe.
-     * (For non-primary tenants these are still deleted — that tenant is removed
+     * (For non-primary tenants these are still deleted, that tenant is removed
      * entirely.) The `tenants` row itself is handled separately and never
      * deleted for the primary, so branding/settings in its `settings` column
      * are preserved.
@@ -42,16 +42,16 @@ class ResetToPrimaryTenant extends Command
         $db = DB::getDatabaseName();
         $slug = config('saas.primary_slug', 'jorsas');
 
-        // 1. Resolve the primary tenant. Abort loudly if we can't — proceeding
+        // 1. Resolve the primary tenant. Abort loudly if we can't, proceeding
         //    without a confirmed primary could wipe everything.
         $primary = Tenant::where('slug', $slug)->first();
         if (! $primary) {
-            $this->error("Primary tenant (slug='{$slug}') not found in database '{$db}'. Aborting — nothing deleted.");
+            $this->error("Primary tenant (slug='{$slug}') not found in database '{$db}'. Aborting, nothing deleted.");
             return self::FAILURE;
         }
         $primaryId = (int) $primary->id;
         if ($primaryId <= 0) {
-            $this->error("Resolved a non-positive primary id ({$primaryId}). Aborting — nothing deleted.");
+            $this->error("Resolved a non-positive primary id ({$primaryId}). Aborting, nothing deleted.");
             return self::FAILURE;
         }
 
@@ -88,7 +88,7 @@ class ResetToPrimaryTenant extends Command
         }
         $this->newLine();
 
-        // 4. Build the deletion plan (counts only — nothing deleted here).
+        // 4. Build the deletion plan (counts only, nothing deleted here).
         $plan = [];
         $totalNonPrimary = 0;
         $totalPrimaryWipe = 0;
@@ -124,7 +124,7 @@ class ResetToPrimaryTenant extends Command
 
         // 5. Dry run stops here.
         if (! $this->option('force')) {
-            $this->warn('DRY RUN — nothing was deleted. Re-run with --force to execute:');
+            $this->warn('DRY RUN, nothing was deleted. Re-run with --force to execute:');
             $this->line('    php artisan tenants:reset-to-primary --force');
             return self::SUCCESS;
         }
@@ -160,13 +160,13 @@ class ResetToPrimaryTenant extends Command
                 }
             });
         } catch (\Throwable $e) {
-            $this->error('Failed — transaction rolled back, nothing deleted: ' . $e->getMessage());
+            $this->error('Failed, transaction rolled back, nothing deleted: ' . $e->getMessage());
             return self::FAILURE;
         } finally {
             DB::statement('SET FOREIGN_KEY_CHECKS=1');
         }
 
-        // 7. After snapshot — prove the shell survived and the data is gone.
+        // 7. After snapshot, prove the shell survived and the data is gone.
         $this->newLine();
         $this->info('Done. Post-reset state:');
         $remainingTenants = DB::table('tenants')->get(['id', 'slug', 'name', 'plan']);

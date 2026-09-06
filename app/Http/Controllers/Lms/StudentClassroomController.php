@@ -30,7 +30,7 @@ class StudentClassroomController extends BaseLmsController
             return response()->json(['message' => 'You cannot join this class yet.'], 403);
         }
 
-        // "Mark attendance only" — record the join without launching the embedded
+        // "Mark attendance only", record the join without launching the embedded
         // room. Live classes run on Jitsi (joined in-portal), so there is no longer
         // an external meeting URL to open here.
         LmsAttendance::query()->firstOrCreate(
@@ -77,8 +77,8 @@ class StudentClassroomController extends BaseLmsController
         // Live classes are a paid-plan feature. Gate on the bound tenant's plan
         // (ResolveTenantFromSession bound it from the bearer token) BEFORE the
         // platform config check, so a free institute is told to upgrade rather
-        // than shown a misleading "not configured". The primary institute — and
-        // any tier that includes live_classes — passes through.
+        // than shown a misleading "not configured". The primary institute, and
+        // any tier that includes live_classes, passes through.
         $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
         if (! $tenant || ! $tenant->planFeature('live_classes')) {
             return response()->json([

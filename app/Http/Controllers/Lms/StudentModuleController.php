@@ -11,7 +11,7 @@ class StudentModuleController extends BaseLmsController
 {
     /**
      * Return the ids (as a flipped set for O(1) lookup) of the given modules
-     * that already have at least one delivered (past, non-cancelled) class —
+     * that already have at least one delivered (past, non-cancelled) class, 
      * one query instead of an exists() per module.
      */
     private function taughtModuleIds(\Illuminate\Support\Collection $moduleIds): \Illuminate\Support\Collection

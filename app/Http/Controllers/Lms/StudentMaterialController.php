@@ -41,7 +41,7 @@ class StudentMaterialController extends BaseLmsController
                 'file_url' => $m->file_url,
                 'type' => $m->type,
                 'session_id' => $m->session_id,
-                // Externally-hosted video (Bunny Stream) pointers — present only for
+                // Externally-hosted video (Bunny Stream) pointers, present only for
                 // videos uploaded to Bunny; file_url is the player embed URL. Lets the
                 // student gallery show a thumbnail + play into an iframe (not <video>).
                 'provider' => $m->provider,

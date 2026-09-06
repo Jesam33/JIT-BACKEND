@@ -155,8 +155,8 @@ class StaffClassroomController extends BaseLmsController
         // Live classes are a paid-plan feature. Gate on the bound tenant's plan
         // (ResolveTenantFromSession bound it from the bearer token) BEFORE the
         // platform config check, so a free institute is told to upgrade rather
-        // than shown a misleading "not configured". The primary institute — and
-        // any tier that includes live_classes — passes through.
+        // than shown a misleading "not configured". The primary institute, and
+        // any tier that includes live_classes, passes through.
         $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
         if (! $tenant || ! $tenant->planFeature('live_classes')) {
             return response()->json([

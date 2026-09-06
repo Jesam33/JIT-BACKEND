@@ -614,7 +614,7 @@ class StudentChatController extends BaseLmsController
 
     /**
      * Add or remove the student's reaction (one emoji) on a message they can
-     * see — a message in their track's group chat or their instructor DM.
+     * see, a message in their track's group chat or their instructor DM.
      * Returns the message's full re-aggregated reaction list.
      */
     public function toggleReaction(Request $request, int $id): JsonResponse

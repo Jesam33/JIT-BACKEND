@@ -13,7 +13,7 @@ use Illuminate\Queue\SerializesModels;
 /**
  * Sent when an institute owner invites a student straight into a course
  * (Issue C). Branded as the academy (from the registration's tenant_id) and it
- * NAMES the course the student is joining — closing the gap the owner reported
+ * NAMES the course the student is joining, closing the gap the owner reported
  * ("how do students know the course they're signing up for?").
  *
  * One template, two modes:

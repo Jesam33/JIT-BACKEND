@@ -10,15 +10,15 @@ use Illuminate\Support\Facades\Http;
  *
  * Two separate concerns kept deliberately apart:
  *
- *  • DISPLAY — a cosmetic "≈ £30" the visitor sees, converted from the base NGN
+ *  • DISPLAY, a cosmetic "≈ £30" the visitor sees, converted from the base NGN
  *    price at live FX rates and rounded. Never authoritative; recomputed per view.
- *  • CHARGE — the currency money is actually collected in: NGN for Nigeria, USD
+ *  • CHARGE, the currency money is actually collected in: NGN for Nigeria, USD
  *    for everyone else *only when* `saas.usd_charge_enabled` is on (off by default,
  *    so today every buyer is charged NGN). Frozen server-side at registration.
  *
  * FX rates are base-NGN, fetched from a free no-key provider and cached. On
  * provider downtime the last-good rates are served; with no cache at all the
- * display silently falls back to base NGN — the storefront never errors over FX.
+ * display silently falls back to base NGN, the storefront never errors over FX.
  */
 class CurrencyService
 {
@@ -86,7 +86,7 @@ class CurrencyService
             return $fetched;
         }
 
-        // Provider unavailable — serve the last-good snapshot if we ever had one.
+        // Provider unavailable, serve the last-good snapshot if we ever had one.
         $lastGood = Cache::get(self::LAST_GOOD_KEY);
 
         return is_array($lastGood) && $lastGood ? $lastGood : null;
@@ -168,7 +168,7 @@ class CurrencyService
 
     /**
      * The currency the visitor is charged in: NGN for Nigeria (and whenever the
-     * country is unknown), otherwise USD — but only when USD charging is enabled;
+     * country is unknown), otherwise USD, but only when USD charging is enabled;
      * while it's off, everyone is charged NGN (today's behavior).
      */
     public function chargeCurrencyForCountry(?string $countryCode): string

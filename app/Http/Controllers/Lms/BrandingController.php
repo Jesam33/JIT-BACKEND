@@ -33,7 +33,7 @@ class BrandingController extends BaseLmsController
      * Branding read for UNAUTHENTICATED institute pages (student/staff login,
      * password setup + reset). There is no portal session yet, so the tenant is
      * resolved, in order, from:
-     *   1. an invite/setup token in the query — the TrainingRegistration it
+     *   1. an invite/setup token in the query, the TrainingRegistration it
      *      belongs to is stamped with the institute's tenant_id, so this is
      *      authoritative even on the bare apex domain (no subdomain, no cookie),
      *   2. the tenant ResolveTenant already bound (subdomain / ?tenant / header),
@@ -57,7 +57,7 @@ class BrandingController extends BaseLmsController
         $token = trim((string) $request->query('token', ''));
 
         if ($token !== '') {
-            // 1. Student invite/setup token — stamped on its TrainingRegistration.
+            // 1. Student invite/setup token, stamped on its TrainingRegistration.
             $registration = TrainingRegistration::query()
                 ->withoutGlobalScope(TenantScope::class)
                 ->where('invite_token', $token)
@@ -71,7 +71,7 @@ class BrandingController extends BaseLmsController
             }
 
             // 2. Staff/agent reset + owner-issued staff SETUP token. These are NOT
-            // training registrations — they live in lms_password_resets, which
+            // training registrations, they live in lms_password_resets, which
             // carries the institute's tenant_id. The token is stored as a sha256
             // hash, so match on the hash of the query token. Decorative read: no
             // used/expiry filter, so branding still resolves if the recipient

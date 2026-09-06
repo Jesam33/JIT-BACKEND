@@ -11,7 +11,7 @@ class ResolveTenant
      * Resolve the tenant from an explicit request signal (subdomain, header, or
      * ?org=) and bind it. While fail-closed enforcement is OFF, an unresolved
      * request falls back to the legacy 'default'/primary tenant so code can be
-     * deployed before the migration/backfill run. This middleware never aborts —
+     * deployed before the migration/backfill run. This middleware never aborts, 
      * RequireTenant is the gate.
      */
     public function handle($request, Closure $next)
@@ -28,7 +28,7 @@ class ResolveTenant
             }
         }
 
-        // Legacy fallback — only while fail-closed enforcement is disabled.
+        // Legacy fallback, only while fail-closed enforcement is disabled.
         if (! $tenant && ! config('saas.enforce_tenancy')) {
             $tenant = Tenant::where('slug', 'default')->first()
                 ?? Tenant::where('slug', config('saas.primary_slug', 'default'))->first();
@@ -61,7 +61,7 @@ class ResolveTenant
                 $subdomain = explode('.', $candidate)[0] ?? null;
             }
         } elseif (filter_var($host, FILTER_VALIDATE_IP)) {
-            // A bare IP host (127.0.0.1, ::1, a LAN address) has no subdomain —
+            // A bare IP host (127.0.0.1, ::1, a LAN address) has no subdomain, 
             // never mistake its first octet ("127") for a tenant slug, which would
             // short-circuit the header/?org resolution below.
             $subdomain = null;

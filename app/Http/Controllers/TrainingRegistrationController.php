@@ -20,7 +20,7 @@ class TrainingRegistrationController extends Controller
 {
     private function ensureTrainingFeatureEnabled(): void
     {
-        // Config-bound (config/saas.php), NOT env() — survives `php artisan
+        // Config-bound (config/saas.php), NOT env(), survives `php artisan
         // config:cache` on live, which otherwise blanks the direct env() read and
         // 404s the whole training-registration flow. Mirrors ensureLmsEnabled().
         if (! config('saas.training_feature_enabled')) {
