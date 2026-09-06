@@ -23,10 +23,16 @@ class LmsPasswordResetMail extends Mailable
         // un-updated caller still sends a valid (platform-default) email.
         //   $brandName  — sender NAME + header wordmark (defaults to mail.from.name)
         //   $brandColor — header/button/link accent hex (defaults to red #ed180d)
-        //   $replyTo    — where replies route (the institute), when known
+        //   $brandReplyTo — where replies route (the institute), when known.
+        //     NOTE: must NOT be named $replyTo — Illuminate\Mail\Mailable
+        //     already declares an untyped `public $replyTo = []`, and PHP 8.4
+        //     fatals ("Type of ... $replyTo must not be defined") if a subclass
+        //     re-declares that inherited property WITH a type. That fatal fires
+        //     at class-load (before any try/catch), killing the request with a
+        //     header-less 500 that the browser misreports as a CORS failure.
         public ?string $brandName = null,
         public ?string $brandColor = null,
-        public ?string $replyTo = null,
+        public ?string $brandReplyTo = null,
     ) {
     }
 
@@ -43,8 +49,8 @@ class LmsPasswordResetMail extends Mailable
             : (string) config('mail.from.name');
 
         $replyTo = [];
-        if ($this->replyTo && filter_var($this->replyTo, FILTER_VALIDATE_EMAIL)) {
-            $replyTo[] = new Address($this->replyTo, $fromName ?: 'Support');
+        if ($this->brandReplyTo && filter_var($this->brandReplyTo, FILTER_VALIDATE_EMAIL)) {
+            $replyTo[] = new Address($this->brandReplyTo, $fromName ?: 'Support');
         }
 
         return new Envelope(
