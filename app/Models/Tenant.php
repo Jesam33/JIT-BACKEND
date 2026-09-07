@@ -341,6 +341,13 @@ class Tenant extends Model
             // Tech". Empty when the tenant has no name; the client only applies it
             // on a NON-primary academy (the primary keeps the default title).
             'name' => trim((string) $this->name),
+            // Authoritative "is this the Jorsas platform tenant?" flag, resolved
+            // server-side from the session-bound tenant. The client uses it to
+            // decide whether to swap the tab title/favicon to the academy: on an
+            // authenticated portal the `tenant` cookie can be stale (a bare
+            // /lms/staff/app URL with no ?tenant= falls the cookie back to the
+            // primary slug), so it must NOT gate branding. This flag does.
+            'is_primary' => $this->isPrimary(),
         ];
     }
 
