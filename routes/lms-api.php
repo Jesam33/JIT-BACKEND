@@ -227,6 +227,13 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::post('/api/frontend/lms/owner/profile', [OwnerAdminController::class, 'updateProfile']);
     Route::post('/api/frontend/lms/owner/profile/cover', [OwnerAdminController::class, 'uploadCover']);
 
+    // Owner's own LOGIN account (Profile page → Personal details): name, email
+    // and password of the users-table row behind the owner session. Distinct
+    // from the public-page profile above (storefront content).
+    Route::get('/api/frontend/lms/owner/account', [OwnerAdminController::class, 'account']);
+    Route::post('/api/frontend/lms/owner/account', [OwnerAdminController::class, 'updateAccount']);
+    Route::post('/api/frontend/lms/owner/account/password', [OwnerAdminController::class, 'changeAccountPassword'])->middleware('throttle:10,1');
+
     // Owner course-fee payout: link the institute's own Paystack subaccount so
     // course fees settle to its bank (institute collects, not the platform).
     Route::get('/api/frontend/lms/owner/payment-settings', [OwnerAdminController::class, 'paymentSettings']);

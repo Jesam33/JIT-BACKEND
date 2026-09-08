@@ -1193,6 +1193,141 @@ class OwnerAdminController extends BaseLmsController
     }
 
     /**
+     * The OWNER's own login account (Personal details tab of the Profile page):
+     * the name, email, and password they sign in with, plus the academy's
+     * teaching niche (it lives on the tenant but is edited from this tab).
+     * Distinct from the public-page profile() above (storefront content) and
+     * from the tenant itself, this is the users-table row behind their owner
+     * session.
+     */
+    public function account(Request $request): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        [$tenant, $owner] = $context;
+
+        return response()->json([
+            'account' => [
+                'first_name' => $owner?->first_name ?? '',
+                'last_name' => $owner?->last_name ?? '',
+                'email' => $owner?->email,
+                'created_at' => $owner?->created_at,
+                // The academy's teaching category (drives the public Campuses
+                // directory filter). Lives on the TENANT's settings.profile, not
+                // the user row, but it's edited from this same tab.
+                'niche' => data_get($tenant->settings, 'profile.niche'),
+            ],
+        ]);
+    }
+
+    /**
+     * Update the owner's personal details. An email change also rewrites
+     * `username` (setup() seeds username = email, and the username is what the
+     * users table's uniqueness actually rests on), and the owner must log in
+     * with the new email from then on. Email must not collide with another
+     * users-table row, otherwise the next owner to sign up with that address
+     * would silently graft onto this account.
+     */
+    public function updateAccount(Request $request): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        [$tenant, $owner] = $context;
+
+        if (! $owner) {
+            return response()->json(['message' => 'Owner account not found.'], 404);
+        }
+
+        $validated = $request->validate([
+            'first_name' => ['nullable', 'string', 'max:120'],
+            'last_name' => ['nullable', 'string', 'max:120'],
+            'email' => ['required', 'email', 'max:190'],
+            // The academy's teaching category, free text (the general dropdown is
+            // frontend-only), stored on the tenant exactly like updateProfile
+            // stores it so both writers stay interchangeable.
+            'niche' => ['nullable', 'string', 'max:80'],
+        ]);
+
+        $email = strtolower(trim($validated['email']));
+
+        $collision = User::query()
+            ->where('email', $email)
+            ->whereKeyNot($owner->id)
+            ->exists();
+        if ($collision) {
+            return response()->json(['message' => 'That email is already used by another account.'], 422);
+        }
+
+        $owner->update([
+            'first_name' => trim((string) ($validated['first_name'] ?? '')),
+            'last_name' => trim((string) ($validated['last_name'] ?? '')),
+            'email' => $email,
+            'username' => $email,
+        ]);
+
+        // The niche rides on the tenant, not the user row. Same normalization as
+        // updateProfile (blank → null) so clearing it here clears it everywhere.
+        if (array_key_exists('niche', $validated)) {
+            $niche = trim((string) ($validated['niche'] ?? ''));
+            $settings = (array) ($tenant->settings ?? []);
+            $profile = (array) ($settings['profile'] ?? []);
+            $profile['niche'] = $niche === '' ? null : $niche;
+            $settings['profile'] = $profile;
+            $tenant->update(['settings' => $settings]);
+        }
+
+        return response()->json([
+            'message' => 'Personal details updated.',
+            'account' => [
+                'first_name' => $owner->first_name ?? '',
+                'last_name' => $owner->last_name ?? '',
+                'email' => $owner->email,
+                'created_at' => $owner->created_at,
+                'niche' => data_get($tenant->fresh()->settings, 'profile.niche'),
+            ],
+        ]);
+    }
+
+    /**
+     * Change the owner's login password. Requires the current password so a
+     * borrowed/unlocked browser can't silently take the account over. The
+     * bearer session stays valid (sessions are separate rows), matching the
+     * student/staff changePassword behaviour.
+     */
+    public function changeAccountPassword(Request $request): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        [$tenant, $owner] = $context;
+
+        if (! $owner) {
+            return response()->json(['message' => 'Owner account not found.'], 404);
+        }
+
+        $validated = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        if (! Hash::check($validated['current_password'], $owner->password)) {
+            return response()->json(['message' => 'Your current password is incorrect.'], 422);
+        }
+
+        $owner->update(['password' => Hash::make($validated['password'])]);
+
+        return response()->json(['message' => 'Password updated.']);
+    }
+
+    /**
      * Merge stored branding over sensible defaults (the current red/blue theme).
      */
     protected function brandingFor(Tenant $tenant): array
