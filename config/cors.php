@@ -31,7 +31,15 @@ return [
         explode(',', (string) env('CORS_ALLOWED_ORIGINS', ''))
     ))),
 
-    'allowed_origins_patterns' => [],
+    // Optional anchored REGEX allowing every tenant subdomain in one entry,
+    // e.g. CORS_ALLOWED_ORIGINS_PATTERN=~^https:\/\/[a-z0-9-]+\.jorsastech\.com$~
+    // (escape slashes or pick another delimiter). A pattern, not a wildcard in
+    // allowed_origins, is the right tool here: it stays anchored to YOUR domain
+    // while admitting any {academy}.jorsastech.com origin, and stays compatible
+    // with supports_credentials=true (unlike allowed_origins=['*']).
+    'allowed_origins_patterns' => array_values(array_filter([
+        env('CORS_ALLOWED_ORIGINS_PATTERN'),
+    ])),
 
     'allowed_headers' => ['*'],
 
