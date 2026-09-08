@@ -177,33 +177,17 @@ abstract class BaseLmsController extends Controller
     {
         if (! $courseId) return null;
 
-        $now = now();
-
-        $tracks = LmsTrack::query()->with('batch')
+        // LmsTrack::registrationOpen() is the single source of truth for the
+        // registration cutoff: it checks the cohort-level dates (end_date and
+        // registration_deadline ?? start_date, inclusive of the whole day) and
+        // falls back to the legacy Batch window, so cohort placement and the
+        // public registration gate can never disagree.
+        return LmsTrack::query()
+            ->with('batch')
             ->where('course_id', $courseId)
             ->orderBy('id')
-            ->get();
-
-        foreach ($tracks as $t) {
-            if (! $t->batch) {
-                return $t;
-            }
-
-            $starts = $t->batch->registration_starts_at;
-            $ends = $t->batch->registration_ends_at;
-
-            if ($starts && $now->lt($starts)) {
-                continue;
-            }
-
-            if ($ends && $now->gt($ends)) {
-                continue;
-            }
-
-            return $t;
-        }
-
-        return null;
+            ->get()
+            ->first(fn (LmsTrack $t) => $t->registrationOpen());
     }
 
     /**

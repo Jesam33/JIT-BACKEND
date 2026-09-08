@@ -20,19 +20,14 @@ class PublicPagesController extends Controller
         return view('public.onboarding');
     }
 
-    // simple JSON endpoint for available plans, sourced from config/saas.php
-    // (the plans DB table + admin CRUD are dormant; config is the source of truth)
+    // JSON endpoint for available plans, sourced from config/saas.php
+    // (the plans DB table + admin CRUD are dormant; config is the source of
+    // truth). Serves the FULL catalogue via the shared PlanCatalogue (the same
+    // source the billing portal's cards use) so the signup page renders cards
+    // identical to /lms/admin/billing. Unauthenticated, it carries no secrets.
     public function plansJson()
     {
-        $plans = collect(config('saas.plans', []))
-            ->map(fn ($plan, $slug) => [
-                'slug' => $slug,
-                'name' => $plan['name'] ?? ucfirst($slug),
-                'price' => (float) ($plan['price'] ?? 0),
-            ])
-            ->values();
-
-        return response()->json($plans);
+        return response()->json(['plans' => \App\Support\PlanCatalogue::all()]);
     }
 
     // Resolve tenant by host or slug. Accepts ?host=example.tenant.com or ?slug=tenant-slug

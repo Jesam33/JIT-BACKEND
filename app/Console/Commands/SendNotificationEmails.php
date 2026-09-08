@@ -200,7 +200,13 @@ class SendNotificationEmails extends Command
         return $query
             ->withoutGlobalScope(TenantScope::class)
             ->whereNull('emailed_at')
-            ->where('email_attempts', '<', $maxAttempts)
+            // Tolerate a NULL attempt counter. The column defaults to 0, but a row
+            // that predates the counter (or one written by a path that left it
+            // NULL) would be skipped forever by a bare `email_attempts < N`,
+            // because in SQL `NULL < N` is NULL, never true. Such a row would show
+            // in-app but never email. COALESCE keeps every un-emailed row eligible
+            // until it has genuinely exhausted its retry budget.
+            ->whereRaw('COALESCE(email_attempts, 0) < ?', [$maxAttempts])
             ->when($exclude, fn ($q) => $q->whereNotIn('type', $exclude))
             ->orderBy('id')
             ->limit($batch)
@@ -247,7 +253,11 @@ class SendNotificationEmails extends Command
 
             return true;
         } catch (\Throwable $e) {
-            $n->increment('email_attempts');
+            // Coerce a possibly-NULL counter to 0 before advancing it: a plain
+            // increment on NULL stays NULL in MySQL (NULL + 1 = NULL), so a bad
+            // address paired with the COALESCE guard above would retry every
+            // minute forever. Casting first guarantees it climbs to max and stops.
+            $n->forceFill(['email_attempts' => ((int) $n->email_attempts) + 1])->saveQuietly();
             Log::warning('lms:send-notification-emails: send failed', [
                 'table' => $n->getTable(),
                 'id' => $n->getKey(),

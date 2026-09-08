@@ -12,6 +12,7 @@ use App\Models\LmsStudent;
 use App\Models\LmsTrack;
 use App\Models\LmsNotification;
 use App\Models\LmsTeacher;
+use App\Models\LmsTeacherNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -32,6 +33,17 @@ class StudentChatController extends BaseLmsController
             ['student_id' => $studentId, 'chat_type' => 'dm', 'chat_id' => $chatId],
             ['last_read_at' => now()]
         );
+
+        // Reading the conversation clears its "new message" notification too, so the
+        // navbar bell (which counts unread notifications alongside unread chats) does
+        // not keep flagging a direct message the student has already opened.
+        LmsNotification::query()
+            ->where('student_id', $studentId)
+            ->where('type', 'message')
+            ->where('reference_type', 'dm_thread')
+            ->where('reference_id', $chatId)
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
     }
 
     public function unreadCount(Request $request): JsonResponse
@@ -475,6 +487,40 @@ class StudentChatController extends BaseLmsController
                 'reactions' => [],
                 'created_at' => $message->created_at->toIso8601String(),
             ]);
+        } catch (\Throwable) {}
+
+        // A direct message notifies its recipient. Here that is the thread's
+        // instructor; the staff navbar bell reads the notifications feed (not chat
+        // unread), so without this row a student's DM would never surface for the
+        // teacher. Dedup on the unread state so one burst of messages makes at most
+        // one notification (and one email) until the teacher opens the thread.
+        try {
+            $recipientTeacherId = (int) $dmThread->instructor_id;
+            if ($recipientTeacherId > 0) {
+                $hasPending = LmsTeacherNotification::query()
+                    ->where('teacher_id', $recipientTeacherId)
+                    ->where('type', 'message')
+                    ->where('reference_type', 'dm_thread')
+                    ->where('reference_id', $dmThread->id)
+                    ->where('is_read', false)
+                    ->exists();
+                if (! $hasPending) {
+                    $preview = trim($validated['content'] ?? '');
+                    if ($preview === '') {
+                        $preview = 'Sent an attachment';
+                    } elseif (mb_strlen($preview) > 140) {
+                        $preview = mb_substr($preview, 0, 140) . '...';
+                    }
+                    LmsTeacherNotification::query()->create([
+                        'teacher_id' => $recipientTeacherId,
+                        'type' => 'message',
+                        'title' => 'New message from ' . $studentName,
+                        'body' => $preview,
+                        'reference_type' => 'dm_thread',
+                        'reference_id' => $dmThread->id,
+                    ]);
+                }
+            }
         } catch (\Throwable) {}
 
         return response()->json([

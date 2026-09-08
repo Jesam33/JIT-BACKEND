@@ -217,6 +217,118 @@ class Tenant extends Model
     }
 
     /**
+     * The commission percent an admission agent earns on a sale for THIS academy.
+     * Per-tenant override in settings.agent_commission_percent (set by the owner on
+     * the payments page); falls back to the platform-wide default in config. Always
+     * clamped to a sane 0..100 so a bad stored value can never produce a negative or
+     * runaway payout. Distinct from {@see commissionPercent()} (the platform's own
+     * cut): this is money the academy pays its own agents, not the platform.
+     */
+    public function agentCommissionPercent(): float
+    {
+        $stored = data_get($this->settings, 'agent_commission_percent');
+        $percent = is_numeric($stored)
+            ? (float) $stored
+            : (float) config('saas.agent_commission_percent', 5);
+
+        return max(0.0, min(100.0, $percent));
+    }
+
+    /**
+     * Whether this tenant can ever be frozen for non-payment. Only a non-primary
+     * academy on a positive-price paid plan is eligible: the primary institute,
+     * the free plan (price 0), and contact-sales Enterprise (price null) are
+     * always exempt so they can never be locked out. This is the single guard
+     * every freeze decision funnels through.
+     */
+    public function isFreezeEligible(): bool
+    {
+        if ($this->isPrimary()) {
+            return false;
+        }
+
+        $price = data_get($this->planConfig(), 'price');
+
+        return is_numeric($price) && (float) $price > 0;
+    }
+
+    /**
+     * The subscription lifecycle state for display + gating, computed live from
+     * the paid period and the grace window, independent of whether enforcement
+     * is switched on:
+     *   'active' — within the paid period (or not freeze-eligible at all).
+     *   'grace'  — the paid period ended but is still inside the grace window.
+     *   'frozen' — past the grace window, or an operator hard-froze it.
+     * A null current_period_end reads as 'active' (nothing to enforce yet). An
+     * explicit subscription_status of 'frozen' always wins.
+     */
+    public function subscriptionState(): string
+    {
+        if (! $this->isFreezeEligible()) {
+            return 'active';
+        }
+
+        // An operator can hard-freeze from the host side regardless of dates.
+        if ($this->subscription_status === 'frozen') {
+            return 'frozen';
+        }
+
+        $end = $this->current_period_end;
+        if (! $end) {
+            return 'active';
+        }
+
+        $now = now();
+        if ($now->lessThanOrEqualTo($end)) {
+            return 'active';
+        }
+
+        $graceDays = max(0, (int) config('saas.subscription_grace_days', 2));
+        $graceEnds = $end->copy()->addDays($graceDays);
+
+        return $now->lessThanOrEqualTo($graceEnds) ? 'grace' : 'frozen';
+    }
+
+    /**
+     * Whether the OWNER portal should actually be frozen right now. Combines the
+     * lifecycle state with the master enforcement flag: while enforcement is off
+     * (deployed dark) this is always false, so the whole gate can ship and be
+     * reviewed before it is switched on. Never true for an exempt tenant.
+     */
+    public function isSubscriptionFrozen(): bool
+    {
+        if (! config('saas.subscription_enforce_freeze', false)) {
+            return false;
+        }
+
+        return $this->subscriptionState() === 'frozen';
+    }
+
+    /**
+     * Subscription state shaped for the owner UI (billing page renew banner +
+     * the freeze screen). Always safe to call; for an exempt tenant it reports
+     * active with no period. Carbon values serialize to ISO strings on JSON
+     * encode, matching how current_period_end is already returned by billing.
+     */
+    public function subscriptionInfo(): array
+    {
+        $end = $this->current_period_end;
+        $graceDays = max(0, (int) config('saas.subscription_grace_days', 2));
+        $eligible = $this->isFreezeEligible();
+
+        return [
+            'state' => $this->subscriptionState(),          // active | grace | frozen
+            'freeze_eligible' => $eligible,
+            'enforced' => (bool) config('saas.subscription_enforce_freeze', false),
+            'frozen' => $this->isSubscriptionFrozen(),
+            'status' => $this->subscription_status,
+            'current_period_end' => $end,
+            'grace_ends_at' => ($eligible && $end) ? $end->copy()->addDays($graceDays) : null,
+            'grace_days' => $graceDays,
+        ];
+    }
+
+    /**
      * Plan state + limits + current usage, shaped for the owner UI (billing and
      * dashboard). Usage counts are tenant-scoped to this institute; pass true to
      * include them (they run three COUNT queries).
@@ -453,6 +565,7 @@ class Tenant extends Model
         return [
             'tagline' => null,
             'about' => null,
+            'niche' => null,
             'cover_url' => null,
             'contact' => [
                 'email' => null,
@@ -484,6 +597,9 @@ class Tenant extends Model
         return [
             'tagline' => $p['tagline'] ?? null,
             'about' => $p['about'] ?? null,
+            // The academy's teaching niche (Campuses directory filter). Free-form
+            // string; the frontend offers a general dropdown plus an "Other" option.
+            'niche' => $p['niche'] ?? null,
             // Rebuilt against the current host so a cover frozen at upload time still
             // resolves (see brandingArray()/App\Support\MediaUrl).
             'cover_url' => \App\Support\MediaUrl::url($p['cover_url'] ?? null),

@@ -7,6 +7,16 @@ return [
     'primary_slug' => env('PRIMARY_TENANT_SLUG', 'jorsas'),
     'primary_name' => env('PRIMARY_TENANT_NAME', 'Jorsas Institute of Technology'),
 
+    // The platform's base domain (e.g. jorsastech.com). ResolveTenant strips this
+    // off the request Host to read the tenant subdomain ({slug}.jorsastech.com),
+    // and uses it to tell the platform's own hosts apart from a customer's custom
+    // domain. Resolved HERE via config — NOT env() in the middleware — so the value
+    // survives `php artisan config:cache` in production. (Reading env() directly
+    // returns null once the config is cached, which silently disables subdomain
+    // tenant resolution and drops every academy back to the primary tenant.) Set
+    // APP_DOMAIN=jorsastech.com in the live .env; leave blank for local dev.
+    'app_domain' => env('APP_DOMAIN', ''),
+
     // Header names accepted by ResolveTenant for public/unauthenticated requests.
     // Both are honoured so the existing frontend server components (X-Tenant-Slug)
     // and any legacy callers (X-Tenant) keep working.
@@ -104,6 +114,41 @@ return [
     // the institute's bank. Set to 0 to take no cut. Applied at subaccount
     // creation time (Paystack `percentage_charge`).
     'platform_commission_percent' => (float) env('PLATFORM_COMMISSION_PERCENT', 2),
+
+    // Default commission (percent of the course price) an admission agent earns on
+    // a sale they refer or register. This is the platform-wide DEFAULT; each
+    // academy can override it from its owner payments page (stored per-tenant in
+    // settings.agent_commission_percent, read via Tenant::agentCommissionPercent).
+    // It is entirely separate from the platform fee above: the platform fee is
+    // taken by Paystack at settlement, while the agent commission is a ledger the
+    // academy pays its own agents from. Set to 0 to default agents to no cut.
+    'agent_commission_percent' => (float) env('AGENT_COMMISSION_PERCENT', 5),
+
+    // ─── Subscription enforcement (owner plan billing) ─────────────────
+    // A paid-plan academy renews monthly (manual re-checkout on the billing page;
+    // there is no silent auto-charge). When its paid period ends it enters a short
+    // grace window, and once the grace elapses the OWNER portal freezes to a
+    // "contact management services" screen until the owner renews. Never touches
+    // the primary institute, a free plan, or contact-sales Enterprise (null price),
+    // and the billing + onboarding endpoints stay reachable while frozen so a
+    // lapsed owner can always pay their way back in. Students are never frozen.
+    //
+    // Deployed DARK: the enforcement flag defaults OFF so the whole gate can ship
+    // and be reviewed before it is switched on. Flip SUBSCRIPTION_ENFORCE_FREEZE=true
+    // in the live .env (then config:cache) to turn freezing on. Resolved here via
+    // config (never env() at the call site) so it survives config:cache.
+    'subscription_enforce_freeze' => filter_var(env('SUBSCRIPTION_ENFORCE_FREEZE', false), FILTER_VALIDATE_BOOLEAN),
+
+    // Days after a paid period ends before the owner portal freezes (grace window).
+    // During grace the portal still works and the billing page nudges the owner to
+    // renew; past it, the portal freezes. Default 2 days.
+    'subscription_grace_days' => (int) env('SUBSCRIPTION_GRACE_DAYS', 2),
+
+    // Where a frozen owner is told to reach the platform ("contact management
+    // services"). Optional: when set, the freeze screen shows it as a mailto.
+    // Falls back to the training admin address if that is configured. Read via
+    // config so it survives config:cache.
+    'support_email' => env('SUPPORT_EMAIL', env('TRAINING_ADMIN_EMAIL')),
 
     // Who bears Paystack's transaction fee (~1.5%) on split payments to an
     // institute's subaccount. `subaccount` (default) = the institute absorbs it

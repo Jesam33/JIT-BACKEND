@@ -95,6 +95,9 @@ class LmsIntakeController extends BaseLmsController
                 'is_full' => $course->isFull(),
                 'is_live_available' => $course->is_live_available,
                 'is_prerecorded_available' => $course->is_prerecorded_available,
+                'registration_open' => $course->registrationOpen(),
+                'registration_closes_at' => $course->openCohort()?->registrationClosesAt(),
+                'next_cohort_starts_at' => $course->tracks()->whereNotNull('start_date')->orderBy('start_date')->value('start_date'),
             ])
             ->values();
 
@@ -127,6 +130,9 @@ class LmsIntakeController extends BaseLmsController
             'is_full' => $course->isFull(),
             'is_live_available' => $course->is_live_available,
             'is_prerecorded_available' => $course->is_prerecorded_available,
+            'registration_open' => $course->registrationOpen(),
+            'registration_closes_at' => $course->openCohort()?->registrationClosesAt(),
+            'next_cohort_starts_at' => $course->tracks()->whereNotNull('start_date')->orderBy('start_date')->value('start_date'),
         ]);
     }
 
@@ -173,6 +179,17 @@ class LmsIntakeController extends BaseLmsController
             return response()->json([
                 'message' => 'This course is full. Please join the waitlist.',
                 'is_full' => true,
+            ], 422);
+        }
+
+        // Cohort registration cutoff (the hard guarantee behind the storefront's
+        // closed state): a course whose cohorts all have closed registration
+        // windows takes no new students, even if the form is submitted directly.
+        // LmsCourse::registrationOpen() keeps a no-cohort course open.
+        if (! $course->registrationOpen()) {
+            return response()->json([
+                'message' => 'Registration for this course has closed. Please check back for the next cohort.',
+                'registration_closed' => true,
             ], 422);
         }
 
@@ -441,6 +458,35 @@ class LmsIntakeController extends BaseLmsController
         return response()->json(['message' => 'Webhook received.']);
     }
 
+    /**
+     * The admission-agent commission RATE (a 0..1 fraction) to apply for a sale of
+     * the given course. Resolves the owning academy from the bound tenant when one
+     * is present (the normal request path), else from the course row itself (e.g. a
+     * webhook tick where no tenant is bound), so the correct per-academy rate is
+     * used in every context; falls back to the platform default when the tenant
+     * cannot be resolved. Kept separate from the platform's own settlement cut, and
+     * distinct from the 5% referral discount the student already received on price.
+     */
+    private function agentCommissionRate(int $courseId): float
+    {
+        $tenant = (app()->bound('currentTenant') && app('currentTenant'))
+            ? app('currentTenant')
+            : null;
+
+        if (! $tenant) {
+            $tenantId = LmsCourse::withoutGlobalScope(TenantScope::class)
+                ->whereKey($courseId)
+                ->value('tenant_id');
+            $tenant = $tenantId ? Tenant::find($tenantId) : null;
+        }
+
+        $percent = $tenant
+            ? $tenant->agentCommissionPercent()
+            : (float) config('saas.agent_commission_percent', 5);
+
+        return $percent / 100;
+    }
+
     private function handleZeroPayment(TrainingRegistration $registration): JsonResponse
     {
         $token = Str::random(80);
@@ -483,13 +529,14 @@ class LmsIntakeController extends BaseLmsController
 
         LmsCourse::query()->where('id', $registration->course_id)->increment('registered_count');
 
+        $agentRate = $this->agentCommissionRate($registration->course_id);
         if ($registration->referred_by_agent_id) {
             $fullPrice = (float) $registration->course_price / 0.95;
             AgentCommission::create([
                 'agent_id' => $registration->referred_by_agent_id,
                 'enrollment_id' => null,
                 'course_price' => round($fullPrice, 2),
-                'commission_amount' => round($fullPrice * 0.10, 2),
+                'commission_amount' => round($fullPrice * $agentRate, 2),
                 'status' => 'pending',
                 'type' => 'referral',
                 'notes' => "Student: {$registration->first_name} {$registration->last_name}, Course: {$registration->course_name}",
@@ -500,7 +547,7 @@ class LmsIntakeController extends BaseLmsController
                 'agent_id' => $registration->registered_by_agent_id,
                 'enrollment_id' => null,
                 'course_price' => round($fullPrice, 2),
-                'commission_amount' => round($fullPrice * 0.10, 2),
+                'commission_amount' => round($fullPrice * $agentRate, 2),
                 'status' => 'pending',
                 'type' => 'direct',
                 'notes' => "Student: {$registration->first_name} {$registration->last_name}, Course: {$registration->course_name}",
@@ -618,13 +665,14 @@ class LmsIntakeController extends BaseLmsController
 
         LmsCourse::query()->where('id', $registration->course_id)->increment('registered_count');
 
+        $agentRate = $this->agentCommissionRate($registration->course_id);
         if ($registration->referred_by_agent_id) {
             $fullPrice = (float) $registration->course_price / 0.95;
             AgentCommission::create([
                 'agent_id' => $registration->referred_by_agent_id,
                 'enrollment_id' => null,
                 'course_price' => round($fullPrice, 2),
-                'commission_amount' => round($fullPrice * 0.10, 2),
+                'commission_amount' => round($fullPrice * $agentRate, 2),
                 'status' => 'pending',
                 'type' => 'referral',
                 'notes' => "Student: {$registration->first_name} {$registration->last_name}, Course: {$registration->course_name}",
@@ -635,7 +683,7 @@ class LmsIntakeController extends BaseLmsController
                 'agent_id' => $registration->registered_by_agent_id,
                 'enrollment_id' => null,
                 'course_price' => round($fullPrice, 2),
-                'commission_amount' => round($fullPrice * 0.10, 2),
+                'commission_amount' => round($fullPrice * $agentRate, 2),
                 'status' => 'pending',
                 'type' => 'direct',
                 'notes' => "Student: {$registration->first_name} {$registration->last_name}, Course: {$registration->course_name}",

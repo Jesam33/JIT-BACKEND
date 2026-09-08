@@ -376,6 +376,8 @@ class StaffChatController extends BaseLmsController
 
         $teacher = \App\Models\LmsTeacher::query()->findOrFail($session->user_id);
 
+        $dmThread = LmsDmThread::query()->find($validated['dm_thread_id']);
+
         $message = LmsMessage::query()->create([
             'chat_type' => 'dm',
             'chat_id' => $validated['dm_thread_id'],
@@ -401,6 +403,37 @@ class StaffChatController extends BaseLmsController
                 'reactions' => [],
                 'created_at' => $message->created_at->toIso8601String(),
             ]);
+        } catch (\Throwable) {}
+
+        // A direct message notifies its recipient. Here that is the thread's
+        // student; deduped on the unread state so one burst of replies makes at most
+        // one notification (and one email) until the student opens the thread.
+        try {
+            if ($dmThread && (int) $dmThread->student_id > 0) {
+                $hasPending = LmsNotification::query()
+                    ->where('student_id', (int) $dmThread->student_id)
+                    ->where('type', 'message')
+                    ->where('reference_type', 'dm_thread')
+                    ->where('reference_id', $dmThread->id)
+                    ->where('is_read', false)
+                    ->exists();
+                if (! $hasPending) {
+                    $preview = trim($validated['content'] ?? '');
+                    if ($preview === '') {
+                        $preview = 'Sent an attachment';
+                    } elseif (mb_strlen($preview) > 140) {
+                        $preview = mb_substr($preview, 0, 140) . '...';
+                    }
+                    LmsNotification::query()->create([
+                        'student_id' => (int) $dmThread->student_id,
+                        'type' => 'message',
+                        'title' => 'New message from ' . $teacher->name,
+                        'body' => $preview,
+                        'reference_type' => 'dm_thread',
+                        'reference_id' => $dmThread->id,
+                    ]);
+                }
+            }
         } catch (\Throwable) {}
 
         return response()->json([
@@ -499,6 +532,16 @@ class StaffChatController extends BaseLmsController
         }
 
         LmsTeacher::query()->where('id', $session->user_id)->update(['dm_chat_read_at' => now()]);
+
+        // Opening the DM tab clears its "new message" notifications too, so the
+        // navbar bell (which counts unread notifications) does not keep flagging
+        // direct messages the teacher has already read.
+        \App\Models\LmsTeacherNotification::query()
+            ->where('teacher_id', $session->user_id)
+            ->where('type', 'message')
+            ->where('reference_type', 'dm_thread')
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
 
         return response()->json(['ok' => true]);
     }

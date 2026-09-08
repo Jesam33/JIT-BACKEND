@@ -91,6 +91,39 @@ class LmsCourse extends Model
         return $this->hasMany(LmsTrack::class, 'course_id');
     }
 
+    /**
+     * The cohort new registrations are placed into (the first one whose
+     * registration window is open, lowest id first, matching
+     * BaseLmsController::findActiveTrackForCourse). Null when the course has
+     * no open cohort.
+     */
+    public function openCohort(): ?LmsTrack
+    {
+        return $this->tracks()
+            ->orderBy('id')
+            ->get()
+            ->first(fn (LmsTrack $t) => $t->registrationOpen());
+    }
+
+    public function hasCohorts(): bool
+    {
+        return $this->tracks()->exists();
+    }
+
+    /**
+     * Whether students can still register for this course. A course with no
+     * cohorts stays open (the pre-cohort behaviour: students register and are
+     * placed once a cohort exists). A course WITH cohorts is open only while
+     * at least one cohort's registration window is open.
+     */
+    public function registrationOpen(): bool
+    {
+        if (! $this->hasCohorts()) {
+            return true;
+        }
+        return $this->openCohort() !== null;
+    }
+
     public function reviews(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(LmsCourseReview::class, 'course_id');

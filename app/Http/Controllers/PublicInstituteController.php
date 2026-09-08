@@ -136,6 +136,7 @@ class PublicInstituteController extends Controller
                 'primary_color' => $branding['primary_color'],
                 'entity_label' => $branding['entity_label'],
                 'description' => $description,
+                'niche' => $profile['niche'],
                 'course_titles' => $courses,
                 'course_count' => $courseCount,
             ];
@@ -342,6 +343,12 @@ class PublicInstituteController extends Controller
             // Pre-recorded requires BOTH the per-course toggle AND a plan that
             // unlocks pre-recorded video, so a Free academy never offers it.
             'is_prerecorded_available' => $prerecordedAvailable,
+            // Cohort registration window: closed when every cohort's cutoff
+            // (registration_deadline ?? start_date, or end_date) has passed.
+            // A no-cohort course stays open (pre-cohort behaviour).
+            'registration_open' => $course->registrationOpen(),
+            'registration_closes_at' => $course->openCohort()?->registrationClosesAt()?->toIso8601String(),
+            'next_cohort_starts_at' => $course->tracks()->whereNotNull('start_date')->orderBy('start_date')->value('start_date'),
             // Separate (cheaper) pre-recorded price + its localized display. Null
             // when there's no distinct pre-recorded price (falls back to `price`).
             'prerecorded_price' => $prerecordedPrice,

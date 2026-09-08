@@ -156,7 +156,7 @@ Route::middleware('tenant.primary')->group(function () {
 | tenant from a header/subdomain at entry. RequireTenant aborts 400 when no
 | tenant is bound (only once config('saas.enforce_tenancy') is true).
 */
-Route::middleware('tenant.required')->group(function () {
+Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     // Owner onboarding actions (org update, import students, create course, invite staff)
     Route::post('/api/frontend/lms/onboarding/org', [\App\Http\Controllers\Lms\OwnerOnboardingController::class, 'updateOrg']);
     Route::post('/api/frontend/lms/onboarding/import-students', [\App\Http\Controllers\Lms\OwnerOnboardingController::class, 'importStudents']);
@@ -233,6 +233,15 @@ Route::middleware('tenant.required')->group(function () {
     Route::post('/api/frontend/lms/owner/payment-settings', [OwnerAdminController::class, 'updatePaymentSettings']);
     // Confirm the account-holder name before linking (Paystack /bank/resolve).
     Route::post('/api/frontend/lms/owner/resolve-account', [OwnerAdminController::class, 'resolveBankAccount'])->middleware('throttle:30,1');
+
+    // Owner custom domains (Pro/Enterprise): point learn.youracademy.com at the
+    // platform. Add → publish DNS → verify (TXT check) → the domain resolves the
+    // academy (ResolveTenant). Every action is tenant-scoped + custom_domain-gated
+    // inside the controller. Verify is throttled (each call does a DNS lookup).
+    Route::get('/api/frontend/lms/owner/domains', [OwnerAdminController::class, 'domains']);
+    Route::post('/api/frontend/lms/owner/domains', [OwnerAdminController::class, 'addDomain']);
+    Route::post('/api/frontend/lms/owner/domains/{id}/verify', [OwnerAdminController::class, 'verifyDomain'])->middleware('throttle:20,1');
+    Route::delete('/api/frontend/lms/owner/domains/{id}', [OwnerAdminController::class, 'deleteDomain']);
 
     // Owner AI training materials (Gamma, Pro+). generate → poll status → save the
     // finished Gamma link into a course/module. Every action gates on the

@@ -34,6 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant.required' => \App\Http\Middleware\RequireTenant::class,
             'tenant.primary' => \App\Http\Middleware\BindPrimaryTenant::class,
             'plan.chat' => \App\Http\Middleware\EnsureChatEnabled::class,
+            'subscription.gate' => \App\Http\Middleware\EnsureSubscriptionActive::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

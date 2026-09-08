@@ -53,15 +53,22 @@ class TenantSignupController extends Controller
             // No password at signup, the owner sets it later on the emailed setup
             // link (/lms/admin/setup), so registration only collects who they are.
             'plan' => ['required', 'string', Rule::in($selfServePlans)],
+            // The academy's teaching niche, used by the public Campuses filter.
+            // Free text is allowed so an owner who picks "Other" can type their own;
+            // the dropdown of general niches lives on the frontend (src/lib/niches.ts),
+            // so we never constrain the stored value to a fixed list here.
+            'niche' => ['required', 'string', 'max:80'],
         ], [
             'slug.regex' => 'The subdomain may only contain lowercase letters, numbers, and hyphens.',
             'slug.not_in' => 'That subdomain is reserved. Please choose another.',
             'plan.required' => 'Please choose a plan.',
             'plan.in' => 'Please choose one of the available plans.',
+            'niche.required' => 'Please choose what your academy teaches.',
         ]);
 
         $plan = $validated['plan'];
         $email = $validated['admin_email'];
+        $niche = trim($validated['niche']);
 
         // A free plan (price ≤ 0) provisions without payment; only paid signups
         // need a live gateway. Fail loud for a paid plan when Paystack is unset
@@ -118,6 +125,10 @@ class TenantSignupController extends Controller
             $tenant = Tenant::find($pendingTenantId);
             $settings = $tenant->settings ?? [];
             $settings['plan'] = $plan;
+            // Persist the chosen niche without disturbing any other profile keys.
+            $profile = (array) ($settings['profile'] ?? []);
+            $profile['niche'] = $niche;
+            $settings['profile'] = $profile;
             $tenant->update(['name' => $validated['name'], 'settings' => $settings]);
 
             // Switching an abandoned (still-pending) signup to the free plan:
@@ -159,7 +170,7 @@ class TenantSignupController extends Controller
                 'name' => $validated['name'],
                 'slug' => $slug,
                 'status' => 'pending', // nothing provisioned until payment confirms
-                'settings' => ['plan' => $plan],
+                'settings' => ['plan' => $plan, 'profile' => ['niche' => $niche]],
             ]);
 
             [$first, $last] = array_pad(explode(' ', $validated['admin_name'], 2), 2, '');

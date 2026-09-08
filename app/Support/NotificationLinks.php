@@ -46,6 +46,7 @@ class NotificationLinks
             'staff' => match ($refType) {
                 'task', 'task_submission' => '/lms/staff/tasks',
                 'group_chat' => '/lms/staff/chats',
+                'dm_thread' => '/lms/staff/chats',
                 'scheduled_class' => '/lms/staff/timetable',
                 default => '/lms/staff/notifications',
             },
@@ -57,6 +58,7 @@ class NotificationLinks
             default => match ($refType) {
                 'task' => $id ? '/lms/tasks/' . $id : '/lms/app/tasks',
                 'group_chat' => '/lms/app/chats',
+                'dm_thread' => '/lms/app/chats',
                 'scheduled_class' => '/lms/app/classroom',
                 'module' => $id ? '/lms/app/modules/' . $id : '/lms/app/modules',
                 'course' => '/lms/app/modules',

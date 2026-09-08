@@ -137,6 +137,11 @@ class TenantBillingController extends BaseLmsController
             'plan' => $tenant->plan ?? 'free',
             'subscription_status' => $tenant->subscription_status ?? 'active',
             'current_period_end' => $tenant->current_period_end,
+            // Live subscription lifecycle (active | grace | frozen) plus the grace
+            // window + whether enforcement is switched on, so the billing page can
+            // show a renew banner before the freeze and the owner shell knows when
+            // to lock. Always safe: reports active for an exempt tenant.
+            'subscription' => $tenant->subscriptionInfo(),
             // Resolved current plan (limits + features + commission) with live usage
             // counts, so the billing page can show "12 / 50 students" and which
             // features the current plan includes. Primary institute reads as 'pro'.
@@ -338,44 +343,15 @@ class TenantBillingController extends BaseLmsController
     }
 
     /**
-     * The upgradeable plan catalogue from config, shaped for the billing UI, 
-     * price, per-plan commission, the three limits (null = unlimited) and the
-     * feature flags, so the page can render a full comparison from one call.
+     * The upgradeable plan catalogue from config, shaped for the plan cards
+     * (price, per-plan commission, the three limits (null = unlimited) and the
+     * feature flags, so the page can render a full comparison from one call).
+     * Delegates to the shared App\Support\PlanCatalogue, the same source the
+     * public /api/plans endpoint serves, so the billing cards and the signup
+     * cards are identical by construction.
      */
     protected function planCatalogue(): array
     {
-        $default = config('saas.platform_commission_percent', 2);
-
-        // Every feature flag the plan model exposes, in display order, kept in
-        // sync with config/saas.php `features` and the billing UI's labels. `free`
-        // lists them all (false), so data_get always resolves.
-        $featureKeys = [
-            'live_classes', 'chat', 'certificates', 'pre_recorded_video',
-            'admission_marketer', 'remove_branding', 'advanced_analytics',
-            'advanced_reporting', 'custom_domain', 'priority_support',
-            'ai_materials', 'api_access', 'white_label',
-        ];
-
-        return collect(config('saas.plans', []))
-            ->map(fn ($plan, $slug) => [
-                'slug' => $slug,
-                'name' => $plan['name'] ?? ucfirst($slug),
-                'label' => $plan['label'] ?? null,
-                // Enterprise has no self-serve price, it's a contact-sales tier,
-                // so price stays null (the UI renders "Contact sales", not ₦0).
-                'price' => array_key_exists('price', $plan) && $plan['price'] !== null ? (float) $plan['price'] : null,
-                'contact_sales' => (bool) ($plan['contact_sales'] ?? false),
-                'commission_percent' => (float) ($plan['commission_percent'] ?? $default),
-                'limits' => [
-                    'courses' => data_get($plan, 'limits.courses'),
-                    'students' => data_get($plan, 'limits.students'),
-                    'staff' => data_get($plan, 'limits.staff'),
-                ],
-                'features' => collect($featureKeys)
-                    ->mapWithKeys(fn ($k) => [$k => (bool) data_get($plan, "features.$k", false)])
-                    ->all(),
-            ])
-            ->values()
-            ->all();
+        return \App\Support\PlanCatalogue::all();
     }
 }

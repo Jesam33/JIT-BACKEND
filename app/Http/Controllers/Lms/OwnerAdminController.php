@@ -764,7 +764,7 @@ class OwnerAdminController extends BaseLmsController
         $tracks = LmsTrack::query()
             ->with('course:id,title')
             ->latest('id')
-            ->get(['id', 'name', 'course_id', 'instructor_id', 'batch_id', 'created_at']);
+            ->get(['id', 'name', 'course_id', 'instructor_id', 'batch_id', 'start_date', 'end_date', 'registration_deadline', 'created_at']);
 
         // Resolve instructor names in one query (same tenant scope applies).
         $instructorNames = LmsTeacher::query()
@@ -778,6 +778,11 @@ class OwnerAdminController extends BaseLmsController
             'course_id' => $t->course_id,
             'instructor' => $t->instructor_id ? ($instructorNames[$t->instructor_id] ?? null) : null,
             'instructor_id' => $t->instructor_id,
+            'start_date' => $t->start_date?->toDateString(),
+            'end_date' => $t->end_date?->toDateString(),
+            'registration_deadline' => $t->registration_deadline?->toDateString(),
+            'registration_open' => $t->registrationOpen(),
+            'registration_closes_at' => $t->registrationClosesAt()?->toIso8601String(),
             'created_at' => $t->created_at,
         ]);
 
@@ -1097,6 +1102,9 @@ class OwnerAdminController extends BaseLmsController
         $validated = $request->validate([
             'tagline' => ['nullable', 'string', 'max:160'],
             'about' => ['nullable', 'string', 'max:5000'],
+            // Teaching niche shown in the public Campuses filter. Free text (owners
+            // may pick "Other" and type their own); the general dropdown is frontend-only.
+            'niche' => ['nullable', 'string', 'max:80'],
             'contact' => ['nullable', 'array'],
             'contact.email' => ['nullable', 'email', 'max:255'],
             'contact.phone' => ['nullable', 'string', 'max:40'],
@@ -1116,7 +1124,7 @@ class OwnerAdminController extends BaseLmsController
 
         $norm = fn ($v) => (is_string($v) && trim($v) === '') ? null : $v;
 
-        foreach (['tagline', 'about'] as $key) {
+        foreach (['tagline', 'about', 'niche'] as $key) {
             if (array_key_exists($key, $validated)) {
                 $profile[$key] = $norm($validated[$key]);
             }
@@ -1234,6 +1242,11 @@ class OwnerAdminController extends BaseLmsController
                 'account_name' => $paystack['account_name'] ?? null,
             ],
             'platform_commission_percent' => $tenant->commissionPercent(),
+            // The cut this academy pays its own admission agents on each sale, and
+            // whether the agent programme is even part of this plan (the UI only
+            // shows the control when it is). Distinct from the platform fee above.
+            'agent_commission_percent' => $tenant->agentCommissionPercent(),
+            'agent_program_enabled' => (bool) $tenant->planFeature('admission_marketer'),
             'gateway_ready' => $gatewayReady,
             // The bank picker only needs codes when linking a fresh subaccount, and
             // the list is a live Paystack round-trip, only fetch it when the
@@ -1260,6 +1273,29 @@ class OwnerAdminController extends BaseLmsController
         }
 
         [$tenant] = $context;
+
+        // Rate-only update: the owner is just changing the agent commission from
+        // the payments page, not touching the payout bank. Handle it up front so it
+        // never triggers the subaccount validation below. Gated on the plan actually
+        // including the agent programme, and clamped 0..100 so a bad value can never
+        // produce a negative or runaway payout.
+        if ($request->has('agent_commission_percent')
+            && ! $request->hasAny(['subaccount_code', 'bank_code', 'account_number', 'disconnect'])) {
+            if (! $tenant->planFeature('admission_marketer')) {
+                return response()->json(['message' => 'The admission agent programme is not part of your current plan.'], 403);
+            }
+            $rate = $request->validate([
+                'agent_commission_percent' => ['required', 'numeric', 'min:0', 'max:100'],
+            ]);
+            $settings = (array) ($tenant->settings ?? []);
+            $settings['agent_commission_percent'] = round((float) $rate['agent_commission_percent'], 2);
+            $tenant->update(['settings' => $settings]);
+
+            return response()->json([
+                'message' => 'Agent commission updated.',
+                'agent_commission_percent' => $settings['agent_commission_percent'],
+            ]);
+        }
 
         $validated = $request->validate([
             'subaccount_code' => ['nullable', 'string', 'max:120'],
@@ -1408,6 +1444,216 @@ class OwnerAdminController extends BaseLmsController
             'account_name' => $name,
             'message' => $name ? null : 'Could not resolve this account. Check the account number and the selected bank.',
         ]);
+    }
+
+    // ─── Custom domains (Pro/Enterprise: point learn.theiracademy.com at the
+    //     platform). Every read/write is tenant-scoped via ownerContext() and
+    //     gated on the custom_domain plan feature. A domain resolves a tenant
+    //     (ResolveTenant) only after its DNS TXT record is verified. ──
+
+    /**
+     * Shape a TenantDomain row for the owner UI, including the DNS record the
+     * owner must publish. Never leaks another tenant's rows, callers always
+     * scope by the resolved owner's tenant_id.
+     */
+    private function domainPayload(\App\Models\TenantDomain $d): array
+    {
+        return [
+            'id' => $d->id,
+            'host' => $d->host,
+            'status' => $d->status,
+            'verified' => $d->isVerified(),
+            'is_primary' => (bool) $d->is_primary,
+            'verified_at' => optional($d->verified_at)->toIso8601String(),
+            'dns' => $d->dnsInstructions(),
+        ];
+    }
+
+    /**
+     * List this academy's custom domains + whether the plan allows them. The UI
+     * shows the add form and DNS instructions only when `enabled` is true.
+     */
+    public function domains(Request $request): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        [$tenant] = $context;
+
+        $domains = \App\Models\TenantDomain::where('tenant_id', $tenant->id)
+            ->orderByDesc('is_primary')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (\App\Models\TenantDomain $d) => $this->domainPayload($d))
+            ->all();
+
+        return response()->json([
+            'enabled' => (bool) $tenant->planFeature('custom_domain'),
+            'domains' => $domains,
+            // Shown as the DNS target the owner points a CNAME at. The platform's
+            // own apex is the safe default; ops can override via APP_DOMAIN.
+            'cname_target' => (string) (env('APP_DOMAIN') ?: parse_url((string) config('saas.frontend_url'), PHP_URL_HOST)),
+        ]);
+    }
+
+    /**
+     * Add a custom domain (status=pending) and return the DNS TXT record the
+     * owner must publish to verify control. Gated on the custom_domain feature;
+     * a host can only ever belong to one academy (unique), so a host already
+     * claimed elsewhere is refused.
+     */
+    public function addDomain(Request $request): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        [$tenant] = $context;
+
+        if (! $tenant->planFeature('custom_domain')) {
+            return response()->json(['message' => 'Custom domains are not part of your current plan.'], 403);
+        }
+
+        $validated = $request->validate([
+            'host' => ['required', 'string', 'max:253'],
+        ]);
+
+        $host = \App\Models\TenantDomain::normalizeHost($validated['host']);
+        if (! $host) {
+            return response()->json(['message' => 'Enter a valid domain, for example learn.youracademy.com.'], 422);
+        }
+
+        // Never let a custom domain shadow the platform's own hosts.
+        $appDomain = strtolower((string) env('APP_DOMAIN'));
+        if ($appDomain !== '' && ($host === $appDomain || str_ends_with($host, '.' . $appDomain))) {
+            return response()->json(['message' => 'That domain is reserved by the platform. Use a domain you own.'], 422);
+        }
+
+        $existing = \App\Models\TenantDomain::where('host', $host)->first();
+        if ($existing) {
+            if ((int) $existing->tenant_id === (int) $tenant->id) {
+                return response()->json([
+                    'message' => 'This domain is already added.',
+                    'domain' => $this->domainPayload($existing),
+                ], 200);
+            }
+
+            return response()->json(['message' => 'This domain is already in use.'], 422);
+        }
+
+        $domain = \App\Models\TenantDomain::create([
+            'tenant_id' => $tenant->id,
+            'host' => $host,
+            'status' => \App\Models\TenantDomain::STATUS_PENDING,
+            'verification_token' => \App\Models\TenantDomain::newToken(),
+            'is_primary' => false,
+        ]);
+
+        return response()->json([
+            'message' => 'Domain added. Publish the DNS records below, then verify.',
+            'domain' => $this->domainPayload($domain),
+        ], 201);
+    }
+
+    /**
+     * Verify a pending domain by checking its DNS TXT record matches the token
+     * we issued. On success the row flips to verified (and becomes primary if it
+     * is the academy's first verified domain) so ResolveTenant will honour it.
+     * DNS lookups can fail transiently, an unverified result is a soft 422, not
+     * an error, so the owner can simply retry once propagation completes.
+     */
+    public function verifyDomain(Request $request, int $id): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        [$tenant] = $context;
+
+        $domain = \App\Models\TenantDomain::where('tenant_id', $tenant->id)->whereKey($id)->first();
+        if (! $domain) {
+            return response()->json(['message' => 'Domain not found.'], 404);
+        }
+
+        if ($domain->isVerified()) {
+            return response()->json(['message' => 'Domain already verified.', 'domain' => $this->domainPayload($domain)]);
+        }
+
+        $recordHost = '_jorsas-verify.' . $domain->host;
+        $found = false;
+        try {
+            $records = @dns_get_record($recordHost, DNS_TXT) ?: [];
+            foreach ($records as $rec) {
+                $txt = trim((string) ($rec['txt'] ?? ''));
+                if ($txt !== '' && hash_equals($domain->verification_token, $txt)) {
+                    $found = true;
+                    break;
+                }
+            }
+        } catch (\Throwable $e) {
+            $found = false;
+        }
+
+        if (! $found) {
+            return response()->json([
+                'message' => 'We could not find the verification record yet. DNS changes can take a while to propagate, please try again shortly.',
+                'domain' => $this->domainPayload($domain),
+            ], 422);
+        }
+
+        // First verified domain for this academy becomes its primary (canonical) host.
+        $hasPrimary = \App\Models\TenantDomain::where('tenant_id', $tenant->id)
+            ->where('status', \App\Models\TenantDomain::STATUS_VERIFIED)
+            ->where('is_primary', true)
+            ->exists();
+
+        $domain->update([
+            'status' => \App\Models\TenantDomain::STATUS_VERIFIED,
+            'verified_at' => now(),
+            'is_primary' => ! $hasPrimary,
+        ]);
+
+        return response()->json([
+            'message' => 'Domain verified. Your academy is now reachable at this address.',
+            'domain' => $this->domainPayload($domain->fresh()),
+        ]);
+    }
+
+    /** Remove a custom domain. Tenant-scoped so an owner can only delete their own. */
+    public function deleteDomain(Request $request, int $id): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        [$tenant] = $context;
+
+        $domain = \App\Models\TenantDomain::where('tenant_id', $tenant->id)->whereKey($id)->first();
+        if (! $domain) {
+            return response()->json(['message' => 'Domain not found.'], 404);
+        }
+
+        $wasPrimary = (bool) $domain->is_primary;
+        $domain->delete();
+
+        // If the canonical host was removed, promote the next verified domain so
+        // the academy still has a primary custom host where one exists.
+        if ($wasPrimary) {
+            $next = \App\Models\TenantDomain::where('tenant_id', $tenant->id)
+                ->where('status', \App\Models\TenantDomain::STATUS_VERIFIED)
+                ->orderBy('id')
+                ->first();
+            if ($next) {
+                $next->update(['is_primary' => true]);
+            }
+        }
+
+        return response()->json(['message' => 'Domain removed.']);
     }
 
     // ─── Certificates (institute-issued, admin-only, moved off the staff
@@ -1782,6 +2028,12 @@ class OwnerAdminController extends BaseLmsController
             'name' => ['required', 'string', 'max:255'],
             'course_id' => ['required', 'integer'],
             'instructor_id' => ['nullable', 'integer'],
+            // Cohort scheduling (all optional): registration closes at the
+            // deadline when set, else the start date, else the cohort stays
+            // always-open like the pre-date behaviour.
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'registration_deadline' => ['nullable', 'date'],
         ]);
 
         $course = LmsCourse::query()->find($validated['course_id']);
@@ -1802,6 +2054,9 @@ class OwnerAdminController extends BaseLmsController
             'name' => $validated['name'],
             'course_id' => $course->id,
             'instructor_id' => $instructorId,
+            'start_date' => $validated['start_date'] ?? null,
+            'end_date' => $validated['end_date'] ?? null,
+            'registration_deadline' => $validated['registration_deadline'] ?? null,
         ]);
 
         // Every cohort gets its group chat, same as the super-admin path.
@@ -1834,11 +2089,21 @@ class OwnerAdminController extends BaseLmsController
             'name' => ['nullable', 'string', 'max:255'],
             'course_id' => ['nullable', 'integer'],
             'instructor_id' => ['nullable', 'integer'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'registration_deadline' => ['nullable', 'date'],
         ]);
 
         $data = [];
         if (($validated['name'] ?? null) !== null) {
             $data['name'] = $validated['name'];
+        }
+        // Cohort dates: each key present in the request is applied (empty string
+        // clears it), absent keys keep the stored value.
+        foreach (['start_date', 'end_date', 'registration_deadline'] as $dateKey) {
+            if ($request->has($dateKey)) {
+                $data[$dateKey] = $validated[$dateKey] ?? null;
+            }
         }
         if (! empty($validated['course_id'])) {
             $course = LmsCourse::query()->find($validated['course_id']);
@@ -1938,6 +2203,11 @@ class OwnerAdminController extends BaseLmsController
             'course_id' => $track->course_id,
             'instructor' => $instructorName,
             'instructor_id' => $track->instructor_id,
+            'start_date' => $track->start_date?->toDateString(),
+            'end_date' => $track->end_date?->toDateString(),
+            'registration_deadline' => $track->registration_deadline?->toDateString(),
+            'registration_open' => $track->registrationOpen(),
+            'registration_closes_at' => $track->registrationClosesAt()?->toIso8601String(),
             'created_at' => $track->created_at,
         ];
     }
