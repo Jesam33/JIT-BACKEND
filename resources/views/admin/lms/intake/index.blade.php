@@ -1,7 +1,7 @@
 @extends('admin.lms.layout')
 
 @section('title', 'LMS Intake & Approvals')
-@php($activeLmsPage = 'registrations')
+@php ($activeLmsPage = 'registrations') @endphp
 
 @section('head')
     <style>
@@ -11,15 +11,16 @@
         }
 
         .alert {
-            border-radius: 12px;
+            border-radius: 10px;
             padding: 12px 14px;
-            font-size: 14px;
+            font-size: 13px;
+            line-height: 1.6;
             border: 1px solid transparent;
         }
 
         .alert.ok {
             background: var(--success-soft);
-            border-color: rgba(31, 157, 85, 0.16);
+            border-color: rgba(18, 145, 90, 0.18);
             color: var(--success);
         }
 
@@ -30,9 +31,15 @@
         }
 
         .alert.note {
-            background: #f5f8fb;
-            border-color: var(--line);
-            color: #385066;
+            background: var(--accent-soft);
+            border-color: rgba(237, 24, 13, 0.14);
+            color: var(--accent-dark);
+        }
+
+        .alert.note a {
+            color: var(--accent-dark);
+            font-weight: 700;
+            word-break: break-all;
         }
 
         .summary-grid {
@@ -42,98 +49,161 @@
         }
 
         .summary-card {
-            padding: 16px;
+            padding: 18px;
         }
 
         .summary-card h3 {
-            margin: 0 0 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 0 12px;
             color: #4f6478;
             font-size: 12px;
             text-transform: uppercase;
             letter-spacing: 0.08em;
+            font-weight: 700;
+        }
+
+        .summary-card h3 svg {
+            width: 15px;
+            height: 15px;
+            stroke: var(--accent);
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+            flex: none;
         }
 
         .summary-card strong {
             display: block;
-            font-size: 34px;
-            letter-spacing: -0.04em;
-            margin-bottom: 8px;
+            font-size: 30px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1;
+            margin-bottom: 14px;
         }
 
         .summary-card p {
             margin: 0;
+            padding-top: 12px;
+            border-top: 1px solid var(--line);
             color: var(--muted);
-            font-size: 13px;
+            font-size: 12.5px;
             line-height: 1.6;
-        }
-
-        .table-wrap {
-            overflow: auto;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th, td {
-            text-align: left;
-            border-bottom: 1px solid var(--line);
-            padding: 12px 10px;
-            font-size: 14px;
-            vertical-align: top;
-        }
-
-        th {
-            background: #fbfdff;
-            color: #627a8f;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            font-weight: 800;
         }
 
         .status {
             display: inline-flex;
             align-items: center;
-            padding: 4px 8px;
-            border-radius: 999px;
-            font-size: 12px;
+            padding: 4px 9px;
+            border-radius: 7px;
+            font-size: 11px;
             font-weight: 700;
+            text-transform: capitalize;
         }
 
-        .pending { background: rgba(217, 119, 6, 0.12); color: #b45309; }
-        .approved { background: rgba(31, 157, 85, 0.10); color: #1f9d55; }
-        .rejected { background: rgba(185, 28, 28, 0.12); color: #b91c1c; }
+        .pending {
+            background: var(--warning-soft);
+            color: var(--warning);
+        }
 
-        .small { font-size: 12px; color: var(--muted); margin-top: 4px; }
+        .approved {
+            background: var(--success-soft);
+            color: var(--success);
+        }
+
+        .rejected {
+            background: var(--danger-soft);
+            color: var(--danger);
+        }
 
         .price-input {
-            width: 120px;
-            padding: 9px 10px;
-            border: 1px solid #d7dfe8;
-            border-radius: 8px;
-            margin-bottom: 8px;
+            width: 110px;
+            padding: 8px 10px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #fff;
+            color: var(--ink);
             font: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            transition: border-color 0.15s ease;
+        }
+
+        .price-input:hover {
+            border-color: #cfd8e2;
+        }
+
+        .price-input:focus {
+            outline: none;
+            border-color: var(--accent);
         }
 
         .btn,
         .btn-secondary,
         .btn-danger {
-            border: 0;
-            border-radius: 8px;
-            padding: 9px 12px;
-            font-weight: 700;
-            cursor: pointer;
+            border: 1px solid transparent;
+            border-radius: 10px;
+            padding: 8px 14px;
             font: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
         }
 
-        .btn { background: var(--accent); color: #fff; }
-        .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
-        .btn-secondary { background: #6b7d90; color: #fff; }
-        .btn-danger { background: #8a1515; color: #fff; }
+        .btn {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 6px 16px rgba(237, 24, 13, 0.28);
+        }
+
+        .btn:hover {
+            background: var(--accent-dark);
+        }
+
+        .btn[disabled] {
+            opacity: 0.45;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: #fff;
+            border-color: var(--line);
+            color: #557082;
+        }
+
+        .btn-secondary:hover {
+            border-color: #cfd8e2;
+        }
+
+        .btn-danger {
+            background: #fff;
+            border-color: var(--line);
+            color: var(--danger);
+        }
+
+        .btn-danger:hover {
+            border-color: var(--danger);
+            background: var(--danger-soft);
+        }
+
         .action-row,
-        .action-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .action-group {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .table-empty {
+            padding: 24px 14px;
+            color: var(--muted);
+            font-size: 13px;
+        }
 
         @media (max-width: 1180px) {
             .summary-grid {
@@ -176,19 +246,28 @@
 
         <section class="summary-grid">
             <article class="summary-card panel">
-                <h3>Pending approvals</h3>
+                <h3>
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Pending approvals
+                </h3>
                 <strong>{{ $items->where('status', 'pending')->count() }}</strong>
                 <p>Applicants waiting for admin review before they can activate a student account.</p>
             </article>
 
             <article class="summary-card panel">
-                <h3>Approved intake</h3>
+                <h3>
+                    <svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
+                    Approved intake
+                </h3>
                 <strong>{{ $items->where('status', 'approved')->count() }}</strong>
                 <p>Approved learners who are ready to enter onboarding and course selection inside the LMS.</p>
             </article>
 
             <article class="summary-card panel">
-                <h3>Rejected intake</h3>
+                <h3>
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>
+                    Rejected intake
+                </h3>
                 <strong>{{ $items->where('status', 'rejected')->count() }}</strong>
                 <p>Applications that were declined and removed from the current learner intake pipeline.</p>
             </article>
@@ -201,7 +280,7 @@
             </div>
 
             <div class="table-wrap">
-                <table>
+                <table class="data-table">
                     <thead>
                         <tr>
                             <th>ID</th>
@@ -218,18 +297,18 @@
                     <tbody>
                         @forelse ($items as $item)
                             <tr>
-                                <td>{{ $item->id }}</td>
+                                <td class="num">{{ $item->id }}</td>
                                 <td>{{ $item->first_name }} {{ $item->last_name }}</td>
                                 <td>{{ $item->email }}</td>
                                 <td>{{ $item->course_name }}</td>
-                                <td>{{ $item->course_price ? '$' . number_format((float) $item->course_price, 2) : '-' }}</td>
+                                <td class="num">{{ $item->course_price ? '$' . number_format((float) $item->course_price, 2) : 'Not set' }}</td>
                                 <td>{{ $item->learning_mode }}</td>
                                 <td>
                                     <span class="status {{ $item->status === 'approved' ? 'approved' : ($item->status === 'rejected' ? 'rejected' : 'pending') }}">{{ $item->status }}</span>
                                 </td>
-                                <td>
+                                <td class="num">
                                     {{ optional($item->created_at)->format('Y-m-d H:i') }}
-                                    <div class="small">{{ $item->phone_number }}</div>
+                                    <div class="row-sub">{{ $item->phone_number }}</div>
                                 </td>
                                 <td>
                                     @if ($item->status === 'pending')
@@ -273,7 +352,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="9">No registrations found.</td>
+                                <td colspan="9" class="table-empty">No registrations found.</td>
                             </tr>
                         @endforelse
                     </tbody>

@@ -1,87 +1,114 @@
 @extends('admin.lms.layout')
 
 @section('title', 'Platform Announcements')
+@php ($activeLmsPage = 'announcements') @endphp
+
+@section('head')
+    <style>
+        .flash-ok { border-radius: 10px; padding: 12px 14px; font-size: 13px; font-weight: 600; background: var(--success-soft); color: var(--success); border: 1px solid rgba(18, 145, 90, 0.20); }
+        .flash-error { border-radius: 10px; padding: 12px 14px; font-size: 13px; font-weight: 600; background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(185, 28, 28, 0.20); }
+        .flash-error ul { margin: 0; padding-left: 18px; }
+        .stack { display: grid; gap: 18px; }
+        .field label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 700; color: #4f6478; }
+        .field input[type="text"], .field textarea { width: 100%; border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 13px; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+        .field textarea { resize: vertical; }
+        .field input[type="text"]:hover, .field textarea:hover { border-color: #cfd8e2; }
+        .field input[type="text"]:focus, .field textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+        .audience-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+        .audience-option { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; text-transform: capitalize; cursor: pointer; }
+        .audience-option input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+        .submit-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .submit-row .action.primary { cursor: pointer; }
+        .submit-hint { font-size: 12px; color: var(--muted); }
+        .announce-title { font-weight: 700; color: var(--ink); }
+        .announce-excerpt { font-size: 12px; color: var(--muted); max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+        .audiences-cell { text-transform: capitalize; }
+        .error-detail { font-size: 11px; color: var(--danger); margin-top: 4px; max-width: 260px; }
+        .created-cell { color: var(--muted); }
+    </style>
+@endsection
+
 @section('toolbar_title', 'Platform Announcements')
-@section('toolbar_text', 'Broadcast a message to everybody — students, staff and agents — across every institute on the platform.')
+@section('toolbar_text', 'Broadcast a message to all students, staff and agents across every institute on the platform.')
 
 @section('toolbar_actions')
     <a href="{{ url()->current() }}" class="action">Refresh</a>
 @endsection
 
 @section('content')
-    @if(session('status'))
-        <div class="alert ok" style="padding:12px 14px;background:#ecfdf5;border:1px solid #bbf7d0;color:#14532d;border-radius:12px">{{ session('status') }}</div>
-    @endif
-    @if(session('error'))
-        <div class="alert error" style="padding:12px 14px;background:#fff7f7;border:1px solid #fecaca;color:#7f1d1d;border-radius:12px">{{ session('error') }}</div>
-    @endif
-    @if($errors->any())
-        <div class="alert error" style="padding:12px 14px;background:#fff7f7;border:1px solid #fecaca;color:#7f1d1d;border-radius:12px">
-            <ul style="margin:0;padding-left:18px">
-                @foreach($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
-            </ul>
-        </div>
-    @endif
-
-    <div class="panel">
-        <div class="panel-head">
-            <div class="panel-title">New Announcement</div>
-            <div></div>
-        </div>
-        <div style="padding:18px">
-            <form method="POST" action="{{ route('admin.lms.announcements.store') }}">
-                @csrf
-
-                <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:700;color:#30465b">Title</label>
-                <input type="text" name="title" value="{{ old('title') }}" maxlength="255" required
-                       placeholder="e.g. Scheduled maintenance this weekend"
-                       style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin-bottom:16px">
-
-                <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:700;color:#30465b">Message</label>
-                <textarea name="body" rows="5" maxlength="5000" required
-                          placeholder="Write the announcement everyone will receive as a notification and an email."
-                          style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;font-family:inherit;resize:vertical;margin-bottom:16px">{{ old('body') }}</textarea>
-
-                <label style="display:block;margin-bottom:8px;font-size:13px;font-weight:700;color:#30465b">Send to</label>
-                @php $oldAudiences = old('audiences', $audienceOptions); @endphp
-                <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:20px">
-                    @foreach($audienceOptions as $audience)
-                        <label style="display:inline-flex;align-items:center;gap:8px;font-size:14px;text-transform:capitalize;cursor:pointer">
-                            <input type="checkbox" name="audiences[]" value="{{ $audience }}"
-                                   {{ in_array($audience, $oldAudiences) ? 'checked' : '' }}>
-                            {{ $audience }}s
-                        </label>
+    <div class="stack">
+        @if(session('status'))
+            <div class="flash-ok">{{ session('status') }}</div>
+        @endif
+        @if(session('error'))
+            <div class="flash-error">{{ session('error') }}</div>
+        @endif
+        @if($errors->any())
+            <div class="flash-error">
+                <ul>
+                    @foreach($errors->all() as $error)
+                        <li>{{ $error }}</li>
                     @endforeach
-                </div>
+                </ul>
+            </div>
+        @endif
 
-                <div style="display:flex;align-items:center;gap:12px">
-                    <button type="submit" class="action primary" style="padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer">Send Announcement</button>
-                    <span style="font-size:12px;color:var(--muted)">Delivered as an in-app notification and an email to every recipient, on every institute.</span>
-                </div>
-            </form>
-        </div>
-    </div>
+        <div class="panel">
+            <div class="panel-head">
+                <div class="panel-title">New Announcement</div>
+            </div>
+            <div class="panel-body">
+                <form method="POST" action="{{ route('admin.lms.announcements.store') }}">
+                    @csrf
 
-    <div class="panel">
-        <div class="panel-head">
-            <div class="panel-title">Recent Announcements</div>
-            <div></div>
+                    <div class="field" style="margin-bottom: 16px;">
+                        <label for="announcement-title">Title</label>
+                        <input type="text" id="announcement-title" name="title" value="{{ old('title') }}" maxlength="255" required
+                               placeholder="e.g. Scheduled maintenance this weekend">
+                    </div>
+
+                    <div class="field" style="margin-bottom: 16px;">
+                        <label for="announcement-body">Message</label>
+                        <textarea id="announcement-body" name="body" rows="5" maxlength="5000" required
+                                  placeholder="Write the announcement everyone will receive as a notification and an email.">{{ old('body') }}</textarea>
+                    </div>
+
+                    <label style="display:block;margin-bottom:8px;font-size:12px;font-weight:700;color:#4f6478">Send to</label>
+                    @php $oldAudiences = old('audiences', $audienceOptions); @endphp
+                    <div class="audience-row">
+                        @foreach($audienceOptions as $audience)
+                            <label class="audience-option">
+                                <input type="checkbox" name="audiences[]" value="{{ $audience }}"
+                                       {{ in_array($audience, $oldAudiences) ? 'checked' : '' }}>
+                                {{ $audience }}s
+                            </label>
+                        @endforeach
+                    </div>
+
+                    <div class="submit-row">
+                        <button type="submit" class="action primary">Send Announcement</button>
+                        <span class="submit-hint">Delivered as an in-app notification and an email to every recipient, on every institute.</span>
+                    </div>
+                </form>
+            </div>
         </div>
-        <div style="padding:16px">
+
+        <div class="panel">
+            <div class="panel-head">
+                <div class="panel-title">Recent Announcements</div>
+            </div>
             @if(count($announcements ?? []) === 0)
                 <div class="panel-empty">No announcements sent yet.</div>
             @else
-                <div style="overflow-x:auto">
-                    <table style="width:100%;border-collapse:collapse">
+                <div class="table-wrap">
+                    <table class="data-table">
                         <thead>
-                            <tr style="text-align:left">
-                                <th style="padding:8px;border-bottom:1px solid #e6eef6;font-size:12px;color:#4f6478">Title</th>
-                                <th style="padding:8px;border-bottom:1px solid #e6eef6;font-size:12px;color:#4f6478">Audiences</th>
-                                <th style="padding:8px;border-bottom:1px solid #e6eef6;font-size:12px;color:#4f6478">Status</th>
-                                <th style="padding:8px;border-bottom:1px solid #e6eef6;font-size:12px;color:#4f6478">Recipients</th>
-                                <th style="padding:8px;border-bottom:1px solid #e6eef6;font-size:12px;color:#4f6478">Created</th>
+                            <tr>
+                                <th>Title</th>
+                                <th>Audiences</th>
+                                <th>Status</th>
+                                <th>Recipients</th>
+                                <th>Created</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -94,19 +121,19 @@
                                     };
                                 @endphp
                                 <tr>
-                                    <td style="padding:10px 8px;border-bottom:1px solid #f1f6fb">
-                                        <div style="font-weight:700;color:#30465b">{{ $a->title }}</div>
-                                        <div style="font-size:12px;color:var(--muted);max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ $a->body }}</div>
+                                    <td>
+                                        <div class="announce-title">{{ $a->title }}</div>
+                                        <div class="announce-excerpt">{{ $a->body }}</div>
                                     </td>
-                                    <td style="padding:10px 8px;border-bottom:1px solid #f1f6fb;text-transform:capitalize">{{ implode(', ', (array) $a->audiences) }}</td>
-                                    <td style="padding:10px 8px;border-bottom:1px solid #f1f6fb">
+                                    <td class="audiences-cell">{{ implode(', ', (array) $a->audiences) }}</td>
+                                    <td>
                                         <span class="course-state {{ $stateClass }}">{{ ucfirst($a->status) }}</span>
                                         @if($a->status === 'failed' && $a->error)
-                                            <div style="font-size:11px;color:var(--danger);margin-top:4px;max-width:260px">{{ $a->error }}</div>
+                                            <div class="error-detail">{{ $a->error }}</div>
                                         @endif
                                     </td>
-                                    <td style="padding:10px 8px;border-bottom:1px solid #f1f6fb">{{ $a->recipients_count }}</td>
-                                    <td style="padding:10px 8px;border-bottom:1px solid #f1f6fb;font-size:13px;color:var(--muted)">{{ $a->created_at }}</td>
+                                    <td class="num">{{ $a->recipients_count }}</td>
+                                    <td class="num created-cell">{{ $a->created_at }}</td>
                                 </tr>
                             @endforeach
                         </tbody>

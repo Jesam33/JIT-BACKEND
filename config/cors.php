@@ -31,14 +31,28 @@ return [
         explode(',', (string) env('CORS_ALLOWED_ORIGINS', ''))
     ))),
 
-    // Optional anchored REGEX allowing every tenant subdomain in one entry,
-    // e.g. CORS_ALLOWED_ORIGINS_PATTERN=~^https:\/\/[a-z0-9-]+\.jorsastech\.com$~
-    // (escape slashes or pick another delimiter). A pattern, not a wildcard in
-    // allowed_origins, is the right tool here: it stays anchored to YOUR domain
-    // while admitting any {academy}.jorsastech.com origin, and stays compatible
-    // with supports_credentials=true (unlike allowed_origins=['*']).
+    // Subdomain admission, two sources, both hardened:
+    //
+    // 1. An anchored regex DERIVED from the frontend URL (App\Support\Cors::
+    //    subdomainPattern): a frontend at https://jorsastech.com automatically
+    //    admits https://{academy}.jorsastech.com. Read from the same env keys
+    //    as config/saas.php 'frontend_url' (config files load alphabetically,
+    //    so saas.php is NOT available here yet).
+    // 2. The optional CORS_ALLOWED_ORIGINS_PATTERN env override — but ONLY if
+    //    it compiles. A malformed regex here makes preg_match() emit a warning
+    //    that Laravel converts to an ErrorException, so every request whose
+    //    Origin is not an exact allowed_origins match 500s with no CORS
+    //    headers (the browser then reports it as a CORS failure; the apex
+    //    domain keeps working because exact matches short-circuit before the
+    //    pattern loop). patternCompiles() drops such values instead of
+    //    letting them take the site down.
     'allowed_origins_patterns' => array_values(array_filter([
-        env('CORS_ALLOWED_ORIGINS_PATTERN'),
+        \App\Support\Cors::patternCompiles((string) env('CORS_ALLOWED_ORIGINS_PATTERN'))
+            ? env('CORS_ALLOWED_ORIGINS_PATTERN')
+            : null,
+        \App\Support\Cors::subdomainPattern(
+            rtrim((string) env('LMS_BASE_URL', env('FRONTEND_URL', '')), '/')
+        ),
     ])),
 
     'allowed_headers' => ['*'],

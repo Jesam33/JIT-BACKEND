@@ -1,20 +1,20 @@
 @extends('admin.lms.layout')
 
-@section('title', 'LMS Dashboard')
-@php($activeLmsPage = 'dashboard')
+@section('title', 'Platform Overview')
+@php ($activeLmsPage = 'dashboard') @endphp
 
 @section('head')
     <style>
         .stats {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 16px;
         }
 
         .stat-card {
-            padding: 16px;
+            padding: 18px;
             display: grid;
-            gap: 10px;
+            gap: 14px;
         }
 
         .stat-top {
@@ -37,6 +37,7 @@
             font-size: 11px;
             text-decoration: none;
             font-weight: 700;
+            white-space: nowrap;
         }
 
         .stat-body {
@@ -47,10 +48,11 @@
         }
 
         .stat-value {
-            font-size: 42px;
+            font-size: 30px;
             font-weight: 800;
-            line-height: 0.95;
-            letter-spacing: -0.05em;
+            line-height: 1;
+            letter-spacing: -0.03em;
+            white-space: nowrap;
         }
 
         .delta {
@@ -71,42 +73,40 @@
             color: var(--accent);
         }
 
+        .delta.flat {
+            background: #eef2f6;
+            color: #5c7286;
+        }
+
         .stat-meta {
             display: flex;
-            gap: 18px;
-            color: #8293a3;
-            font-size: 11px;
+            gap: 24px;
+            color: #7d8fa0;
+            font-size: 10px;
             text-transform: uppercase;
-            letter-spacing: 0.06em;
+            letter-spacing: 0.1em;
             font-weight: 700;
+            border-top: 1px solid var(--line);
+            padding-top: 12px;
         }
 
         .stat-meta span {
             display: block;
-            margin-top: 3px;
+            margin-top: 4px;
             color: var(--ink);
-            font-size: 18px;
-            letter-spacing: -0.03em;
-        }
-
-        .stat-spark {
-            height: 36px;
-            display: flex;
-            align-items: end;
-            gap: 3px;
-        }
-
-        .stat-spark i {
-            display: block;
-            flex: 1;
-            background: linear-gradient(180deg, #d8e2ec, #c4d2df);
-            border-radius: 999px;
-            min-width: 5px;
+            font-size: 17px;
+            letter-spacing: -0.02em;
         }
 
         .main-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.8fr);
+            grid-template-columns: minmax(0, 1.6fr) minmax(300px, 0.8fr);
+            gap: 16px;
+        }
+
+        .split-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 16px;
         }
 
@@ -138,13 +138,13 @@
         }
 
         .chart-area {
-            fill: url(#activityFill);
+            fill: url(#salesFill);
         }
 
         .chart-line {
             fill: none;
             stroke: var(--accent);
-            stroke-width: 3;
+            stroke-width: 2.5;
             stroke-linecap: round;
             stroke-linejoin: round;
         }
@@ -152,7 +152,7 @@
         .chart-point {
             fill: #fff;
             stroke: var(--accent);
-            stroke-width: 3;
+            stroke-width: 2.5;
         }
 
         .chart-summary {
@@ -172,97 +172,122 @@
             letter-spacing: -0.03em;
         }
 
-        .leaderboard-table,
-        .courses-table {
-            width: 100%;
-            border-collapse: collapse;
+        /* Attention center: every row is one link, one decision. */
+        .action-rows {
+            display: grid;
         }
 
-        .leaderboard-table th,
-        .leaderboard-table td,
-        .courses-table th,
-        .courses-table td {
-            text-align: left;
-            padding: 11px 14px;
+        .action-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 13px 16px;
             border-bottom: 1px solid var(--line);
-            font-size: 13px;
+            text-decoration: none;
+            color: inherit;
         }
 
-        .leaderboard-table th,
-        .courses-table th {
-            color: #627a8f;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            font-weight: 800;
+        .action-row:last-child {
+            border-bottom: 0;
+        }
+
+        .action-row:hover {
             background: #fbfdff;
         }
 
-        .leaderboard-table td strong,
-        .courses-table td strong {
-            font-size: 14px;
+        .action-copy strong {
+            display: block;
+            font-size: 13px;
         }
 
-        .courses-panel {
-            min-height: 220px;
+        .action-copy span {
+            display: block;
+            margin-top: 2px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.45;
         }
 
-        .progress-track {
-            width: 100%;
-            height: 8px;
+        .action-count {
+            min-width: 34px;
+            text-align: center;
             border-radius: 999px;
-            background: #edf2f6;
-            overflow: hidden;
-            margin-top: 6px;
+            padding: 5px 10px;
+            font-size: 13px;
+            font-weight: 800;
+            background: var(--accent-soft);
+            color: var(--accent);
+            white-space: nowrap;
         }
 
-        .progress-bar {
-            height: 100%;
-            border-radius: 999px;
-            background: linear-gradient(90deg, var(--accent), #ef4444);
+        .action-count.zero {
+            background: var(--success-soft);
+            color: var(--success);
         }
 
-        .footer-grid {
+        /* Agent economy split tiles: Jorsas agents vs every other academy. */
+        .agent-split {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 16px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0;
+            border-bottom: 1px solid var(--line);
         }
 
-        .mini-panel {
+        .agent-tile {
             padding: 16px;
         }
 
-        .mini-panel h3 {
-            margin: 0 0 8px;
-            font-size: 14px;
+        .agent-tile + .agent-tile {
+            border-left: 1px solid var(--line);
         }
 
-        .mini-panel p {
-            margin: 0;
-            color: var(--muted);
-            font-size: 13px;
-            line-height: 1.6;
+        .agent-tile-label {
+            color: #4f6478;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 700;
         }
 
-        .mini-panel strong {
-            display: block;
-            margin-top: 12px;
+        .agent-tile-value {
+            margin-top: 8px;
             font-size: 24px;
+            font-weight: 800;
             letter-spacing: -0.04em;
         }
 
+        .agent-tile-meta {
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
         @media (max-width: 1180px) {
-            .stats,
-            .footer-grid {
+            .stats {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .main-grid,
+            .split-grid {
                 grid-template-columns: 1fr;
             }
 
-            .main-grid {
+            .agent-split {
                 grid-template-columns: 1fr;
+            }
+
+            .agent-tile + .agent-tile {
+                border-left: 0;
+                border-top: 1px solid var(--line);
             }
         }
 
         @media (max-width: 720px) {
+            .stats {
+                grid-template-columns: 1fr;
+            }
+
             .stat-body {
                 flex-direction: column;
                 align-items: flex-start;
@@ -271,81 +296,91 @@
     </style>
 @endsection
 
-@section('toolbar_title', 'LMS Management Dashboard')
-@section('toolbar_text', 'Admin manages student accounts, course setup, track assignment, staff provisioning, and overall learning delivery health.')
+@section('toolbar_title', 'Platform Overview')
+@section('toolbar_text', 'Your host view of every Online Academy on Jorsastech: money in, money owed, agent earnings and what needs your attention.')
 
 @section('toolbar_actions')
-    <div class="chip">Period <strong>Last 12 Months</strong></div>
-    <div class="chip">Students <strong>{{ $studentCount }}</strong></div>
-    <div class="chip">Data <strong>Live</strong></div>
-    <a href="{{ route('admin.lms.students.index') }}" class="action primary">View Students</a>
+    <div class="chip">Academies <strong>{{ number_format($tenantCount) }}</strong></div>
+    <div class="chip">Students <strong>{{ number_format($studentCount) }}</strong></div>
+    <div class="chip">New this month <strong>{{ number_format($newTenantsThisMonth) }}</strong></div>
+    <a href="{{ route('admin.lms.transactions.index') }}" class="action primary">Revenue detail</a>
 @endsection
 
 @section('content')
+    @php
+        // Pill mappings reusing the layout's .course-state styles.
+        $planStates = ['free' => 'inactive', 'basic' => 'warning', 'pro' => 'active', 'enterprise' => 'danger'];
+        $subStates = ['active' => 'active', 'grace' => 'warning', 'frozen' => 'danger'];
+        $agentStates = ['approved' => 'active', 'pending' => 'warning'];
+
+        $agentTotals = [
+            'agents' => $agentRows->sum('agents'),
+            'deals' => $agentRows->sum('deals'),
+            'earned' => $agentRows->sum('earned'),
+            'pending_payout' => $agentRows->sum('pending_payout'),
+            'paid_out' => $agentRows->sum('paid_out'),
+            'balance' => $agentRows->sum('balance'),
+        ];
+    @endphp
+
     <section class="stats">
         <article class="stat-card">
             <div class="stat-top">
-                <div class="stat-label">Student Completion</div>
-                <a href="{{ route('lms.courses.index') }}" class="stat-link">Course Management</a>
+                <div class="stat-label">Platform revenue</div>
+                <a href="{{ route('admin.lms.transactions.index') }}" class="stat-link">Transactions</a>
             </div>
             <div class="stat-body">
-                <div class="stat-value">{{ number_format($completionRate, 1) }}%</div>
-                <div class="delta {{ $completionRate >= 50 ? 'up' : 'down' }}">
-                    {{ $completedTaskSlots }}/{{ $assignedTaskSlots }}
-                </div>
+                <div class="stat-value">₦{{ number_format($platformRevenue) }}</div>
+                <div class="delta up">{{ number_format($platformTxCount) }} payments</div>
             </div>
             <div class="stat-meta">
-                <div>Assigned<span>{{ $assignedTaskSlots }}</span></div>
-                <div>Completed<span>{{ $completedTaskSlots }}</span></div>
-            </div>
-            <div class="stat-spark" aria-hidden="true">
-                @foreach ($monthlyActiveLearners as $point)
-                    <i style="height: {{ max(18, min(36, $point['value'] * 6)) }}px;"></i>
-                @endforeach
+                <div>Successful<span>{{ number_format($platformTxCount) }}</span></div>
+                <div>Pending<span>₦{{ number_format($pendingPlatform) }}</span></div>
             </div>
         </article>
 
         <article class="stat-card">
             <div class="stat-top">
-                <div class="stat-label">Onboarding Activation</div>
-                <a href="{{ route('admin.lms.students.index') }}" class="stat-link">All Students</a>
+                <div class="stat-label">Course sales, all academies</div>
+                <a href="{{ route('admin.lms.transactions.index') }}" class="stat-link">Sales ledger</a>
             </div>
             <div class="stat-body">
-                <div class="stat-value">{{ number_format($activationRate, 1) }}%</div>
-                <div class="delta {{ $activationRate >= 50 ? 'up' : 'down' }}">
-                    {{ $onboardedStudents }}/{{ $approvedRegistrations }}
-                </div>
+                <div class="stat-value">₦{{ number_format($courseGross) }}</div>
+                <div class="delta up">{{ number_format($salesCount) }} sales</div>
             </div>
             <div class="stat-meta">
-                <div>Approved<span>{{ $approvedRegistrations }}</span></div>
-                <div>Onboarded<span>{{ $onboardedStudents }}</span></div>
-            </div>
-            <div class="stat-spark" aria-hidden="true">
-                @foreach ($monthlyActiveLearners as $point)
-                    <i style="height: {{ max(16, min(36, ($point['value'] + 1) * 5)) }}px;"></i>
-                @endforeach
+                <div>This month<span>₦{{ number_format($salesThisMonth) }}</span></div>
+                <div>Selling academies<span>{{ number_format($sellingAcademies) }}</span></div>
             </div>
         </article>
 
         <article class="stat-card">
             <div class="stat-top">
-                <div class="stat-label">Track Placement</div>
-                <a href="{{ route('lms.tracks.index') }}" class="stat-link">Cohort Assignment</a>
+                <div class="stat-label">Commission earned</div>
+                <a href="{{ route('admin.lms.institutes.index') }}" class="stat-link">Academies</a>
             </div>
             <div class="stat-body">
-                <div class="stat-value">{{ number_format($enrollmentRate, 1) }}%</div>
-                <div class="delta {{ $enrollmentRate >= 50 ? 'up' : 'down' }}">
-                    {{ $enrolledStudents }}/{{ $studentCount }}
-                </div>
+                <div class="stat-value">₦{{ number_format($totalCommission) }}</div>
+                <div class="delta flat">≈ {{ $courseGross > 0 ? round(($totalCommission / $courseGross) * 100, 1) : 0 }}% of sales</div>
             </div>
             <div class="stat-meta">
-                <div>Learners<span>{{ $studentCount }}</span></div>
-                <div>Enrolled<span>{{ $enrolledStudents }}</span></div>
+                <div>Lifetime sales<span>₦{{ number_format($courseGross) }}</span></div>
+                <div>Academies<span>{{ number_format($tenantCount) }}</span></div>
             </div>
-            <div class="stat-spark" aria-hidden="true">
-                @foreach ($monthlyActiveLearners as $point)
-                    <i style="height: {{ max(14, min(36, ($point['value'] + 2) * 4)) }}px;"></i>
-                @endforeach
+        </article>
+
+        <article class="stat-card">
+            <div class="stat-top">
+                <div class="stat-label">Agent commissions</div>
+                <a href="{{ route('admin.lms.agents.withdrawals') }}" class="stat-link">Payouts</a>
+            </div>
+            <div class="stat-body">
+                <div class="stat-value">₦{{ number_format($agentEarnedTotal) }}</div>
+                <div class="delta {{ $agentPayoutPending > 0 ? 'down' : 'up' }}">₦{{ number_format($agentPayoutPending) }} to pay</div>
+            </div>
+            <div class="stat-meta">
+                <div>Agents<span>{{ number_format($agentCount) }}</span></div>
+                <div>Payout requests<span>{{ number_format($withdrawalRequests) }}</span></div>
             </div>
         </article>
     </section>
@@ -353,23 +388,23 @@
     <section class="main-grid">
         <article class="panel">
             <div class="panel-head">
-                <div class="panel-title">Monthly Student Activity</div>
-                <a href="{{ route('admin.lms.students.index') }}" class="panel-link">Student overview</a>
+                <div class="panel-title">Course sales across all academies</div>
+                <a href="{{ route('admin.lms.transactions.index') }}" class="panel-link">Transactions</a>
             </div>
             <div class="chart-wrap">
                 <div class="chart-shell">
-                    <svg class="chart-svg" viewBox="0 0 {{ $chartWidth }} {{ $chartHeight }}" preserveAspectRatio="none" role="img" aria-label="Monthly active learners chart">
+                    <svg class="chart-svg" viewBox="0 0 {{ $chartWidth }} {{ $chartHeight }}" preserveAspectRatio="none" role="img" aria-label="Monthly course sales chart">
                         <defs>
-                            <linearGradient id="activityFill" x1="0" x2="0" y1="0" y2="1">
-                                <stop offset="0%" stop-color="#c1121f" stop-opacity="0.22"></stop>
-                                <stop offset="100%" stop-color="#c1121f" stop-opacity="0.03"></stop>
+                            <linearGradient id="salesFill" x1="0" x2="0" y1="0" y2="1">
+                                <stop offset="0%" stop-color="#ed180d" stop-opacity="0.20"></stop>
+                                <stop offset="100%" stop-color="#ed180d" stop-opacity="0.02"></stop>
                             </linearGradient>
                         </defs>
 
                         <g class="chart-grid">
                             @foreach ($chartTicks as $tick)
                                 <line x1="0" y1="{{ $tick['y'] }}" x2="{{ $chartWidth }}" y2="{{ $tick['y'] }}"></line>
-                                <text x="0" y="{{ $tick['y'] - 6 }}">{{ $tick['value'] }}</text>
+                                <text x="0" y="{{ $tick['y'] - 6 }}">₦{{ $tick['value'] }}</text>
                             @endforeach
                         </g>
 
@@ -389,39 +424,173 @@
                 </div>
 
                 <div class="chart-summary">
-                    <span>Courses<b>{{ $courses }}</b></span>
-                    <span>Teachers<b>{{ $teachers }}</b></span>
-                    <span>Tracks<b>{{ $tracks }}</b></span>
-                    <span>Classrooms<b>{{ $classrooms }}</b></span>
+                    <span>Academies<b>{{ number_format($tenantCount) }}</b></span>
+                    <span>Students<b>{{ number_format($studentCount) }}</b></span>
+                    <span>Staff<b>{{ number_format($teachers) }}</b></span>
+                    <span>Courses<b>{{ number_format($courses) }}</b></span>
+                    <span>Cohorts<b>{{ number_format($tracks) }}</b></span>
                 </div>
             </div>
         </article>
 
         <article class="panel">
             <div class="panel-head">
-                <div class="panel-title">Student Progress Snapshot</div>
-                <a href="{{ route('lms.teachers.create') }}" class="panel-link">Manage staff</a>
+                <div class="panel-title">Needs your attention</div>
             </div>
 
-            @if ($leaderboard->isEmpty())
-                <div class="panel-empty">No student progress is available yet. This table fills up once students are onboarded and staff begin pushing tasks to learners.</div>
-            @else
-                <table class="leaderboard-table">
+            <div class="action-rows">
+                @foreach ($attention as $item)
+                    <a class="action-row" href="{{ $item['href'] }}">
+                        <div class="action-copy">
+                            <strong>{{ $item['label'] }}</strong>
+                            <span>{{ $item['detail'] }}</span>
+                        </div>
+                        <span class="action-count {{ $item['count'] > 0 ? '' : 'zero' }}">{{ number_format($item['count']) }}</span>
+                    </a>
+                @endforeach
+            </div>
+        </article>
+    </section>
+
+    <section class="panel">
+        <div class="panel-head">
+            <div class="panel-title">Agent earnings by academy</div>
+            <a href="{{ route('admin.lms.agents.withdrawals') }}" class="panel-link">Payout requests</a>
+        </div>
+
+        @if ($agentRows->isEmpty())
+            <div class="panel-empty">No agents have been approved or earned commissions yet. Agent activity across every academy will appear here.</div>
+        @else
+            <div class="agent-split">
+                <div class="agent-tile">
+                    <div class="agent-tile-label">Jorsas agents (primary institute)</div>
+                    <div class="agent-tile-value">₦{{ number_format($jorsasAgents['earned']) }}</div>
+                    <div class="agent-tile-meta">{{ number_format($jorsasAgents['agents']) }} agents · ₦{{ number_format($jorsasAgents['pending_payout']) }} awaiting payout</div>
+                </div>
+                <div class="agent-tile">
+                    <div class="agent-tile-label">Agents of other academies</div>
+                    <div class="agent-tile-value">₦{{ number_format($otherAgents['earned']) }}</div>
+                    <div class="agent-tile-meta">{{ number_format($otherAgents['agents']) }} agents · ₦{{ number_format($otherAgents['pending_payout']) }} awaiting payout</div>
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Name</th>
-                            <th>In Progress</th>
-                            <th>Complete</th>
-                            <th>Progress</th>
+                            <th>Academy</th>
+                            <th class="num">Agents</th>
+                            <th class="num">Deals</th>
+                            <th class="num">Earned</th>
+                            <th class="num">Awaiting payout</th>
+                            <th class="num">Paid out</th>
+                            <th class="num">Agent balance</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach ($leaderboard as $entry)
+                        @foreach ($agentRows as $row)
                             <tr>
-                                <td><strong>{{ $entry['name'] }}</strong></td>
-                                <td>{{ $entry['in_progress'] }}</td>
-                                <td>{{ $entry['complete'] }}</td>
-                                <td>{{ $entry['progress'] }}%</td>
+                                <td>
+                                    <strong>{{ $row['name'] }}</strong>
+                                    @if ($row['is_primary'])
+                                        <div class="row-sub">Primary institute</div>
+                                    @endif
+                                </td>
+                                <td class="num">{{ number_format($row['agents']) }}</td>
+                                <td class="num">{{ number_format($row['deals']) }}</td>
+                                <td class="num">₦{{ number_format($row['earned']) }}</td>
+                                <td class="num">₦{{ number_format($row['pending_payout']) }}</td>
+                                <td class="num">₦{{ number_format($row['paid_out']) }}</td>
+                                <td class="num"><strong>₦{{ number_format($row['balance']) }}</strong></td>
+                            </tr>
+                        @endforeach
+                        <tr class="total-row">
+                            <td>Total</td>
+                            <td class="num">{{ number_format($agentTotals['agents']) }}</td>
+                            <td class="num">{{ number_format($agentTotals['deals']) }}</td>
+                            <td class="num">₦{{ number_format($agentTotals['earned']) }}</td>
+                            <td class="num">₦{{ number_format($agentTotals['pending_payout']) }}</td>
+                            <td class="num">₦{{ number_format($agentTotals['paid_out']) }}</td>
+                            <td class="num">₦{{ number_format($agentTotals['balance']) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </section>
+
+    <section class="split-grid">
+        <article class="panel">
+            <div class="panel-head">
+                <div class="panel-title">Top agents, all academies</div>
+                <a href="{{ route('admin.lms.agents.index') }}" class="panel-link">All agents</a>
+            </div>
+
+            @if ($topAgents->isEmpty())
+                <div class="panel-empty">No agent commissions have been recorded yet.</div>
+            @else
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Agent</th>
+                            <th>Academy</th>
+                            <th class="num">Deals</th>
+                            <th class="num">Earned</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($topAgents as $agent)
+                            <tr>
+                                <td>
+                                    <strong>{{ $agent['name'] }}</strong>
+                                    <div class="course-state {{ $agentStates[$agent['status']] ?? 'danger' }}" style="margin-top: 6px; width: fit-content;">
+                                        {{ ucfirst($agent['status']) }}
+                                    </div>
+                                </td>
+                                <td>{{ $agent['academy'] }}</td>
+                                <td class="num">{{ number_format($agent['deals']) }}</td>
+                                <td class="num"><strong>₦{{ number_format($agent['earned']) }}</strong></td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            @endif
+        </article>
+
+        <article class="panel">
+            <div class="panel-head">
+                <div class="panel-title">Newest academies</div>
+                <a href="{{ route('admin.lms.institutes.index') }}" class="panel-link">All institutes</a>
+            </div>
+
+            @if ($newestAcademies->isEmpty())
+                <div class="panel-empty">No academies have signed up yet.</div>
+            @else
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Academy</th>
+                            <th>Plan</th>
+                            <th>Owner</th>
+                            <th>Joined</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($newestAcademies as $academy)
+                            <tr>
+                                <td>
+                                    <strong>{{ $academy['name'] }}</strong>
+                                    <div class="course-state {{ $subStates[$academy['state']] ?? 'danger' }}" style="margin-top: 6px; width: fit-content;">
+                                        {{ ucfirst($academy['state']) }}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="course-state {{ $planStates[$academy['plan']] ?? 'inactive' }}" style="width: fit-content;">
+                                        {{ ucfirst($academy['plan']) }}
+                                    </div>
+                                </td>
+                                <td>{{ $academy['owner_email'] }}</td>
+                                <td>{{ optional($academy['created_at'])->format('d-m-Y') ?? '-' }}</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -430,71 +599,60 @@
         </article>
     </section>
 
-    <section class="panel courses-panel" id="courses">
+    <section class="panel">
         <div class="panel-head">
-            <div class="panel-title">Course Delivery Snapshot</div>
-            <a href="{{ route('lms.courses.index') }}" class="panel-link">Course load</a>
+            <div class="panel-title">Academies, ranked by course sales</div>
+            <a href="{{ route('admin.lms.institutes.index') }}" class="panel-link">All institutes</a>
         </div>
 
-        @if ($popularCourses->isEmpty())
-            <div class="panel-empty">No LMS courses exist yet. Admin needs to create courses first, then students can register and staff can begin delivery.</div>
+        @if ($academyRows->isEmpty())
+            <div class="panel-empty">No academies exist yet. They will appear here the moment they sign up.</div>
         @else
-            <table class="courses-table">
-                <thead>
-                    <tr>
-                        <th>Course Name</th>
-                        <th>Created</th>
-                        <th>Last Update</th>
-                        <th>Enrolled</th>
-                        <th>Started</th>
-                        <th>Completed</th>
-                        <th>Average Progress</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($popularCourses as $course)
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
                         <tr>
-                            <td>
-                                <strong>{{ $course['title'] }}</strong>
-                                <div class="course-state {{ $course['is_active'] ? 'active' : 'inactive' }}" style="margin-top: 6px; width: fit-content;">
-                                    {{ $course['is_active'] ? 'Active' : 'Inactive' }}
-                                </div>
-                            </td>
-                            <td>{{ optional($course['created_at'])->format('d-m-Y') ?? '-' }}</td>
-                            <td>{{ optional($course['updated_at'])->format('d-m-Y') ?? '-' }}</td>
-                            <td>{{ $course['enrolled'] }}</td>
-                            <td>{{ $course['started'] }}</td>
-                            <td>{{ $course['completed'] }}</td>
-                            <td style="min-width: 160px;">
-                                {{ $course['average_progress'] }}%
-                                <div class="progress-track">
-                                    <div class="progress-bar" style="width: {{ max(0, min(100, $course['average_progress'])) }}%;"></div>
-                                </div>
-                            </td>
+                            <th>Academy</th>
+                            <th>Plan</th>
+                            <th>State</th>
+                            <th class="num">Students</th>
+                            <th class="num">Courses</th>
+                            <th class="num">Sales</th>
+                            <th class="num">Gross sales</th>
+                            <th class="num">Commission</th>
+                            <th>Joined</th>
                         </tr>
-                    @endforeach
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach ($academyRows->take(12) as $row)
+                            <tr>
+                                <td>
+                                    <strong>{{ $row['name'] }}</strong>
+                                    @if ($row['is_primary'])
+                                        <div class="row-sub">Primary institute</div>
+                                    @endif
+                                </td>
+                                <td>
+                                    <div class="course-state {{ $planStates[$row['plan']] ?? 'inactive' }}" style="width: fit-content;">
+                                        {{ ucfirst($row['plan']) }}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="course-state {{ $subStates[$row['state']] ?? 'danger' }}" style="width: fit-content;">
+                                        {{ ucfirst($row['state']) }}
+                                    </div>
+                                </td>
+                                <td class="num">{{ number_format($row['students']) }}</td>
+                                <td class="num">{{ number_format($row['courses']) }}</td>
+                                <td class="num">{{ number_format($row['sales']) }}</td>
+                                <td class="num">₦{{ number_format($row['gross']) }}</td>
+                                <td class="num"><strong>₦{{ number_format($row['commission']) }}</strong></td>
+                                <td>{{ optional($row['created_at'])->format('d-m-Y') ?? '-' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         @endif
-    </section>
-
-    <section class="footer-grid" id="tracks">
-        <article class="mini-panel">
-            <h3>Total students</h3>
-            <p>All registered learners in the LMS system, including those still onboarding.</p>
-            <strong>{{ $studentCount }}</strong>
-        </article>
-
-        <article class="mini-panel">
-            <h3>Onboarded learners</h3>
-            <p>Students who completed onboarding and can access their portal and track enrollment.</p>
-            <strong>{{ $onboardedStudents }}</strong>
-        </article>
-
-        <article class="mini-panel">
-            <h3>Staff delivery structure</h3>
-            <p>Tracks and courses configured so staff can teach, grade, message and manage live sessions.</p>
-            <strong>{{ $tracks }}</strong>
-        </article>
     </section>
 @endsection

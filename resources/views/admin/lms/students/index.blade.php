@@ -1,13 +1,13 @@
-@php($activeLmsPage = 'students')
+@php ($activeLmsPage = 'students') @endphp
 @extends('admin.lms.layout')
 
-@section('title', 'All Students — LMS Admin')
+@section('title', 'All Students, LMS Admin')
 @section('toolbar_title', 'All Students')
 @section('toolbar_text', 'View all registered learners, filter by course or track, search by name or email, and manage student accounts.')
 
 @section('head')
 <style>
-    /* ── Filter bar ─────────────────────────────────────────── */
+    /* Filter bar */
     .filter-bar {
         display: flex;
         align-items: center;
@@ -42,15 +42,20 @@
     .search-wrap input[type="search"],
     .search-wrap input[type="text"] {
         width: 100%;
-        padding: 9px 10px 9px 33px;
+        padding: 8px 10px 8px 33px;
         border: 1px solid var(--line);
-        border-radius: 8px;
-        font-size: 13px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
         font-family: inherit;
         color: var(--ink);
         background: #fff;
         outline: none;
-        transition: border-color .18s;
+        transition: border-color 0.15s ease;
+    }
+
+    .search-wrap input:hover {
+        border-color: #cfd8e2;
     }
 
     .search-wrap input:focus {
@@ -58,62 +63,36 @@
     }
 
     .filter-select {
-        padding: 9px 32px 9px 10px;
+        padding: 8px 32px 8px 10px;
         border: 1px solid var(--line);
-        border-radius: 8px;
-        font-size: 13px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
         font-family: inherit;
         color: var(--ink);
         background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23728194' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
         appearance: none;
         cursor: pointer;
         outline: none;
-        transition: border-color .18s;
+        transition: border-color 0.15s ease;
         flex: 0 0 auto;
+    }
+
+    .filter-select:hover {
+        border-color: #cfd8e2;
     }
 
     .filter-select:focus {
         border-color: var(--accent);
     }
 
-    .filter-apply {
-        padding: 9px 16px;
-        background: var(--accent);
-        color: #fff;
-        border: none;
-        border-radius: 8px;
-        font-size: 13px;
-        font-weight: 700;
-        font-family: inherit;
-        cursor: pointer;
-        transition: background .18s;
+    .filter-bar .action,
+    .filter-bar .action.primary {
         flex: 0 0 auto;
-    }
-
-    .filter-apply:hover {
-        background: var(--accent-dark);
-    }
-
-    .filter-clear {
-        padding: 9px 14px;
-        border: 1px solid var(--line);
-        background: #fff;
-        border-radius: 8px;
-        font-size: 13px;
-        font-family: inherit;
-        color: var(--muted);
-        text-decoration: none;
         cursor: pointer;
-        transition: border-color .18s, color .18s;
-        flex: 0 0 auto;
     }
 
-    .filter-clear:hover {
-        border-color: var(--accent);
-        color: var(--accent);
-    }
-
-    /* ── Active filter chips ────────────────────────────────── */
+    /* Active filter chips */
     .active-filters {
         display: flex;
         align-items: center;
@@ -127,7 +106,7 @@
     .af-label {
         font-size: 11px;
         text-transform: uppercase;
-        letter-spacing: .08em;
+        letter-spacing: 0.08em;
         font-weight: 700;
         color: var(--muted);
         margin-right: 4px;
@@ -139,76 +118,35 @@
         gap: 5px;
         background: var(--accent-soft);
         color: var(--accent);
-        border-radius: 999px;
-        padding: 3px 8px 3px 10px;
-        font-size: 12px;
-        font-weight: 600;
+        border-radius: 7px;
+        padding: 3px 8px;
+        font-size: 11px;
+        font-weight: 700;
         text-decoration: none;
     }
 
-    .af-chip span {
-        line-height: 1;
-        font-size: 14px;
-        margin-top: -1px;
+    .af-chip svg {
+        display: block;
     }
 
-    /* ── Panel header ───────────────────────────────────────── */
-    .panel-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 14px 18px;
-        border-bottom: 1px solid var(--line);
-        background: var(--panel-alt);
-    }
-
-    .panel-title {
-        color: #4f6478;
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: .08em;
-        font-weight: 700;
-    }
-
+    /* Panel header meta */
     .panel-meta {
         font-size: 12px;
         color: var(--muted);
-    }
-
-    /* ── Table ──────────────────────────────────────────────── */
-    .students-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .students-table th,
-    .students-table td {
-        text-align: left;
-        padding: 11px 14px;
-        border-bottom: 1px solid var(--line);
-        font-size: 13px;
-    }
-
-    .students-table th {
-        color: #627a8f;
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: .08em;
-        font-weight: 800;
-        background: #fbfdff;
         white-space: nowrap;
     }
 
-    .students-table tbody tr:hover {
+    /* Table row hover + cell helpers */
+    .data-table tbody tr:hover {
         background: #f7fafc;
     }
 
-    .students-table tbody tr:last-child td {
-        border-bottom: none;
+    .cell-muted {
+        color: var(--muted);
+        font-size: 12px;
     }
 
-    /* ── Student avatar ─────────────────────────────────────── */
+    /* Student avatar */
     .student-cell {
         display: flex;
         align-items: center;
@@ -220,7 +158,7 @@
         height: 34px;
         border-radius: 10px;
         background: var(--sidebar);
-        color: rgba(255,255,255,0.92);
+        color: rgba(255, 255, 255, 0.92);
         font-size: 13px;
         font-weight: 700;
         display: grid;
@@ -242,13 +180,13 @@
         margin-top: 1px;
     }
 
-    /* ── Badges ─────────────────────────────────────────────── */
+    /* Badges */
     .badge {
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        padding: 3px 8px;
-        border-radius: 999px;
+        padding: 4px 9px;
+        border-radius: 7px;
         font-size: 11px;
         font-weight: 700;
         white-space: nowrap;
@@ -264,22 +202,23 @@
         color: #7a8c9c;
     }
 
-    /* ── Mode pill ──────────────────────────────────────────── */
+    /* Mode pill */
     .mode-pill {
         display: inline-block;
-        padding: 2px 8px;
-        border-radius: 999px;
+        padding: 3px 9px;
+        border-radius: 7px;
         font-size: 11px;
-        font-weight: 600;
+        font-weight: 700;
         background: var(--accent-soft);
         color: var(--accent);
     }
 
-    /* ── CTA actions cell ───────────────────────────────────── */
+    /* Row actions */
     .row-actions {
         display: flex;
         align-items: center;
         gap: 6px;
+        justify-content: flex-end;
     }
 
     .btn-delete {
@@ -287,17 +226,16 @@
         align-items: center;
         gap: 5px;
         padding: 6px 12px;
-        border-radius: 7px;
+        border-radius: 10px;
         font-size: 12px;
         font-weight: 700;
         font-family: inherit;
         cursor: pointer;
         border: 1px solid transparent;
-        transition: background .18s, color .18s, border-color .18s;
+        transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
         text-decoration: none;
         background: var(--danger-soft);
         color: var(--danger);
-        border-color: transparent;
     }
 
     .btn-delete:hover {
@@ -305,30 +243,37 @@
         color: #fff;
     }
 
-    /* ── Empty state ────────────────────────────────────────── */
+    /* Empty state */
     .empty-row td {
         padding: 48px 24px;
         text-align: center;
         color: var(--muted);
-        font-size: 14px;
+        font-size: 13px;
     }
 
     .empty-icon {
-        font-size: 32px;
+        display: grid;
+        place-items: center;
         margin-bottom: 10px;
-        opacity: .5;
+        opacity: 0.45;
+        color: var(--muted);
     }
 
-    /* ── Pagination ─────────────────────────────────────────── */
+    .empty-icon svg {
+        width: 34px;
+        height: 34px;
+    }
+
+    /* Pagination */
     .panel-footer {
         padding: 12px 18px;
         border-top: 1px solid var(--line);
         background: var(--panel-alt);
     }
 
-    /* ── Confirm modal ──────────────────────────────────────── */
+    /* Confirm modal */
     .spin {
-        animation: spinAnim .8s linear infinite;
+        animation: spinAnim 0.8s linear infinite;
     }
 
     @keyframes spinAnim {
@@ -339,7 +284,7 @@
         display: none;
         position: fixed;
         inset: 0;
-        background: rgba(15, 23, 36, .55);
+        background: rgba(15, 23, 36, 0.55);
         z-index: 900;
         place-items: center;
     }
@@ -350,8 +295,8 @@
 
     .modal {
         background: #fff;
-        border-radius: 16px;
-        box-shadow: 0 24px 64px rgba(15, 23, 36, .22);
+        border-radius: var(--radius);
+        box-shadow: 0 24px 64px rgba(15, 23, 36, 0.22);
         padding: 28px;
         width: 100%;
         max-width: 400px;
@@ -377,7 +322,8 @@
     .modal h2 {
         margin: 0 0 8px;
         font-size: 18px;
-        letter-spacing: -.02em;
+        font-weight: 800;
+        letter-spacing: -0.02em;
     }
 
     .modal p {
@@ -398,59 +344,59 @@
     }
 
     .btn-cancel {
-        padding: 9px 18px;
+        padding: 8px 16px;
         border: 1px solid var(--line);
-        border-radius: 8px;
+        border-radius: 10px;
         background: #fff;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 700;
         font-family: inherit;
         cursor: pointer;
         color: var(--muted);
-        transition: border-color .18s;
+        transition: border-color 0.15s ease, color 0.15s ease;
     }
 
     .btn-cancel:hover {
-        border-color: #a0aec0;
+        border-color: #cfd8e2;
         color: var(--ink);
     }
 
     .btn-confirm-delete {
-        padding: 9px 18px;
+        padding: 8px 16px;
         border: none;
-        border-radius: 8px;
+        border-radius: 10px;
         background: var(--danger);
         color: #fff;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 700;
         font-family: inherit;
         cursor: pointer;
-        transition: background .18s;
+        transition: background 0.15s ease;
     }
 
     .btn-confirm-delete:hover {
         background: #991b1b;
     }
 
-    /* ── Flash banner ───────────────────────────────────────── */
+    /* Flash banner */
     .flash-banner {
         margin: 0;
         padding: 12px 18px;
         background: var(--success-soft);
         color: var(--success);
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 600;
-        border-bottom: 1px solid rgba(31,157,85,.18);
+        border-bottom: 1px solid rgba(31, 157, 85, 0.18);
         display: flex;
         align-items: center;
         gap: 8px;
     }
 
     @media (max-width: 860px) {
-        .students-table th:nth-child(3),
-        .students-table td:nth-child(3),
-        .students-table th:nth-child(5),
-        .students-table td:nth-child(5) {
+        .data-table th:nth-child(3),
+        .data-table td:nth-child(3),
+        .data-table th:nth-child(5),
+        .data-table td:nth-child(5) {
             display: none;
         }
     }
@@ -478,21 +424,21 @@
     {{-- Flash status --}}
     @if(session('status'))
         <div class="flash-banner">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
             {{ session('status') }}
         </div>
     @endif
 
-    {{-- ── Filter bar ──────────────────────────────────────── --}}
+    {{-- Filter bar --}}
     <div class="filter-bar">
         <form method="GET" action="{{ route('admin.lms.students.index') }}" style="display:contents">
             {{-- Search --}}
             <div class="search-wrap">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
                 <input
                     type="search"
                     name="search"
-                    placeholder="Search by name or email…"
+                    placeholder="Search by name or email"
                     value="{{ request('search') }}"
                     autocomplete="off"
                 >
@@ -518,40 +464,43 @@
                 @endforeach
             </select>
 
-            <button type="submit" class="filter-apply">Apply Filters</button>
+            <button type="submit" class="action primary">Apply Filters</button>
 
             @if(request()->hasAny(['search','course_id','track_id']))
-                <a href="{{ route('admin.lms.students.index') }}" class="filter-clear">✕ Clear</a>
+                <a href="{{ route('admin.lms.students.index') }}" class="action">Clear</a>
             @endif
         </form>
     </div>
 
-    {{-- ── Active filter chips ─────────────────────────────── --}}
+    {{-- Active filter chips --}}
     @if(request()->hasAny(['search','course_id','track_id']))
     <div class="active-filters">
-        <span class="af-label">Filtered by:</span>
+        <span class="af-label">Filtered by</span>
         @if(request('search'))
             <a class="af-chip" href="{{ route('admin.lms.students.index', request()->except('search')) }}">
-                Search: "{{ request('search') }}" <span>×</span>
+                Search: "{{ request('search') }}"
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </a>
         @endif
         @if(request('course_id'))
-            @php($activeCourse = $coursesList->firstWhere('id', request('course_id')))
+            @php ($activeCourse = $coursesList->firstWhere('id', request('course_id'))) @endphp
             <a class="af-chip" href="{{ route('admin.lms.students.index', request()->except('course_id')) }}">
-                Course: {{ $activeCourse?->title ?? 'Unknown' }} <span>×</span>
+                Course: {{ $activeCourse?->title ?? 'Unknown' }}
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </a>
         @endif
         @if(request('track_id'))
-            @php($activeTrack = $tracksList->firstWhere('id', request('track_id')))
+            @php ($activeTrack = $tracksList->firstWhere('id', request('track_id'))) @endphp
             <a class="af-chip" href="{{ route('admin.lms.students.index', request()->except('track_id')) }}">
-                Track: {{ $activeTrack?->name ?? 'Unknown' }} <span>×</span>
+                Track: {{ $activeTrack?->name ?? 'Unknown' }}
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </a>
         @endif
     </div>
     @endif
 
-    {{-- ── Panel header ─────────────────────────────────────── --}}
-    <div class="panel-header">
+    {{-- Panel header --}}
+    <div class="panel-head">
         <div class="panel-title">
             Students &nbsp;<strong style="font-size:14px;font-weight:800;color:var(--ink)">{{ $students->total() }}</strong>
         </div>
@@ -560,9 +509,9 @@
         </div>
     </div>
 
-    {{-- ── Table ────────────────────────────────────────────── --}}
-    <div style="overflow-x:auto">
-        <table class="students-table">
+    {{-- Table --}}
+    <div class="table-wrap">
+        <table class="data-table">
             <thead>
                 <tr>
                     <th>Student</th>
@@ -591,14 +540,14 @@
                         </td>
 
                         {{-- Course --}}
-                        <td>{{ $student->course?->title ?? '—' }}</td>
+                        <td>{{ $student->course?->title ?? 'Not set' }}</td>
 
                         {{-- Track enrollments count --}}
                         <td>
                             @if($student->enrollments_count > 0)
                                 <span class="badge badge-success">{{ $student->enrollments_count }} track{{ $student->enrollments_count !== 1 ? 's' : '' }}</span>
                             @else
-                                <span style="color:var(--muted);font-size:12px">None</span>
+                                <span class="cell-muted">None</span>
                             @endif
                         </td>
 
@@ -607,7 +556,7 @@
                             @if($student->learning_mode)
                                 <span class="mode-pill">{{ ucfirst($student->learning_mode) }}</span>
                             @else
-                                <span style="color:var(--muted);font-size:12px">—</span>
+                                <span class="cell-muted">Not set</span>
                             @endif
                         </td>
 
@@ -615,7 +564,7 @@
                         <td>
                             @if($student->onboarding_completed)
                                 <span class="badge badge-success">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
                                     Yes
                                 </span>
                             @else
@@ -624,20 +573,20 @@
                         </td>
 
                         {{-- Registered date --}}
-                        <td style="white-space:nowrap;color:var(--muted);font-size:12px">
+                        <td class="num" style="white-space:nowrap;color:var(--muted);font-size:12px">
                             {{ $student->created_at->format('Y-m-d') }}
                         </td>
 
                         {{-- Actions --}}
                         <td>
-                            <div class="row-actions" style="justify-content:flex-end">
+                            <div class="row-actions">
                                 <button
                                     type="button"
                                     class="btn-delete"
                                     onclick="openDeleteModal({{ $student->id }}, '{{ addslashes($student->first_name . ' ' . $student->last_name) }}', '{{ addslashes($student->email) }}')"
                                     title="Delete student"
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
                                     Delete
                                 </button>
                             </div>
@@ -646,7 +595,9 @@
                 @empty
                     <tr class="empty-row">
                         <td colspan="7">
-                            <div class="empty-icon">◎</div>
+                            <div class="empty-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                            </div>
                             @if(request()->hasAny(['search','course_id','track_id']))
                                 No students match the current filters.
                             @else
@@ -667,11 +618,11 @@
     @endif
 </div>
 
-{{-- ── Delete confirmation modal ─────────────────────────────── --}}
+{{-- Delete confirmation modal --}}
 <div class="modal-backdrop" id="deleteModal">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div class="modal-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
         </div>
         <h2 id="modal-title">Delete Student?</h2>
         <p id="modal-body">
@@ -684,8 +635,8 @@
                 <button type="submit" class="btn-confirm-delete" id="confirmDeleteBtn">
                     <span id="deleteBtnText">Yes, Delete Student</span>
                     <span id="deleteBtnSpinner" style="display:none">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-                        Deleting…
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="spin"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                        Deleting
                     </span>
                 </button>
             </div>

@@ -30,51 +30,290 @@ use App\Notifications\OnboardingCompleted;
 
 class AdminController extends BaseLmsController
 {
+    /**
+     * The HOST dashboard: a platform-wide view of every academy, every naira and
+     * every agent. Deliberately NOT an academy-ops view (task completion and
+     * student activation belong to each academy's own analytics), it answers the
+     * host's four standing questions: how is the business doing, what needs my
+     * action right now, how is each academy performing, and how is the agent
+     * economy doing.
+     *
+     * IMPORTANT: ResolveTenant binds the PRIMARY institute on this host (the api
+     * subdomain is reserved and falls back to it), so every tenant-scoped model
+     * below must explicitly drop the TenantScope or the numbers silently become
+     * jorsas-only. Same rule as transactionsPage(). Every query is batched
+     * (grouped/aggregated in SQL), never per-tenant loops.
+     */
     public function index(Request $request)
     {
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        $shell = $this->adminShellData();
+        $scope = \App\Scopes\TenantScope::class;
 
-        $assignedTaskSlots = \App\Models\LmsTask::query()->count();
-        $completedTaskSlots = \App\Models\LmsTaskSubmission::query()->whereNotNull('graded_at')->count();
-        $completionRate = $assignedTaskSlots > 0 ? round(($completedTaskSlots / $assignedTaskSlots) * 100) : 0;
+        $tenants = Tenant::query()->orderBy('name')->get();
+        $tenantMap = $tenants->keyBy('id');
 
-        $approvedRegistrations = TrainingRegistration::query()->where('status', 'approved')->count();
-        $onboardedStudents = LmsStudent::query()->where('onboarding_completed', true)->count();
-        $activationRate = $approvedRegistrations > 0 ? round(($onboardedStudents / $approvedRegistrations) * 100) : 0;
+        // ─── Money ledgers ────────────────────────────────────────────────────
+        // What the platform has been paid by institutes (paid signups + upgrades).
+        $platformRevenue = (float) \App\Models\PlatformTransaction::query()->where('status', 'success')->sum('amount');
+        $pendingPlatform = (float) \App\Models\PlatformTransaction::query()->where('status', 'pending')->sum('amount');
+        $platformTxCount = (int) \App\Models\PlatformTransaction::query()->where('status', 'success')->count();
 
-        $enrolledStudents = LmsEnrollment::query()->count();
-        $enrollmentRate = $shell['studentCount'] > 0 ? round(($enrolledStudents / $shell['studentCount']) * 100) : 0;
+        // Successful course-fee payments across ALL academies, grouped per tenant.
+        $paidByTenant = Payment::query()
+            ->withoutGlobalScope($scope)
+            ->where('status', 'success')
+            ->selectRaw('tenant_id, COUNT(*) as sales, SUM(amount) as gross')
+            ->groupBy('tenant_id')
+            ->get()
+            ->keyBy('tenant_id');
+
+        $courseGross = round((float) $paidByTenant->sum('gross'), 2);
+        $salesCount = (int) $paidByTenant->sum('sales');
+        $salesThisMonth = (float) Payment::query()
+            ->withoutGlobalScope($scope)
+            ->where('status', 'success')
+            ->where('created_at', '>=', now()->startOfMonth())
+            ->sum('amount');
+
+        // Platform scale, students/staff/courses per academy, all unscoped.
+        $studentsByTenant = LmsStudent::query()->withoutGlobalScope($scope)
+            ->selectRaw('tenant_id, COUNT(*) as aggregate')->groupBy('tenant_id')->pluck('aggregate', 'tenant_id');
+        $coursesByTenant = LmsCourse::query()->withoutGlobalScope($scope)
+            ->selectRaw('tenant_id, COUNT(*) as aggregate')->groupBy('tenant_id')->pluck('aggregate', 'tenant_id');
+
+        $studentCount = (int) $studentsByTenant->sum();
+        $teacherCount = (int) LmsTeacher::query()->withoutGlobalScope($scope)->count();
+        $courseCount = (int) $coursesByTenant->sum();
+        $trackCount = (int) LmsTrack::query()->withoutGlobalScope($scope)->count();
+        $newTenantsThisMonth = (int) Tenant::query()->where('created_at', '>=', now()->startOfMonth())->count();
+
+        // ─── Per-academy performance (gross, commission at that academy's plan rate) ──
+        $academyRows = $tenants->map(function (Tenant $t) use ($paidByTenant, $studentsByTenant, $coursesByTenant) {
+            $row = $paidByTenant->get($t->id);
+            $gross = (float) ($row->gross ?? 0);
+            $rate = $t->commissionPercent();
+
+            return [
+                'id' => $t->id,
+                'name' => $t->name,
+                'is_primary' => $t->isPrimary(),
+                'plan' => $t->planSlug(),
+                'state' => $t->subscriptionState(),
+                'students' => (int) ($studentsByTenant[$t->id] ?? 0),
+                'courses' => (int) ($coursesByTenant[$t->id] ?? 0),
+                'sales' => (int) ($row->sales ?? 0),
+                'gross' => round($gross, 2),
+                'commission' => round($gross * ($rate / 100), 2),
+                'created_at' => $t->created_at,
+            ];
+        })->sortByDesc('gross')->values();
+
+        $totalCommission = round($academyRows->sum('commission'), 2);
+        $sellingAcademies = (int) $academyRows->where('gross', '>', 0)->count();
+
+        // ─── Agent economy ────────────────────────────────────────────────────
+        // One grouped query per ledger question: commissions EARNED (type
+        // referral/default, positive), payouts AWAITING the host (withdrawal,
+        // requested) and payouts already MADE (withdrawal, paid). COALESCE guards
+        // pre-default rows where type is null.
+        $agentsByTenant = \App\Models\Agent::query()->withoutGlobalScope($scope)
+            ->selectRaw('tenant_id, COUNT(*) as aggregate')->groupBy('tenant_id')->pluck('aggregate', 'tenant_id');
+
+        $earningsByTenant = \App\Models\AgentCommission::query()->withoutGlobalScope($scope)
+            ->selectRaw("tenant_id,
+                COUNT(*) as deals,
+                SUM(CASE WHEN COALESCE(type, 'referral') <> 'withdrawal' THEN commission_amount ELSE 0 END) as earned,
+                SUM(CASE WHEN type = 'withdrawal' AND status = 'withdrawal_requested' THEN ABS(commission_amount) ELSE 0 END) as pending_payout,
+                SUM(CASE WHEN type = 'withdrawal' AND status = 'paid' THEN ABS(commission_amount) ELSE 0 END) as paid_out")
+            ->groupBy('tenant_id')
+            ->get()
+            ->keyBy('tenant_id');
+
+        $agentRows = $tenants
+            ->filter(fn ($t) => isset($agentsByTenant[$t->id]) || $earningsByTenant->has($t->id))
+            ->map(function (Tenant $t) use ($agentsByTenant, $earningsByTenant) {
+                $e = $earningsByTenant->get($t->id);
+                $earned = (float) ($e->earned ?? 0);
+                $pendingPayout = (float) ($e->pending_payout ?? 0);
+                $paidOut = (float) ($e->paid_out ?? 0);
+
+                return [
+                    'name' => $t->name,
+                    'is_primary' => $t->isPrimary(),
+                    'agents' => (int) ($agentsByTenant[$t->id] ?? 0),
+                    'deals' => (int) ($e->deals ?? 0),
+                    'earned' => $earned,
+                    'pending_payout' => $pendingPayout,
+                    'paid_out' => $paidOut,
+                    // What agents of THIS academy can still withdraw.
+                    'balance' => round($earned - $pendingPayout - $paidOut, 2),
+                ];
+            })
+            ->sortByDesc('earned')
+            ->values();
+
+        $agentEarnedTotal = round((float) $agentRows->sum('earned'), 2);
+        $agentPayoutPending = round((float) $agentRows->sum('pending_payout'), 2);
+        $agentCount = (int) $agentsByTenant->sum();
+
+        // The split the host asked for by name: the primary institute's agents
+        // versus every other academy's agents.
+        $primaryAgentRow = $agentRows->firstWhere('is_primary', true);
+        $otherAgentRows = $agentRows->where('is_primary', false)->values();
+        $jorsasAgents = [
+            'agents' => (int) ($primaryAgentRow['agents'] ?? 0),
+            'earned' => (float) ($primaryAgentRow['earned'] ?? 0),
+            'pending_payout' => (float) ($primaryAgentRow['pending_payout'] ?? 0),
+        ];
+        $otherAgents = [
+            'agents' => (int) $otherAgentRows->sum('agents'),
+            'earned' => (float) $otherAgentRows->sum('earned'),
+            'pending_payout' => (float) $otherAgentRows->sum('pending_payout'),
+        ];
+
+        // Top earners across the whole platform (batched: one grouped query +
+        // one whereIn for the agent rows, never per-agent lookups).
+        $topEarners = \App\Models\AgentCommission::query()->withoutGlobalScope($scope)
+            ->whereRaw("COALESCE(type, 'referral') <> 'withdrawal'")
+            ->selectRaw('agent_id, SUM(commission_amount) as earned, COUNT(*) as deals')
+            ->groupBy('agent_id')
+            ->orderByDesc('earned')
+            ->limit(8)
+            ->get();
+
+        $topAgentModels = \App\Models\Agent::query()->withoutGlobalScope($scope)
+            ->whereIn('id', $topEarners->pluck('agent_id')->filter())
+            ->get()
+            ->keyBy('id');
+
+        $topAgents = $topEarners->map(function ($e) use ($topAgentModels, $tenantMap) {
+            $agent = $topAgentModels->get($e->agent_id);
+
+            return [
+                'name' => $agent?->name ?? ('Agent #' . $e->agent_id),
+                'academy' => $tenantMap->get($agent->tenant_id ?? 0)?->name ?? '-',
+                'status' => $agent?->status ?? 'unknown',
+                'earned' => (float) $e->earned,
+                'deals' => (int) $e->deals,
+            ];
+        })->values();
+
+        // ─── Attention center: what needs the host's action right now ─────────
+        $withdrawalRequests = (int) \App\Models\AgentCommission::query()->withoutGlobalScope($scope)
+            ->where('type', 'withdrawal')->where('status', 'withdrawal_requested')->count();
+        $withdrawalTotal = abs((float) \App\Models\AgentCommission::query()->withoutGlobalScope($scope)
+            ->where('type', 'withdrawal')->where('status', 'withdrawal_requested')->sum('commission_amount'));
+        $pendingRegistrations = (int) TrainingRegistration::query()->withoutGlobalScope($scope)
+            ->where('status', 'pending')->count();
+        $pendingAgentApps = (int) \App\Models\Agent::query()->withoutGlobalScope($scope)
+            ->where('status', 'pending')->count();
+        $attentionAcademies = (int) $tenants->filter(
+            fn ($t) => in_array($t->subscriptionState(), ['grace', 'frozen'])
+        )->count();
+
+        $pendingPlatformTx = (int) \App\Models\PlatformTransaction::query()->where('status', 'pending')->count();
+
+        $attention = [
+            [
+                'label' => 'Agent payout requests',
+                'detail' => '₦' . number_format($withdrawalTotal) . ' owed to agents, waiting on you',
+                'count' => $withdrawalRequests,
+                'href' => route('admin.lms.agents.withdrawals'),
+            ],
+            [
+                'label' => 'Pending student registrations',
+                'detail' => 'Students waiting to be approved into their course',
+                'count' => $pendingRegistrations,
+                'href' => route('admin.lms.intake.pending'),
+            ],
+            [
+                'label' => 'Agent applications',
+                'detail' => 'Applications awaiting your review',
+                'count' => $pendingAgentApps,
+                'href' => route('admin.lms.agents.index'),
+            ],
+            [
+                'label' => 'Academies in grace or frozen',
+                'detail' => 'Paid period ended, they need to renew',
+                'count' => $attentionAcademies,
+                'href' => route('admin.lms.institutes.index'),
+            ],
+            [
+                'label' => 'Pending platform payments',
+                'detail' => 'Signups and upgrades started but not confirmed',
+                'count' => $pendingPlatformTx,
+                'href' => route('admin.lms.transactions.index'),
+            ],
+        ];
+
+        // ─── Newest academies (owner emails batched, no per-tenant query) ─────
+        $newestTenants = Tenant::query()->orderByDesc('created_at')->limit(5)->get();
+        $ownerLinks = DB::table('tenant_admins')
+            ->whereIn('tenant_id', $newestTenants->pluck('id'))
+            ->get()
+            ->groupBy('tenant_id');
+        $ownerUsers = User::query()
+            ->whereIn('id', $ownerLinks->flatten()->pluck('user_id')->unique())
+            ->get()
+            ->keyBy('id');
+
+        $newestAcademies = $newestTenants->map(function (Tenant $t) use ($ownerLinks, $ownerUsers) {
+            $link = $ownerLinks->get($t->id)?->first();
+
+            return [
+                'name' => $t->name,
+                'plan' => $t->planSlug(),
+                'state' => $t->subscriptionState(),
+                'owner_email' => $link ? ($ownerUsers->get($link->user_id)?->email ?? '-') : '-',
+                'created_at' => $t->created_at,
+            ];
+        });
+
+        // ─── Course-sales trend, REAL data (the old chart used rand()) ────────
+        $monthlyRaw = Payment::query()->withoutGlobalScope($scope)
+            ->where('status', 'success')
+            ->where('created_at', '>=', now()->subMonths(11)->startOfMonth())
+            ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as ym, SUM(amount) as gross")
+            ->groupBy('ym')
+            ->pluck('gross', 'ym');
 
         $chartWidth = 600;
         $chartHeight = 270;
         $chartBaseline = $chartHeight - 20;
-        $monthlyActiveLearners = [];
+        $monthlySales = [];
         $chartAreaPoints = '';
         $chartLinePoints = '';
         $chartPoints = [];
         $chartTicks = [];
 
         for ($i = 11; $i >= 0; $i--) {
-            $monthlyActiveLearners[] = ['value' => max(1, rand(5, 30)), 'label' => now()->subMonths($i)->format('M')];
+            $month = now()->subMonths($i);
+            $monthlySales[] = [
+                'value' => (float) ($monthlyRaw[$month->format('Y-m')] ?? 0),
+                'label' => $month->format('M'),
+            ];
         }
 
-        $maxVal = max(array_column($monthlyActiveLearners, 'value'));
+        $maxVal = max(1.0, (float) max(array_column($monthlySales, 'value')));
         $tickCount = 4;
+        // Compact naira labels for the y axis (₦1.2M / ₦250k / ₦900).
+        $tickLabel = fn ($v) => $v >= 1000000
+            ? round($v / 1000000, 1) . 'M'
+            : ($v >= 1000 ? round($v / 1000) . 'k' : (string) round($v));
 
         for ($i = 0; $i <= $tickCount; $i++) {
-            $val = round(($maxVal / $tickCount) * $i);
-            $y = $chartBaseline - (($val / max($maxVal, 1)) * ($chartHeight - 50));
-            $chartTicks[] = ['y' => $y, 'value' => $val];
+            $val = ($maxVal / $tickCount) * $i;
+            $y = $chartBaseline - (($val / $maxVal) * ($chartHeight - 50));
+            $chartTicks[] = ['y' => $y, 'value' => $tickLabel($val)];
         }
 
-        $pointWidth = $chartWidth / max(count($monthlyActiveLearners) - 1, 1);
+        $pointWidth = $chartWidth / max(count($monthlySales) - 1, 1);
 
-        foreach ($monthlyActiveLearners as $index => $point) {
+        foreach ($monthlySales as $index => $point) {
             $x = $index * $pointWidth;
-            $y = $chartBaseline - (($point['value'] / max($maxVal, 1)) * ($chartHeight - 50));
+            $y = $chartBaseline - (($point['value'] / $maxVal) * ($chartHeight - 50));
             $chartPoints[] = ['x' => $x, 'y' => $y, 'label' => $point['label']];
             $chartAreaPoints .= ($chartAreaPoints ? ' ' : '') . "{$x},{$y}";
             $chartLinePoints .= ($chartLinePoints ? ' ' : '') . "{$x},{$y}";
@@ -82,66 +321,56 @@ class AdminController extends BaseLmsController
 
         $chartAreaPoints .= " {$chartWidth},{$chartBaseline} 0,{$chartBaseline}";
 
-        $leaderboard = LmsStudent::query()
-            ->withCount(['taskSubmissions as graded_count' => function ($q) {
-                $q->whereNotNull('graded_at');
-            }])
-            ->orderByDesc('graded_count')
-            ->limit(10)
-            ->get()
-            ->map(fn ($s) => [
-                'name' => $s->first_name . ' ' . $s->last_name,
-                'in_progress' => $s->taskSubmissions()->whereNull('graded_at')->count(),
-                'complete' => $s->graded_count,
-                'progress' => 0,
-            ]);
+        return view('admin.lms.index', [
+            'adminDir' => config('saas.admin_dir', 'admin'),
+            // Sidebar counts, platform-wide (the layout reads these with ?? 0).
+            'studentCount' => $studentCount,
+            'tracks' => $trackCount,
+            'courses' => $courseCount,
+            'teachers' => $teacherCount,
+            'tenantCount' => $tenants->count(),
 
-        $popularCourses = LmsCourse::query()
-            ->withCount('students')
-            ->orderByDesc('students_count')
-            ->get()
-            ->map(function ($course) {
-                $enrolled = LmsEnrollment::query()
-                    ->whereHas('track', fn ($q) => $q->where('course_id', $course->id))
-                    ->count();
+            // Money.
+            'platformRevenue' => $platformRevenue,
+            'pendingPlatform' => $pendingPlatform,
+            'platformTxCount' => $platformTxCount,
+            'courseGross' => $courseGross,
+            'salesCount' => $salesCount,
+            'salesThisMonth' => $salesThisMonth,
+            'totalCommission' => $totalCommission,
+            'sellingAcademies' => $sellingAcademies,
 
-                $started = LmsStudent::query()
-                    ->where('selected_course_id', $course->id)
-                    ->where('onboarding_completed', true)
-                    ->count();
+            // Platform scale.
+            'newTenantsThisMonth' => $newTenantsThisMonth,
 
-                return [
-                    'title' => $course->title,
-                    'is_active' => $course->is_active,
-                    'created_at' => $course->created_at,
-                    'updated_at' => $course->updated_at,
-                    'enrolled' => $enrolled,
-                    'started' => $started,
-                    'completed' => 0,
-                    'average_progress' => 0,
-                ];
-            });
+            // Agent economy.
+            'agentRows' => $agentRows,
+            'agentEarnedTotal' => $agentEarnedTotal,
+            'agentPayoutPending' => $agentPayoutPending,
+            'agentCount' => $agentCount,
+            'jorsasAgents' => $jorsasAgents,
+            'otherAgents' => $otherAgents,
+            'topAgents' => $topAgents,
 
-        return view('admin.lms.index', array_merge($shell, [
-            'completionRate' => $completionRate,
-            'assignedTaskSlots' => $assignedTaskSlots,
-            'completedTaskSlots' => $completedTaskSlots,
-            'activationRate' => $activationRate,
-            'approvedRegistrations' => $approvedRegistrations,
-            'onboardedStudents' => $onboardedStudents,
-            'enrollmentRate' => $enrollmentRate,
-            'enrolledStudents' => $enrolledStudents,
+            // Academies.
+            'academyRows' => $academyRows,
+            'newestAcademies' => $newestAcademies,
+
+            // Attention center.
+            'attention' => $attention,
+            'withdrawalRequests' => $withdrawalRequests,
+            'withdrawalTotal' => $withdrawalTotal,
+
+            // Chart.
             'chartWidth' => $chartWidth,
             'chartHeight' => $chartHeight,
             'chartBaseline' => $chartBaseline,
-            'monthlyActiveLearners' => $monthlyActiveLearners,
+            'monthlySales' => $monthlySales,
             'chartAreaPoints' => $chartAreaPoints,
             'chartLinePoints' => $chartLinePoints,
             'chartPoints' => $chartPoints,
             'chartTicks' => $chartTicks,
-            'leaderboard' => $leaderboard,
-            'popularCourses' => $popularCourses,
-        ]));
+        ]);
     }
 
     public function coursesPage(Request $request)
@@ -300,6 +529,7 @@ class AdminController extends BaseLmsController
                 'starts_at' => $classroom->starts_at,
                 'ends_at' => $classroom->ends_at,
                 'meeting_id' => $classroom->meeting_id,
+                'meeting_url' => $classroom->meeting_url,
                 'course_title' => $courseMap->get($classroom->course_id)?->title,
                 'teacher_name' => $teacherMap->get($classroom->teacher_id)?->name,
             ];
