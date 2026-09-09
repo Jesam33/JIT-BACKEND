@@ -5,12 +5,16 @@ namespace App\Http\Controllers\Lms;
 use App\Mail\AgentApplicationApprovedMail;
 use App\Models\Agent;
 use App\Models\AgentCommission;
+use App\Models\LmsEnrollment;
 use App\Models\LmsStudent;
+use App\Models\Payment;
 use App\Models\TrainingRegistration;
 use App\Support\PlanGate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 /**
  * The owner's view of their academy's Admission Marketers (agents): everyone
@@ -117,9 +121,152 @@ class OwnerAgentController extends OwnerAdminController
     }
 
     /**
-     * Approve a pending marketer so they can log into the agent portal. Mirrors
-     * AgentController::adminApprove (the host's Blade panel version) — including
-     * the best-effort approval email — but scoped to the owner's own academy.
+     * One agent's analytics: profile, wallet stats, and the three activity
+     * lists (referred students, registrations with payment + commission state,
+     * and the commission/withdrawal history). Same numbers the agent sees on
+     * their own dashboard (AgentController::dashboard / registrations), but
+     * batched — related rows are loaded once per list and keyed, never one
+     * query per row.
+     */
+    public function show(Request $request, int $id): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        [$tenant] = $context;
+
+        PlanGate::ensureFeature($tenant, 'admission_marketer');
+
+        // Tenant-scoped: another academy's agent id 404s here.
+        $agent = Agent::query()->findOrFail($id);
+
+        // Wallet, same arithmetic as index() and the agent dashboard.
+        $wallet = AgentCommission::query()
+            ->where('agent_id', $agent->id)
+            ->selectRaw('
+                sum(case when type != "withdrawal" then commission_amount else 0 end) as earned,
+                sum(case when type = "withdrawal" and status = "withdrawal_requested" then abs(commission_amount) else 0 end) as requested,
+                sum(case when type = "withdrawal" and status = "paid" then abs(commission_amount) else 0 end) as paid')
+            ->first();
+
+        $earned = (float) ($wallet->earned ?? 0);
+        $requested = (float) ($wallet->requested ?? 0);
+        $paid = (float) ($wallet->paid ?? 0);
+
+        // Recent referred students + their first enrollment's course, batched.
+        $students = LmsStudent::query()
+            ->where('referred_by_agent_id', $agent->id)
+            ->latest('id')
+            ->limit(15)
+            ->get(['id', 'first_name', 'last_name', 'email', 'created_at']);
+
+        $enrollments = LmsEnrollment::query()
+            ->with('course:id,title')
+            ->whereIn('student_id', $students->pluck('id'))
+            ->get()
+            ->groupBy('student_id');
+
+        $referrals = $students->map(fn (LmsStudent $s) => [
+            'id' => $s->id,
+            'name' => trim("{$s->first_name} {$s->last_name}") ?: $s->email,
+            'email' => $s->email,
+            'course' => $enrollments->get($s->id)?->first()?->course?->title ?? 'No enrollment yet',
+            'enrolled_at' => $enrollments->get($s->id)?->first()?->created_at?->toIso8601String(),
+            'created_at' => $s->created_at?->toIso8601String(),
+        ])->values();
+
+        // Recent registrations this agent brought in (registered directly or
+        // referred), with payment + commission state — batched like
+        // AgentController::registrations.
+        $registrations = TrainingRegistration::query()
+            ->where(function ($q) use ($agent) {
+                $q->where('registered_by_agent_id', $agent->id)
+                    ->orWhere('referred_by_agent_id', $agent->id);
+            })
+            ->latest('id')
+            ->limit(25)
+            ->get();
+
+        $regIds = $registrations->pluck('id');
+        $payments = Payment::query()->whereIn('registration_id', $regIds)->get()->keyBy('registration_id');
+        // AgentCommission.enrollment_id actually references training_registrations.id
+        // (historical column name, same mapping the agent portal uses).
+        $commissions = AgentCommission::query()
+            ->where('agent_id', $agent->id)
+            ->whereIn('enrollment_id', $regIds)
+            ->get()
+            ->keyBy('enrollment_id');
+
+        $registrationRows = $registrations->map(fn (TrainingRegistration $r) => [
+            'id' => $r->id,
+            'name' => trim("{$r->first_name} {$r->last_name}"),
+            'course' => $r->course?->title ?? $r->course_name,
+            'type' => $r->registered_by_agent_id === $agent->id ? 'direct' : 'referral',
+            'status' => $r->status,
+            'payment_status' => $payments->get($r->id)?->status ?? 'none',
+            'commission' => (float) ($commissions->get($r->id)?->commission_amount ?? 0),
+            'commission_status' => $commissions->get($r->id)?->status,
+            'created_at' => $r->created_at?->toIso8601String(),
+        ])->values();
+
+        // Commission / withdrawal ledger, newest first.
+        $transactions = AgentCommission::query()
+            ->where('agent_id', $agent->id)
+            ->latest('id')
+            ->limit(25)
+            ->get()
+            ->map(fn (AgentCommission $c) => [
+                'id' => $c->id,
+                'amount' => (float) $c->commission_amount,
+                'type' => $c->type,
+                'status' => $c->status,
+                'notes' => $c->notes,
+                'created_at' => $c->created_at?->toIso8601String(),
+            ])->values();
+
+        $totalStudents = LmsStudent::query()->where('referred_by_agent_id', $agent->id)->count();
+        $totalRegistrations = TrainingRegistration::query()
+            ->where(function ($q) use ($agent) {
+                $q->where('registered_by_agent_id', $agent->id)
+                    ->orWhere('referred_by_agent_id', $agent->id);
+            })
+            ->count();
+
+        return response()->json([
+            'agent' => [
+                'id' => $agent->id,
+                'name' => $agent->name,
+                'email' => $agent->email,
+                'phone' => $agent->phone,
+                'avatar_url' => $agent->profile_photo_url,
+                'referral_code' => $agent->referral_code,
+                'status' => $agent->status,
+                'created_at' => $agent->created_at?->toIso8601String(),
+                'approved_at' => $agent->approved_at?->toIso8601String(),
+            ],
+            'stats' => [
+                'students_referred' => $totalStudents,
+                'registrations' => $totalRegistrations,
+                'total_earned' => $earned,
+                'pending_withdrawal' => $requested,
+                'paid_out' => $paid,
+                'balance' => $earned - $requested - $paid,
+            ],
+            'referrals' => $referrals,
+            'registrations' => $registrationRows,
+            'transactions' => $transactions,
+        ]);
+    }
+
+    /**
+     * Approve a pending marketer so they can log into the agent portal.
+     * Mirrors the host panel's AdminController::approveAgent: a NEW temporary
+     * password is generated, saved, and emailed (the agent cannot sign in
+     * without it — AgentApplicationApprovedMail REQUIRES the password as its
+     * third argument; the API-side adminApprove omitted it, which made every
+     * approval email throw inside its own catch and fail silently).
      */
     public function approve(Request $request, int $id): JsonResponse
     {
@@ -137,18 +284,28 @@ class OwnerAgentController extends OwnerAdminController
 
         $wasApproved = $agent->status === 'approved';
 
-        $agent->update([
-            'status' => 'approved',
-            'approved_at' => $agent->approved_at ?? now(),
-        ]);
+        // A fresh approval needs a password they can actually use; re-approving
+        // an already-approved agent is a no-op and must not reset (or re-email)
+        // their password.
+        $password = null;
+        if (! $wasApproved) {
+            $password = Str::random(12);
+            $agent->update([
+                'status' => 'approved',
+                'approved_at' => now(),
+                'password' => Hash::make($password),
+            ]);
+        }
 
         $emailSent = null;
-        // Only a fresh approval gets the email; re-approving an already-approved
-        // agent (a no-op) must not spam them.
-        if (! $wasApproved && config('saas.training_email_enabled')) {
+        if ($password !== null && config('saas.training_email_enabled')) {
             try {
                 Mail::to($agent->email)->send(
-                    new AgentApplicationApprovedMail($agent, rtrim((string) config('saas.frontend_url'), '/') . '/lms/agent/login')
+                    new AgentApplicationApprovedMail(
+                        $agent,
+                        rtrim((string) config('saas.frontend_url'), '/') . '/lms/agent/login?email=' . urlencode($agent->email),
+                        $password
+                    )
                 );
                 $emailSent = true;
             } catch (\Throwable $e) {
@@ -157,12 +314,15 @@ class OwnerAgentController extends OwnerAdminController
             }
         }
 
+        $message = 'Agent approved. They can now sign in to the agent portal.';
+        if ($emailSent === false) {
+            $message = 'Agent approved, but the approval email could not be sent. Ask them to use "Forgot password" to set one.';
+        } elseif ($wasApproved) {
+            $message = 'This agent is already approved.';
+        }
+
         return response()->json([
-            'message' => $wasApproved
-                ? 'This agent is already approved.'
-                : ($emailSent === false
-                    ? 'Agent approved, but the approval email could not be sent. Ask them to use "Forgot password" to set one.'
-                    : 'Agent approved. They can now sign in to the agent portal.'),
+            'message' => $message,
             'email_sent' => $emailSent,
             'agent' => $agent->fresh(),
         ]);

@@ -68,7 +68,10 @@ class StaffClassroomController extends BaseLmsController
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'starts_at' => ['required', 'date'],
-            'ends_at' => ['nullable', 'date', 'after:starts_at'],
+            // A live class carries BOTH a start and an end time. The end time is
+            // the scheduled window shown to students (join closes after it), NOT
+            // an automatic cut-off: the call itself runs until the host ends it.
+            'ends_at' => ['required', 'date', 'after:starts_at'],
             'meeting_url' => ['nullable', 'string', 'max:2048'],
             'meeting_id' => ['nullable', 'string', 'max:255'],
             'meeting_password' => ['nullable', 'string', 'max:64'],

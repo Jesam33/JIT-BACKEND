@@ -213,6 +213,7 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     // approve/reject. Admission-marketer network is Basic+, gated via 402 → the
     // owner UpgradeModal.
     Route::get('/api/frontend/lms/owner/agents', [OwnerAgentController::class, 'index']);
+    Route::get('/api/frontend/lms/owner/agents/{id}', [OwnerAgentController::class, 'show']);
     Route::post('/api/frontend/lms/owner/agents/{id}/approve', [OwnerAgentController::class, 'approve']);
     Route::post('/api/frontend/lms/owner/agents/{id}/reject', [OwnerAgentController::class, 'reject']);
 

@@ -576,15 +576,30 @@ class AgentController extends BaseLmsController
     {
         $agent = Agent::findOrFail($id);
 
-        $agent->update([
-            'status' => 'approved',
-            'approved_at' => now(),
-        ]);
+        $wasApproved = $agent->status === 'approved';
 
-        if (config('saas.training_email_enabled')) {
+        // A fresh approval regenerates the password and emails it — the agent
+        // cannot sign in otherwise. AgentApplicationApprovedMail REQUIRES the
+        // password as its third argument; calling it without one (the old code
+        // here) throws inside the catch below, so every email failed silently.
+        $password = null;
+        if (! $wasApproved) {
+            $password = Str::random(12);
+            $agent->update([
+                'status' => 'approved',
+                'approved_at' => now(),
+                'password' => bcrypt($password),
+            ]);
+        }
+
+        if ($password !== null && config('saas.training_email_enabled')) {
             $baseUrl = config('saas.frontend_url');
             try {
-                Mail::to($agent->email)->send(new AgentApplicationApprovedMail($agent, $baseUrl . '/lms/agent/login'));
+                Mail::to($agent->email)->send(new AgentApplicationApprovedMail(
+                    $agent,
+                    $baseUrl . '/lms/agent/login?email=' . urlencode($agent->email),
+                    $password
+                ));
             } catch (\Throwable $e) {
                 // Log error but don't fail
             }

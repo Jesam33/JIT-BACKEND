@@ -12,6 +12,7 @@ use App\Scopes\TenantScope;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -230,5 +231,81 @@ class OwnerAgentsTest extends TestCase
             ->assertOk();
 
         $this->assertSame('rejected', $agent->fresh()->status);
+    }
+
+    public function test_approve_emails_a_new_temporary_password(): void
+    {
+        // Regression guard for the silent email failure: the mailable REQUIRES
+        // a third $password argument — omitting it throws inside the catch, so
+        // approval succeeded but no email ever left (and the agent had no way
+        // to sign in).
+        Mail::fake();
+        config(['saas.training_email_enabled' => true]);
+
+        $tenant = $this->makeTenant('acme');
+        $token = $this->ownerToken($tenant);
+        $agent = $this->makeAgent($tenant, 'New Agent', 'pending');
+        $oldHash = $agent->password;
+
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson("/api/frontend/lms/owner/agents/{$agent->id}/approve")
+            ->assertOk();
+        $this->assertTrue($res->json('email_sent'));
+
+        Mail::assertSent(\App\Mail\AgentApplicationApprovedMail::class, function ($mail) use ($agent) {
+            return $mail->agent->id === $agent->id && $mail->password !== '' && strlen($mail->password) === 12;
+        });
+
+        // The emailed password is the one now stored (hashed), not the old one.
+        $this->assertNotSame($oldHash, $agent->fresh()->password);
+        $this->assertTrue(Hash::check(collect(Mail::sent(\App\Mail\AgentApplicationApprovedMail::class))->first()->password, $agent->fresh()->password));
+    }
+
+    public function test_show_returns_per_agent_analytics(): void
+    {
+        $tenant = $this->makeTenant('acme');
+        $token = $this->ownerToken($tenant);
+        $agent = $this->makeAgent($tenant, 'Analytics Agent');
+
+        $this->asTenant($tenant, function () use ($agent) {
+            LmsStudent::create([
+                'first_name' => 'Referred',
+                'last_name' => 'Two',
+                'email' => 'referred2@acme.test',
+                'password' => Hash::make('secret123'),
+                'referred_by_agent_id' => $agent->id,
+            ]);
+            AgentCommission::create([
+                'agent_id' => $agent->id,
+                'enrollment_id' => 77,
+                'course_price' => 50000,
+                'commission_amount' => 7500,
+                'status' => 'pending',
+                'type' => 'referral',
+            ]);
+        });
+
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson("/api/frontend/lms/owner/agents/{$agent->id}")
+            ->assertOk();
+
+        $this->assertSame('Analytics Agent', $res->json('agent.name'));
+        $this->assertSame(1, $res->json('stats.students_referred'));
+        $this->assertSame(7500.0, (float) $res->json('stats.total_earned'));
+        $this->assertSame(7500.0, (float) $res->json('stats.balance'));
+        $this->assertCount(1, $res->json('referrals'));
+        $this->assertCount(1, $res->json('transactions'));
+    }
+
+    public function test_show_is_scoped_to_own_academy(): void
+    {
+        $acme = $this->makeTenant('acme');
+        $acmeToken = $this->ownerToken($acme);
+        $beta = $this->makeTenant('beta');
+        $betaAgent = $this->makeAgent($beta, 'Beta Agent');
+
+        $this->withHeader('Authorization', 'Bearer ' . $acmeToken)
+            ->getJson("/api/frontend/lms/owner/agents/{$betaAgent->id}")
+            ->assertNotFound();
     }
 }
