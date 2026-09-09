@@ -33,6 +33,12 @@ use Illuminate\Validation\Rule;
  * All Gamma wire specifics live in GammaService (the sole adapter); this
  * controller only maps request → validated Gamma body and Gamma result →
  * persisted LmsMaterial / LmsModuleContent.
+ *
+ * StaffGammaController extends this class: it overrides resolveContext() to
+ * authenticate a STAFF session instead, and the two authorize*Target() hooks
+ * below to restrict the save/browse targets to the teacher's assigned courses.
+ * Keep every method's context resolution + PlanGate gate going through
+ * resolveContext()/the hooks so the staff variant stays a pure override.
  */
 class OwnerGammaController extends BaseLmsController
 {
@@ -46,7 +52,7 @@ class OwnerGammaController extends BaseLmsController
      * of a tenant. (Copy of OwnerAdminController::ownerContext, kept local so
      * the two owner controllers don't couple through a shared parent method.)
      */
-    protected function ownerContext(Request $request): ?array
+    protected function resolveContext(Request $request): ?array
     {
         $session = $this->sessionFromRequest($request, 'owner');
         if (! $session) {
@@ -78,13 +84,27 @@ class OwnerGammaController extends BaseLmsController
     }
 
     /**
+     * Ownership guards for the save/browse targets. The owner variant allows
+     * ANY course of the bound tenant (the TenantAware scope already 404s
+     * foreign-tenant ids); StaffGammaController overrides both to require the
+     * courses the teacher is actually assigned to (via their cohorts).
+     */
+    protected function authorizeCourseTarget(LmsCourse $course): void
+    {
+    }
+
+    protected function authorizeModuleTarget(LmsModule $module): void
+    {
+    }
+
+    /**
      * Start an async generation. Validates the prompt + options, maps them to
      * Gamma's camelCase body (GammaService owns the wire contract), and returns
      * the generation id the page then polls. PlanGate gates it to Pro+ (402).
      */
     public function generate(Request $request): JsonResponse
     {
-        $context = $this->ownerContext($request);
+        $context = $this->resolveContext($request);
         if (! $context) {
             return response()->json(['message' => 'Not authorized.'], 403);
         }
@@ -158,7 +178,7 @@ class OwnerGammaController extends BaseLmsController
      */
     public function status(Request $request, string $id): JsonResponse
     {
-        $context = $this->ownerContext($request);
+        $context = $this->resolveContext($request);
         if (! $context) {
             return response()->json(['message' => 'Not authorized.'], 403);
         }
@@ -194,7 +214,7 @@ class OwnerGammaController extends BaseLmsController
      */
     public function save(Request $request): JsonResponse
     {
-        $context = $this->ownerContext($request);
+        $context = $this->resolveContext($request);
         if (! $context) {
             return response()->json(['message' => 'Not authorized.'], 403);
         }
@@ -224,6 +244,7 @@ class OwnerGammaController extends BaseLmsController
         if (! empty($data['module_id'])) {
             // Tenant-scoped: a module from another institute 404s here.
             $module = LmsModule::query()->findOrFail((int) $data['module_id']);
+            $this->authorizeModuleTarget($module);
 
             $nextOrder = (int) (LmsModuleContent::query()
                 ->where('module_id', $module->id)
@@ -272,6 +293,7 @@ class OwnerGammaController extends BaseLmsController
 
         // Tenant-scoped: a course from another institute 404s here.
         $course = LmsCourse::query()->findOrFail((int) $data['course_id']);
+        $this->authorizeCourseTarget($course);
 
         $material = LmsMaterial::create([
             'course_id' => $course->id,
@@ -294,7 +316,7 @@ class OwnerGammaController extends BaseLmsController
      */
     public function courseModules(Request $request, int $course): JsonResponse
     {
-        $context = $this->ownerContext($request);
+        $context = $this->resolveContext($request);
         if (! $context) {
             return response()->json(['message' => 'Not authorized.'], 403);
         }
@@ -304,6 +326,7 @@ class OwnerGammaController extends BaseLmsController
 
         // Tenant-scoped: a foreign course 404s instead of leaking its modules.
         $courseModel = LmsCourse::query()->findOrFail($course);
+        $this->authorizeCourseTarget($courseModel);
 
         $modules = LmsModule::query()
             ->where('course_id', $courseModel->id)

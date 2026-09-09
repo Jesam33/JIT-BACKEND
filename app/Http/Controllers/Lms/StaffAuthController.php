@@ -106,6 +106,9 @@ class StaffAuthController extends BaseLmsController
             'email' => $teacher->email,
             'profile_photo_url' => $teacher->profile_photo_url,
             'plan' => $this->planForSession($session),
+            // Per-feature gates for the staff shell (the sidebar shows
+            // "Create with AI" only when the academy's plan includes it).
+            'ai_materials' => $this->featureForSession($session, 'ai_materials'),
             // Lets the staff shell re-pin its `tenant` cookie from this
             // authenticated session so the inactivity → login redirect keeps
             // the institute instead of falling back to the primary slug.

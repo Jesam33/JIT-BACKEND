@@ -94,7 +94,15 @@ class StudentClassroomController extends BaseLmsController
             return response()->json(['message' => 'Live classes are not configured yet.'], 503);
         }
 
-        $classType = $request->input('class_type', 'classroom');
+        // The display name the student typed in the portal's own pre-join step.
+        // Jitsi shows the name from the JWT (userInfo.displayName is only a
+        // fallback), so the choice has to be minted into the token here.
+        $data = $request->validate([
+            'class_type' => ['nullable', 'in:classroom,scheduled'],
+            'display_name' => ['nullable', 'string', 'max:60'],
+        ]);
+
+        $classType = $data['class_type'] ?? 'classroom';
         $classroom = null;
 
         if ($classType === 'scheduled') {
@@ -107,10 +115,13 @@ class StudentClassroomController extends BaseLmsController
 
         $student = \App\Models\LmsStudent::query()->findOrFail($session->user_id);
         $userName = trim($student->first_name . ' ' . $student->last_name) ?: 'Student';
+        // Prefer the name the student chose at the pre-join step; the profile
+        // name is only the prefill/default.
+        $joinName = trim((string) ($data['display_name'] ?? '')) ?: $userName;
 
         $jwt = $this->mintJaasToken($cfg, $room, [
             'id' => 'student-' . $student->id,
-            'name' => $userName,
+            'name' => $joinName,
             'email' => $student->email,
         ], false);
 
@@ -127,7 +138,7 @@ class StudentClassroomController extends BaseLmsController
             'jwt' => $jwt,
             'domain' => $cfg['domain'],
             'app_id' => $cfg['appId'],
-            'user_name' => $userName,
+            'user_name' => $joinName,
             'moderator' => false,
         ]);
     }

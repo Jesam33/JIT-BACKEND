@@ -402,6 +402,30 @@ abstract class BaseLmsController extends Controller
     }
 
     /**
+     * Whether the session's plan includes a boolean feature (e.g.
+     * ai_materials), resolved with the same bound-tenant-first logic as
+     * planForSession(). Lets a portal `me` endpoint publish individual feature
+     * gates (the staff sidebar shows "Create with AI" only when the ACADEMY's
+     * plan has it) without the frontend hard-coding plan-slug matrices.
+     * Fail-closed: a missing tenant/plan reads as false.
+     */
+    protected function featureForSession(?LmsSession $session, string $feature): bool
+    {
+        if (app()->bound('currentTenant') && app('currentTenant')) {
+            return (bool) app('currentTenant')->planFeature($feature);
+        }
+
+        if ($session && $session->tenant_id) {
+            $tenant = \App\Models\Tenant::find($session->tenant_id);
+            if ($tenant) {
+                return (bool) $tenant->planFeature($feature);
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Tenant descriptor for a portal `me` response so the frontend can re-pin
      * its `tenant` cookie from the AUTHENTICATED session on every load, the
      * same self-heal the owner portal does. Without this the cookie is only set

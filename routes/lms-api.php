@@ -5,6 +5,7 @@ use App\Http\Controllers\LmsIntakeController;
 use App\Http\Controllers\PublicInstituteController;
 use App\Http\Controllers\Lms\TenantBillingController;
 use App\Http\Controllers\Lms\OwnerAdminController;
+use App\Http\Controllers\Lms\OwnerAgentController;
 use App\Http\Controllers\Lms\OwnerGammaController;
 use App\Http\Controllers\Lms\StudentAuthController;
 use App\Http\Controllers\Lms\StudentProfileController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Lms\StudentMaterialController;
 use App\Http\Controllers\Lms\StudentModuleController;
 use App\Http\Controllers\Lms\StudentCourseReviewController;
 use App\Http\Controllers\Lms\StaffAuthController;
+use App\Http\Controllers\Lms\StaffGammaController;
 use App\Http\Controllers\Lms\StaffTaskController;
 use App\Http\Controllers\Lms\StaffChatController;
 use App\Http\Controllers\Lms\StaffClassroomController;
@@ -205,6 +207,14 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::delete('/api/frontend/lms/owner/staff/{id}', [OwnerAdminController::class, 'destroyStaff']);
     Route::post('/api/frontend/lms/owner/staff/{id}/resend-invite', [OwnerAdminController::class, 'resendStaffInvite']);
     Route::post('/api/frontend/lms/owner/staff/{id}/active', [OwnerAdminController::class, 'setStaffActive']);
+
+    // Owner Admission Marketer (agent) management: everyone advertising the
+    // academy with their referral numbers and payout balance, plus
+    // approve/reject. Admission-marketer network is Basic+, gated via 402 → the
+    // owner UpgradeModal.
+    Route::get('/api/frontend/lms/owner/agents', [OwnerAgentController::class, 'index']);
+    Route::post('/api/frontend/lms/owner/agents/{id}/approve', [OwnerAgentController::class, 'approve']);
+    Route::post('/api/frontend/lms/owner/agents/{id}/reject', [OwnerAgentController::class, 'reject']);
 
 
     // Owner cohort management (create a track + assign an instructor / reassign staff)
@@ -430,6 +440,19 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     // Staff Assigned Courses & Tracks
     Route::get('/api/frontend/lms/staff/courses', [StaffPortalController::class, 'assignedCourses']);
     Route::get('/api/frontend/lms/staff/tracks', [StaffPortalController::class, 'assignedTracks']);
+
+    // Staff AI training materials (Gamma, Pro+) — the same generate → poll →
+    // save flow as the owner's, but StaffGammaController scopes every target to
+    // the teacher's assigned courses. The ai_materials PlanGate (402) is
+    // inherited on every action; the staff page shows an "ask your academy
+    // owner to upgrade" note (staff cannot upgrade the plan themselves).
+    // Generate is throttled — each call spends Gamma credits.
+    Route::post('/api/frontend/lms/staff/ai/materials/generate', [StaffGammaController::class, 'generate'])->middleware('throttle:20,1');
+    Route::get('/api/frontend/lms/staff/ai/materials/{id}', [StaffGammaController::class, 'status']);
+    Route::post('/api/frontend/lms/staff/ai/materials/save', [StaffGammaController::class, 'save']);
+    // Modules of one assigned course — populates the staff AI-materials
+    // "save into module" picker (assigned-course-scoped inside the controller).
+    Route::get('/api/frontend/lms/staff/courses/{course}/modules', [StaffGammaController::class, 'courseModules']);
 
     // Staff Notifications
     Route::get('/api/frontend/lms/staff/notifications', [StaffNotificationController::class, 'index']);
