@@ -374,6 +374,21 @@ abstract class BaseLmsController extends Controller
     }
 
     /**
+     * Relative URL ('/storage/...') for a file on the public disk. In-app file
+     * links (materials, module contents, task submissions) MUST stay relative:
+     * Storage::url() bakes in APP_URL's host, so a row saved under
+     * http://127.0.0.1:8000 404s from every other host that loads the app (a
+     * phone testing the portal, the live domain). Relative links are served
+     * same-origin by the Next /storage rewrite, which works anywhere the app
+     * itself loads. Share-preview images (og:image) are the exception —
+     * crawlers reject relative URLs — so covers/logos still use Storage::url().
+     */
+    protected function publicFileUrl(string $path): string
+    {
+        return '/storage/' . ltrim($path, '/');
+    }
+
+    /**
      * Plan slug for the current request, used by portal `me` endpoints so the
      * shells can gate paid-only features (chat). Prefers the bound tenant
      * (ResolveTenantFromSession binds it from the bearer token); falls back to

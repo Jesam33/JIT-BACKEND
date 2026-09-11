@@ -201,6 +201,9 @@ class StaffModuleController extends BaseLmsController
             'type' => 'required|in:slides,pdf,video,link,text,code,file,doc',
             'content_url' => 'nullable|string',
             'content_body' => 'nullable|string',
+            // Locally uploaded file (see uploadContentFile), stored so the file
+            // is deleted with the content.
+            'file_path' => ['nullable', 'string', 'max:255'],
             'sort_order' => 'nullable|integer',
             // Externally-hosted video (Bunny Stream) pointers, set by the client
             // after a direct upload finishes. content_url carries the embed URL.
@@ -241,6 +244,10 @@ class StaffModuleController extends BaseLmsController
             'type' => 'sometimes|in:slides,pdf,video,link,text,code,file,doc',
             'content_url' => 'nullable|string',
             'content_body' => 'nullable|string',
+            // A newly uploaded replacement file; the file it supersedes is
+            // deleted below so re-uploading an edited document doesn't orphan
+            // the old copy on disk.
+            'file_path' => ['nullable', 'string', 'max:255'],
             'sort_order' => 'nullable|integer',
         ]);
 
@@ -251,7 +258,18 @@ class StaffModuleController extends BaseLmsController
             PlanGate::ensureFeature($this->currentTenantOrPrimary(), 'pre_recorded_video');
         }
 
+        // Never blank an existing file_path: only apply the key when a
+        // replacement file was actually uploaded (a null would otherwise
+        // orphan the stored file by forgetting its path).
+        if (array_key_exists('file_path', $validated) && empty($validated['file_path'])) {
+            unset($validated['file_path']);
+        }
+
+        $replacedPath = $content->file_path;
         $content->update($validated);
+        if (! empty($validated['file_path']) && $replacedPath && $replacedPath !== $validated['file_path']) {
+            Storage::disk('public')->delete($replacedPath);
+        }
 
         return response()->json($content);
     }
@@ -289,13 +307,16 @@ class StaffModuleController extends BaseLmsController
         }
 
         $request->validate([
-            'file' => 'required|file|max:102400',
+            // Same allowlist as StaffPortalController::uploadMaterialFile:
+            // document/media types only, so executable-ish files (html/svg)
+            // never land on the same-origin storage host.
+            'file' => 'required|file|max:51200|mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,csv,txt,rtf,zip,png,jpg,jpeg,webp,gif,mp3,wav,m4a',
         ]);
 
         $path = $request->file('file')->store('module-contents', 'public');
 
         return response()->json([
-            'url' => Storage::url($path),
+            'url' => $this->publicFileUrl($path),
             'path' => $path,
         ]);
     }

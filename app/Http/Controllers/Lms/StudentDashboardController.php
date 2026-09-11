@@ -37,17 +37,41 @@ class StudentDashboardController extends BaseLmsController
         $courseId = $student->selected_course_id ?? $track?->course_id;
         $course = $courseId ? LmsCourse::query()->find($courseId) : null;
 
+        // Delivered classes across BOTH delivery types: legacy course classrooms
+        // and module-based scheduled classes. Only classes that have already
+        // started (and weren't cancelled) count toward the rate, so future
+        // classes don't drag it down before they happen.
         $classroomIds = collect();
+        $scheduledIds = collect();
         if ($course) {
             $classroomIds = \App\Models\LmsClassroom::query()
                 ->where('course_id', $course->id)
+                ->where('starts_at', '<=', now())
+                ->pluck('id');
+
+            $scheduledIds = \App\Models\LmsScheduledClass::query()
+                ->whereHas('module', fn($q) => $q->where('course_id', $course->id))
+                ->where('status', '!=', 'cancelled')
+                ->where('starts_at', '<=', now())
                 ->pluck('id');
         }
 
-        $classesTotal = $classroomIds->count();
+        $classesTotal = $classroomIds->count() + $scheduledIds->count();
+        // A row only exists because the student joined the room, but an
+        // instant join-and-leave computes to status 'absent' — that should
+        // NOT count as attended. Unclosed rows (student still inside / never
+        // left via the close-out) read as present, matching the attendance
+        // endpoint's own semantics.
         $attendedCount = LmsAttendance::query()
             ->where('student_id', $studentId)
-            ->whereIn('classroom_id', $classroomIds)
+            ->where(fn ($q) => $q->whereNull('status')->orWhereIn('status', ['present', 'partial', 'late', 'made_up']))
+            ->where(function ($q) use ($classroomIds, $scheduledIds) {
+                $q->where(function ($w) use ($classroomIds) {
+                    $w->where('class_type', 'classroom')->whereIn('classroom_id', $classroomIds);
+                })->orWhere(function ($w) use ($scheduledIds) {
+                    $w->where('class_type', 'scheduled')->whereIn('scheduled_class_id', $scheduledIds);
+                });
+            })
             ->count();
         $attendanceRate = $classesTotal > 0 ? round(($attendedCount / $classesTotal) * 100) : 0;
 
@@ -373,7 +397,7 @@ class StudentDashboardController extends BaseLmsController
 
         if ($request->hasFile('submitted_file')) {
             $path = $request->file('submitted_file')->store('task-submissions', 'public');
-            $submittedFileUrl = Storage::url($path);
+            $submittedFileUrl = $this->publicFileUrl($path);
         } else {
             $validated = $request->validate([
                 'submitted_file_url' => ['nullable', 'string', 'max:2048'],
@@ -479,15 +503,21 @@ class StudentDashboardController extends BaseLmsController
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        // Attendance across BOTH delivery types (legacy classrooms + module
+        // scheduled classes). class_id/class_type are the pair to key on in
+        // the frontend; classroom_id is kept for the legacy shape only.
         $records = LmsAttendance::query()
             ->where('student_id', $session->user_id)
-            ->with('classroom')
+            ->with(['classroom', 'scheduledClass'])
             ->orderByDesc('created_at')
             ->get()
             ->map(fn ($a) => [
+                'class_type' => $a->class_type ?? 'classroom',
+                'class_id' => ($a->class_type ?? 'classroom') === 'scheduled' ? $a->scheduled_class_id : $a->classroom_id,
                 'classroom_id' => $a->classroom_id,
-                'class_title' => $a->classroom?->title,
-                'starts_at' => $a->classroom?->starts_at?->toIso8601String(),
+                'scheduled_class_id' => $a->scheduled_class_id,
+                'class_title' => $a->classroom?->title ?? $a->scheduledClass?->title,
+                'starts_at' => ($a->classroom?->starts_at ?? $a->scheduledClass?->starts_at)?->toIso8601String(),
                 'status' => $a->calculated_at ? ($a->status ?? 'present') : ($a->joined_at ? 'present' : 'absent'),
                 'total_seconds' => $a->total_seconds ?? 0,
                 'first_joined_at' => ($a->first_joined_at ?? $a->joined_at)?->toIso8601String(),

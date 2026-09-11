@@ -14,6 +14,8 @@ class LmsAttendance extends Model
     protected $fillable = [
         'student_id',
         'classroom_id',
+        'class_type',
+        'scheduled_class_id',
         'joined_at',
         'first_joined_at',
         'last_left_at',
@@ -32,6 +34,14 @@ class LmsAttendance extends Model
     public function classroom()
     {
         return $this->belongsTo(LmsClassroom::class);
+    }
+
+    // Module-based delivery events (LmsScheduledClass) also track attendance
+    // since 2026-09-11; exactly one of classroom/scheduledClass is set,
+    // discriminated by class_type.
+    public function scheduledClass(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(LmsScheduledClass::class, 'scheduled_class_id');
     }
 
     public function student(): \Illuminate\Database\Eloquent\Relations\BelongsTo

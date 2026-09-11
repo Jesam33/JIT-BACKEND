@@ -11,6 +11,7 @@ use App\Models\LmsClassroom;
 use App\Models\LmsCourse;
 use App\Models\LmsEnrollment;
 use App\Models\LmsMaterial;
+use App\Models\LmsScheduledClass;
 use App\Models\LmsStudent;
 use App\Models\LmsTask;
 use App\Models\LmsTaskSubmission;
@@ -18,6 +19,7 @@ use App\Models\LmsTeacher;
 use App\Models\LmsTrack;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class StaffPortalController extends BaseLmsController
@@ -193,6 +195,9 @@ class StaffPortalController extends BaseLmsController
             'title' => ['required', 'string', 'max:255'],
             'type' => ['required', 'in:pdf,doc,video,link,other'],
             'file_url' => ['required', 'string', 'max:2048'],
+            // Local uploaded file (see uploadMaterialFile), stored so the file
+            // can be deleted with the material.
+            'file_path' => ['nullable', 'string', 'max:255'],
             'session_id' => ['nullable', 'integer', 'exists:lms_classrooms,id'],
             // Externally-hosted video (Bunny Stream) pointers, set by the client
             // after a direct upload finishes. file_url carries the embed URL.
@@ -203,6 +208,13 @@ class StaffPortalController extends BaseLmsController
             'status' => ['nullable', 'string', 'max:40'],
         ]);
 
+        // Scope the write to the teacher's own courses (the list and delete
+        // queries already scope this way): without this a staffer could attach
+        // a material to ANY course in the institute by guessing its id.
+        if (! in_array($validated['course_id'], $this->getCourseIds($teacher))) {
+            return response()->json(['message' => 'Course not in your assignment'], 403);
+        }
+
         // Video materials are a paid feature (Basic+); other material types are
         // available on every plan. Gate only the video type.
         if (($validated['type'] ?? null) === 'video') {
@@ -212,6 +224,36 @@ class StaffPortalController extends BaseLmsController
         $material = LmsMaterial::query()->create($validated);
 
         return response()->json($material, 201);
+    }
+
+    // Upload a non-video material file (PDF, document, slides, archive…) from
+    // the staffer's PC onto the platform's public disk, the same storage the
+    // module contents and task submissions already use. Videos deliberately do
+    // NOT come through here: their bytes go straight from the browser to Bunny
+    // Stream (see StaffVideoController), so big files never touch this server.
+    // The mimes allowlist keeps executable-ish types (html/svg) off the
+    // same-origin storage host.
+    public function uploadMaterialFile(Request $request): JsonResponse
+    {
+        $this->ensureLmsEnabled();
+        $teacher = $this->getTeacher($request);
+        if (! $teacher) return response()->json(['message' => 'Unauthorized'], 401);
+
+        $validated = $request->validate([
+            'file' => [
+                'required',
+                'file',
+                'max:51200',
+                'mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,csv,txt,rtf,zip,png,jpg,jpeg,webp,gif,mp3,wav,m4a',
+            ],
+        ]);
+
+        $path = $validated['file']->store('materials', 'public');
+
+        return response()->json([
+            'url' => $this->publicFileUrl($path),
+            'path' => $path,
+        ]);
     }
 
     public function deleteMaterial(Request $request, int $id): JsonResponse
@@ -225,6 +267,13 @@ class StaffPortalController extends BaseLmsController
         $material = LmsMaterial::query()
             ->whereIn('course_id', $this->getCourseIds($teacher))
             ->findOrFail($id);
+
+        // A locally uploaded file dies with its material; externally hosted
+        // pointers (Bunny, pasted URLs) are left alone.
+        if ($material->file_path) {
+            Storage::disk('public')->delete($material->file_path);
+        }
+
         $material->delete();
 
         return response()->json(['message' => 'Material deleted.']);
@@ -238,13 +287,25 @@ class StaffPortalController extends BaseLmsController
         $teacher = $this->getTeacher($request);
         if (! $teacher) return response()->json(['message' => 'Unauthorized'], 401);
 
+        // Both delivery types: legacy course classrooms (teacher_id on the
+        // classroom) and module scheduled classes (teacher_id on the class).
         $classroomIds = LmsClassroom::query()
             ->where('teacher_id', $teacher->id)
             ->pluck('id');
 
+        $scheduledIds = LmsScheduledClass::query()
+            ->where('teacher_id', $teacher->id)
+            ->pluck('id');
+
         $records = LmsAttendanceRecord::query()
-            ->whereIn('classroom_id', $classroomIds)
-            ->with(['student', 'classroom'])
+            ->where(function ($q) use ($classroomIds, $scheduledIds) {
+                $q->where(function ($w) use ($classroomIds) {
+                    $w->where('class_type', 'classroom')->whereIn('classroom_id', $classroomIds);
+                })->orWhere(function ($w) use ($scheduledIds) {
+                    $w->where('class_type', 'scheduled')->whereIn('scheduled_class_id', $scheduledIds);
+                });
+            })
+            ->with(['student', 'classroom', 'scheduledClass'])
             ->orderBy('created_at', 'desc')
             ->get();
 

@@ -1,0 +1,2501 @@
+diff --git a/src/app/about/page.tsx b/src/app/about/page.tsx
+index 0f7386e..31729f2 100644
+--- a/src/app/about/page.tsx
++++ b/src/app/about/page.tsx
+@@ -1,27 +1,94 @@
++import Link from "next/link";
+ import InnerPageHero from "@/components/layout/InnerPageHero";
+-import ReadMoreText from "@/components/ui/ReadMoreText";
+-import { aboutCoreFeatures, routeIntros } from "@/lib/content";
++import Reveal from "@/components/landing/Reveal";
++import { aboutCoreFeatures, aboutParagraphs, aboutPhilosophy, aboutPromise, routeIntros } from "@/lib/content";
+ 
++/**
++ * About page, in the editorial language of the landing: the shared
++ * InnerPageHero, then the story as a split layout (a serif philosophy
++ * statement beside the running copy) and the three disciplines as
++ * numbered cards.
++ */
+ export default function AboutPage() {
+   const content = routeIntros.about;
+ 
+   return (
+     <section>
+       <InnerPageHero title={content.title} subtitle={content.subtitle}>
+-        <ReadMoreText text={content.body} />
++        <p>{content.body}</p>
+       </InnerPageHero>
+ 
+-      <div className="container-wide py-14">
+-        <h2 className="mb-8 text-3xl font-bold display-gradient" style={{ fontFamily: "var(--font-display)" }}>
+-          Amazing Features For Business Solutions
+-        </h2>
+-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+-          {aboutCoreFeatures.map((item) => (
+-            <article key={item.title} className="rounded-xl border border-site-border/30 bg-site-surface-soft p-6">
+-              <h3 className="mb-3 text-xl font-semibold">{item.title}</h3>
+-              <p className="text-sm text-site-text/75">{item.description}</p>
+-            </article>
+-          ))}
++      {/* The story: serif statement column beside the running copy */}
++      <div className="container-wide section-pad">
++        <div className="grid gap-14 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20">
++          <div className="lg:sticky lg:top-28 lg:self-start">
++            <Reveal variant="left">
++              <p className="text-[10px] font-semibold uppercase tracking-[0.25em]" style={{ color: "var(--color-primary)" }}>
++                Our philosophy
++              </p>
++              <p className="font-editorial mt-5 text-3xl leading-[1.12] md:text-4xl">
++                {aboutPhilosophy}
++              </p>
++              <div className="mt-10 border-t border-site-border/15 pt-6">
++                <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-site-text/50">
++                  Our promise
++                </p>
++                <p className="mt-3 max-w-xs text-sm leading-7 text-site-text/70">
++                  {aboutPromise}
++                </p>
++              </div>
++            </Reveal>
++          </div>
++
++          <Reveal variant="right">
++            <div className="space-y-7">
++              {aboutParagraphs.map((paragraph, i) => (
++                <p
++                  key={i}
++                  className={
++                    i === 0
++                      ? "text-lg leading-9 text-site-text/85"
++                      : "text-base leading-8 text-site-text/70"
++                  }
++                >
++                  {paragraph}
++                </p>
++              ))}
++            </div>
++          </Reveal>
++        </div>
++      </div>
++
++      {/* The disciplines */}
++      <div className="border-t border-site-border/15">
++        <div className="container-wide section-pad">
++          <Reveal>
++            <h2 className="font-editorial text-4xl leading-[1.05] md:text-5xl">
++              What we do<span style={{ color: "var(--color-primary)" }}>.</span>
++            </h2>
++          </Reveal>
++          <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
++            {aboutCoreFeatures.map((item, i) => (
++              <Reveal key={item.title} delay={i * 120}>
++                <article className="h-full rounded-2xl border border-site-border/20 p-8 transition duration-300 hover:-translate-y-1 hover:shadow-xl">
++                  <p className="font-editorial text-sm" style={{ color: "var(--color-primary)" }}>
++                    0{i + 1}
++                  </p>
++                  <h3 className="font-editorial mt-4 text-2xl leading-snug">{item.title}</h3>
++                  <p className="mt-4 text-sm leading-7 text-site-text/70">{item.description}</p>
++                </article>
++              </Reveal>
++            ))}
++          </div>
++          <Reveal delay={200}>
++            <Link
++              href="/qoute"
++              className="font-editorial mt-12 inline-flex items-center gap-3 rounded-full bg-site-primary px-8 py-4 text-sm font-semibold text-[#fff] shadow-lg shadow-site-primary/25 transition hover:shadow-xl hover:shadow-site-primary/35 hover:brightness-110"
++            >
++              Start a project
++              <span aria-hidden="true">↗</span>
++            </Link>
++          </Reveal>
+         </div>
+       </div>
+     </section>
+diff --git a/src/app/campuses/page.tsx b/src/app/campuses/page.tsx
+index e9aaf31..3be8b3e 100644
+--- a/src/app/campuses/page.tsx
++++ b/src/app/campuses/page.tsx
+@@ -235,10 +235,10 @@ export default function CampusesPage() {
+                         className="h-full w-full object-cover"
+                       />
+                     ) : (
+-                      <span className="text-2xl font-bold text-white">{initials(c.name)}</span>
++                      <span className="text-2xl font-bold text-[#fff]">{initials(c.name)}</span>
+                     )}
+                   </span>
+-                  <span className="text-sm font-semibold text-site-text transition group-hover:text-site-primary">
++                  <span className="font-editorial text-lg leading-snug text-site-text transition group-hover:text-site-primary">
+                     {c.name}
+                   </span>
+                   <span className="text-xs text-site-text/60">
+@@ -282,11 +282,11 @@ export default function CampusesPage() {
+                   // eslint-disable-next-line @next/next/no-img-element
+                   <img src={openCampus.logo_url} alt={openCampus.name} className="h-full w-full object-cover" />
+                 ) : (
+-                  <span className="text-xl font-bold text-white">{initials(openCampus.name)}</span>
++                  <span className="text-xl font-bold text-[#fff]">{initials(openCampus.name)}</span>
+                 )}
+               </span>
+               <div className="min-w-0">
+-                <h3 className="truncate text-xl font-bold text-site-text">{openCampus.name}</h3>
++                <h3 className="font-editorial truncate text-2xl text-site-text">{openCampus.name}</h3>
+                 <p className="text-xs uppercase tracking-wider text-site-text/50">
+                   {openCampus.entity_label ?? "Online Academy"}
+                 </p>
+@@ -326,7 +326,7 @@ export default function CampusesPage() {
+               href={tenantStorefrontUrl(openCampus.slug)}
+               target="_blank"
+               rel="noreferrer"
+-              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white transition hover:brightness-110 no-underline"
++              className="font-editorial mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-[#fff] transition hover:brightness-110 no-underline"
+               style={{ backgroundColor: openCampus.primary_color ?? "var(--color-primary)" }}
+             >
+               Visit {openCampus.name}
+@@ -356,7 +356,7 @@ function FilterChip({
+       aria-pressed={active}
+       className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+         active
+-          ? "border-site-primary bg-site-primary text-white"
++          ? "border-site-primary bg-site-primary text-[#fff]"
+           : "border-site-border/40 bg-site-surface-soft text-site-text/70 hover:border-site-primary/60 hover:text-site-text"
+       }`}
+     >
+@@ -429,7 +429,7 @@ function NicheDropdown({
+         aria-expanded={open}
+         className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+           active
+-            ? "border-site-primary bg-site-primary text-white"
++            ? "border-site-primary bg-site-primary text-[#fff]"
+             : "border-site-border/40 bg-site-surface-soft text-site-text/70 hover:border-site-primary/60 hover:text-site-text"
+         }`}
+       >
+@@ -496,7 +496,7 @@ function DropdownRow({
+       className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
+         active
+           ? "bg-site-primary/15 font-semibold text-site-text"
+-          : "text-site-text/75 hover:bg-white/5 hover:text-site-text"
++          : "text-site-text/75 hover:bg-site-text/5 hover:text-site-text"
+       }`}
+     >
+       {children}
+diff --git a/src/app/contact/page.tsx b/src/app/contact/page.tsx
+index 5faae20..5da664a 100644
+--- a/src/app/contact/page.tsx
++++ b/src/app/contact/page.tsx
+@@ -1,5 +1,7 @@
+ import InnerPageHero from "@/components/layout/InnerPageHero";
+ import ContactForm from "@/components/ContactForm";
++import Reveal from "@/components/landing/Reveal";
++import { MailIcon, WhatsAppIcon } from "@/components/ContactIcons";
+ import { routeIntros } from "@/lib/content";
+ 
+ // Prefilled WhatsApp enquiry text, same wording used in the site footer.
+@@ -13,6 +15,8 @@ const CONTACT = {
+   ],
+ };
+ 
++const colHeading = "text-[10px] font-semibold uppercase tracking-[0.25em] text-site-text/50";
++
+ export default function ContactPage() {
+   const content = routeIntros.contact;
+ 
+@@ -22,88 +26,69 @@ export default function ContactPage() {
+         <p>{content.body}</p>
+       </InnerPageHero>
+ 
+-      <div className="container-wide py-14">
+-        <div className="grid gap-10 lg:grid-cols-5">
++      <div className="container-wide section-pad">
++        <div className="grid gap-12 lg:grid-cols-5 lg:gap-16">
+           {/* Message form */}
+           <div className="lg:col-span-3">
+-            <h2 className="mb-6 text-2xl font-bold" style={{ fontFamily: "var(--font-display)" }}>
+-              Send us a message
+-            </h2>
+-            <ContactForm />
++            <Reveal>
++              <h2 className="font-editorial text-4xl leading-[1.05]">
++                Send us a message<span style={{ color: "var(--color-primary)" }}>.</span>
++              </h2>
++              <div className="mt-8">
++                <ContactForm />
++              </div>
++            </Reveal>
+           </div>
+ 
+           {/* Direct contact methods, WhatsApp + email (no physical office listings) */}
+           <aside className="lg:col-span-2">
+-            <div className="rounded-2xl border border-white/20 bg-white/5 p-6 sm:p-8">
+-              <h2 className="text-xl font-semibold text-white">Reach us directly</h2>
+-              <p className="mt-2 text-sm text-white/70">
+-                Prefer to chat? Message us on WhatsApp or send an email, we usually reply within a
+-                few hours.
+-              </p>
++            <Reveal variant="right">
++              <div className="rounded-2xl border border-site-border/20 p-8">
++                <h3 className="font-editorial text-2xl">Reach us directly</h3>
++                <p className="mt-3 text-sm leading-7 text-site-text/70">
++                  Prefer to chat? Message us on WhatsApp or send an email, we usually reply within a
++                  few hours.
++                </p>
+ 
+-              <div className="mt-8">
+-                <p className="text-xs uppercase tracking-[0.22em] text-white/60">WhatsApp</p>
+-                <div className="mt-3 space-y-2">
+-                  {CONTACT.whatsapp.map((w) => (
+-                    <a
+-                      key={w.href}
+-                      href={w.href}
+-                      target="_blank"
+-                      rel="noopener noreferrer"
+-                      className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/[0.03] px-4 py-3 text-sm text-white/90 transition hover:border-white/40 hover:bg-white/[0.06]"
+-                    >
+-                      <WhatsAppIcon />
+-                      <span className="font-medium">{w.label}</span>
+-                    </a>
+-                  ))}
++                <div className="mt-8">
++                  <p className={colHeading}>WhatsApp</p>
++                  <div className="mt-4 space-y-2.5">
++                    {CONTACT.whatsapp.map((w) => (
++                      <a
++                        key={w.href}
++                        href={w.href}
++                        target="_blank"
++                        rel="noopener noreferrer"
++                        className="flex items-center gap-3 rounded-xl border border-site-border/25 px-4 py-3 text-sm text-site-text/90 transition hover:border-site-primary/50 hover:bg-site-primary/5"
++                      >
++                        <WhatsAppIcon />
++                        <span className="font-medium">{w.label}</span>
++                      </a>
++                    ))}
++                  </div>
++                </div>
++
++                <div className="mt-6">
++                  <p className={colHeading}>Email</p>
++                  <a
++                    href={`mailto:${CONTACT.email}`}
++                    className="mt-4 flex items-center gap-3 rounded-xl border border-site-border/25 px-4 py-3 text-sm text-site-text/90 transition hover:border-site-primary/50 hover:bg-site-primary/5"
++                  >
++                    <MailIcon />
++                    <span className="font-medium">{CONTACT.email}</span>
++                  </a>
+                 </div>
+-              </div>
+ 
+-              <div className="mt-6">
+-                <p className="text-xs uppercase tracking-[0.22em] text-white/60">Email</p>
+-                <a
+-                  href={`mailto:${CONTACT.email}`}
+-                  className="mt-3 flex items-center gap-3 rounded-xl border border-white/15 bg-white/[0.03] px-4 py-3 text-sm text-white/90 transition hover:border-white/40 hover:bg-white/[0.06]"
+-                >
+-                  <MailIcon />
+-                  <span className="font-medium">{CONTACT.email}</span>
+-                </a>
++                <div className="mt-6">
++                  <p className={colHeading}>Working hours</p>
++                  <p className="mt-3 text-sm font-medium">Mon - Sat: 8 am - 5 pm</p>
++                  <p className="mt-1 text-sm text-site-text/55">Sunday: Closed</p>
++                </div>
+               </div>
+-            </div>
++            </Reveal>
+           </aside>
+         </div>
+       </div>
+     </section>
+   );
+ }
+-
+-function WhatsAppIcon() {
+-  return (
+-    <svg
+-      className="h-5 w-5 shrink-0 text-[#25D366]"
+-      viewBox="0 0 24 24"
+-      fill="currentColor"
+-      aria-hidden="true"
+-    >
+-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
+-    </svg>
+-  );
+-}
+-
+-function MailIcon() {
+-  return (
+-    <svg
+-      className="h-5 w-5 shrink-0 text-white/70"
+-      viewBox="0 0 24 24"
+-      fill="none"
+-      stroke="currentColor"
+-      strokeWidth="1.8"
+-      strokeLinecap="round"
+-      strokeLinejoin="round"
+-      aria-hidden="true"
+-    >
+-      <rect x="3" y="5" width="18" height="14" rx="2" />
+-      <path d="m3 7 9 6 9-6" />
+-    </svg>
+-  );
+-}
+diff --git a/src/app/globals.css b/src/app/globals.css
+index 1fd0040..962baff 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -1,5 +1,20 @@
+ @import "tailwindcss";
+ 
++/* ── Seraphine (editorial display serif, landing page only) ───────────
++   Local file in /public/fonts/seraphine. Bold-only display face (OS/2
++   weight 700) with no en/em-dash glyphs — keep dash-free copy inside
++   font-editorial text. The folder ships no license ReadMe; confirm
++   commercial licensing before this reaches production. */
++@font-face {
++  font-family: "Seraphine";
++  src: url("/fonts/seraphine/Seraphine.otf") format("opentype");
++  /* Single static face: a weight range stops the browser faux-bolding
++     headings that inherit a bolder font-weight. */
++  font-weight: 100 900;
++  font-style: normal;
++  font-display: swap;
++}
++
+ :root {
+   /* Dark UI by default. Without color-scheme the browser renders native
+      controls (the <select> options popup, date pickers, scrollbars) in the OS
+@@ -41,6 +56,7 @@ html.light {
+   --color-site-secondary: var(--color-secondary);
+   --color-site-border: var(--color-border);
+   --font-sans: var(--font-body);
++  --font-editorial: "Seraphine", Georgia, "Times New Roman", serif;
+ }
+ 
+ * {
+@@ -57,10 +73,13 @@ body {
+   font-family: var(--brand-font, var(--font-body)), sans-serif;
+ }
+ 
+-a {
+-  color: inherit;
+-  text-decoration: none;
+-}
++/* NOTE: do NOT add an unlayered `a { color: inherit }` rule here. Tailwind
++   v4's utilities live in @layer utilities, and UNLAYERED CSS beats layered
++   CSS regardless of specificity — such a rule silently disables every
++   Tailwind color utility on <a>/<Link> elements (e.g. text-[#fff] on the
++   red header pill rendering as inherited dark text in light mode).
++   Tailwind's preflight already makes links inherit color, in the base
++   layer where utilities can override it. */
+ 
+ /* Embedded text links, links that sit INSIDE running prose (a paragraph or a
+    list item) are almost always inline references ("Already have one? Sign in",
+@@ -150,9 +169,12 @@ html.light .display-gradient {
+     linear-gradient(90deg, rgba(255,255,255,0.065) 1px, transparent 1px);
+   background-size: 48px 48px;
+ 
+-  /* Radial fade: grid visible in centre, fades to bg at edges */
+-  mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, black 40%, transparent 100%);
+-  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, black 40%, transparent 100%);
++  /* Radial fade: grid visible in the centre, fades to bg at the edges.
++     Centered vertically (not high) with tight radii, so the CORNERS fall
++     outside the ramp and go fully transparent — a center at 50% 30% left
++     the top-right corner lit up as a visible patch. */
++  mask-image: radial-gradient(ellipse 75% 85% at 50% 45%, black 25%, transparent 95%);
++  -webkit-mask-image: radial-gradient(ellipse 75% 85% at 50% 45%, black 25%, transparent 95%);
+ }
+ 
+ html.light .hero-grid::before {
+@@ -376,3 +398,89 @@ html[data-tenant-subdomain] .global-marketing-footer {
+   display: none !important;
+ }
+ 
++/* ══ Landing page (editorial redesign) ══════════════════════════════ */
++
++/* Red text selection, brand-wide signature */
++::selection {
++  background: var(--color-primary);
++  color: #ffffff;
++}
++
++/* Scroll-reveal: sections start hidden and settle into place when the
++   Reveal wrapper (IntersectionObserver) stamps .is-visible. Variants:
++   fade (rise up), left / right (side slides for split layouts), scale
++   (images settling from a slight zoom). */
++.reveal-fade,
++.reveal-left,
++.reveal-right,
++.reveal-scale {
++  opacity: 0;
++  transition:
++    opacity 800ms cubic-bezier(0.22, 1, 0.36, 1),
++    transform 800ms cubic-bezier(0.22, 1, 0.36, 1);
++  will-change: opacity, transform;
++}
++.reveal-fade { transform: translateY(32px); }
++.reveal-left { transform: translateX(-48px); }
++.reveal-right { transform: translateX(48px); }
++.reveal-scale { transform: scale(1.08); }
++.reveal-fade.is-visible,
++.reveal-left.is-visible,
++.reveal-right.is-visible,
++.reveal-scale.is-visible {
++  opacity: 1;
++  transform: none;
++}
++
++/* Hero dot pattern — fine dots fading out from the upper right, quieter
++   and warmer than the old grid lines. */
++.hero-dots {
++  position: relative;
++  isolation: isolate;
++}
++.hero-dots::before {
++  content: "";
++  position: absolute;
++  inset: 0;
++  z-index: -1;
++  pointer-events: none;
++  background-image: radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1.4px);
++  background-size: 26px 26px;
++  mask-image: radial-gradient(ellipse 85% 65% at 72% 12%, black 0%, transparent 72%);
++  -webkit-mask-image: radial-gradient(ellipse 85% 65% at 72% 12%, black 0%, transparent 72%);
++}
++html.light .hero-dots::before {
++  background-image: radial-gradient(rgba(15, 23, 42, 0.2) 1px, transparent 1.4px);
++}
++
++/* Desktop nav links: red underline sweeps in from the left on hover;
++   active links keep it. */
++.nav-link {
++  position: relative;
++}
++.nav-link::after {
++  content: "";
++  position: absolute;
++  left: 0;
++  right: 100%;
++  bottom: -6px;
++  height: 1px;
++  background: var(--color-primary);
++  transition: right 300ms ease;
++}
++.nav-link:hover::after,
++.nav-link.nav-link-active::after {
++  right: 0;
++}
++
++@media (prefers-reduced-motion: reduce) {
++  .reveal-fade,
++  .reveal-left,
++  .reveal-right,
++  .reveal-scale {
++    opacity: 1;
++    transform: none;
++    transition: none;
++  }
++}
++
+diff --git a/src/app/layout.tsx b/src/app/layout.tsx
+index 000a7d8..8884dd0 100644
+--- a/src/app/layout.tsx
++++ b/src/app/layout.tsx
+@@ -91,12 +91,13 @@ export default function RootLayout({
+             __html: `
+               (function() {
+                 try {
+-                  // Light mode is temporarily disabled while it is being finished:
+-                  // force dark on every load regardless of any previously saved
+-                  // preference, so a visitor who once switched to light is not
+-                  // stranded there with the toggle now hidden. Restore the
+-                  // stored-theme read (and the toggle buttons) to bring it back.
+-                  document.documentElement.classList.remove('light');
++                  // Light/dark follows the visitor's saved choice (written by
++                  // the Header theme toggle); dark is the default. Stamped
++                  // before first paint so there is no theme flash.
++                  var t = null;
++                  try { t = localStorage.getItem('theme'); } catch (e) {}
++                  if (t === 'light') document.documentElement.classList.add('light');
++                  else document.documentElement.classList.remove('light');
+                 } catch (e) {}
+               })()
+             `,
+diff --git a/src/app/lms/admin/agents/page.tsx b/src/app/lms/admin/agents/page.tsx
+index b086603..055a638 100644
+--- a/src/app/lms/admin/agents/page.tsx
++++ b/src/app/lms/admin/agents/page.tsx
+@@ -75,7 +75,7 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
+     return <img src={url} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-white/20" />;
+   }
+   return (
+-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-site-primary text-xs font-bold text-white ring-1 ring-white/20">
++    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-site-primary text-xs font-bold text-[#fff] ring-1 ring-white/20">
+       {initialsOf(name)}
+     </span>
+   );
+@@ -293,7 +293,7 @@ export default function OwnerAgentsPage() {
+                     type="button"
+                     onClick={() => act(a, "approve")}
+                     disabled={actingId === a.id}
+-                    className="rounded-full bg-site-primary px-4 py-2 text-xs font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++                    className="rounded-full bg-site-primary px-4 py-2 text-xs font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+                   >
+                     {actingId === a.id ? "Approving…" : "Approve"}
+                   </button>
+@@ -527,7 +527,7 @@ export default function OwnerAgentsPage() {
+                             type="button"
+                             onClick={() => act(a, "approve")}
+                             disabled={actingId === a.id}
+-                            className="rounded-full bg-site-primary px-3.5 py-1.5 text-xs font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++                            className="rounded-full bg-site-primary px-3.5 py-1.5 text-xs font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+                           >
+                             {actingId === a.id ? "Approving…" : "Approve"}
+                           </button>
+diff --git a/src/app/lms/admin/branding/page.tsx b/src/app/lms/admin/branding/page.tsx
+index 2c7ff3c..47dd9fa 100644
+--- a/src/app/lms/admin/branding/page.tsx
++++ b/src/app/lms/admin/branding/page.tsx
+@@ -41,7 +41,7 @@ export default function CustomisationPage() {
+             onClick={() => setTab(t.key)}
+             className={`flex-1 rounded-full px-5 py-2 transition sm:flex-none ${
+               tab === t.key
+-                ? "bg-site-primary text-white"
++                ? "bg-site-primary text-[#fff]"
+                 : "text-white/60 hover:text-white"
+             }`}
+           >
+diff --git a/src/app/lms/admin/certificates/page.tsx b/src/app/lms/admin/certificates/page.tsx
+index 00ece28..fb9cf95 100644
+--- a/src/app/lms/admin/certificates/page.tsx
++++ b/src/app/lms/admin/certificates/page.tsx
+@@ -268,7 +268,7 @@ export default function OwnerCertificatesPage() {
+             <button
+               type="submit"
+               disabled={issuing || !studentId || !title.trim()}
+-              className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++              className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+             >
+               {issuing ? "Issuing…" : "Issue certificate"}
+             </button>
+diff --git a/src/app/lms/admin/courses/page.tsx b/src/app/lms/admin/courses/page.tsx
+index 0c0b2dd..e14cf14 100644
+--- a/src/app/lms/admin/courses/page.tsx
++++ b/src/app/lms/admin/courses/page.tsx
+@@ -712,7 +712,7 @@ export default function OwnerCoursesPage() {
+             <button
+               type="submit"
+               disabled={saving}
+-              className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++              className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+             >
+               {saving ? "Saving…" : editingId ? "Save changes" : "Create course"}
+             </button>
+diff --git a/src/app/lms/admin/page.tsx b/src/app/lms/admin/page.tsx
+index 468aebd..5fa244d 100644
+--- a/src/app/lms/admin/page.tsx
++++ b/src/app/lms/admin/page.tsx
+@@ -70,7 +70,7 @@ function CopyButton({ url }: { url: string }) {
+   return (
+     <button
+       onClick={copy}
+-      className="rounded-full bg-site-primary px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110"
++      className="rounded-full bg-site-primary px-4 py-2 text-sm font-semibold text-[#fff] transition hover:brightness-110"
+     >
+       {copied ? "Copied" : "Copy link"}
+     </button>
+@@ -405,7 +405,7 @@ export default function OwnerDashboardPage() {
+                     </p>
+                     <Link
+                       href="/lms/admin/billing"
+-                      className="rounded-full bg-site-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110"
++                      className="rounded-full bg-site-primary px-5 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110"
+                     >
+                       Upgrade to Pro
+                     </Link>
+@@ -449,7 +449,7 @@ export default function OwnerDashboardPage() {
+               <div className="mt-6 flex flex-wrap gap-3">
+                 <Link
+                   href="/lms/admin/billing"
+-                  className="rounded-full bg-site-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110"
++                  className="rounded-full bg-site-primary px-5 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110"
+                 >
+                   {isPaid ? "Manage billing" : "Upgrade plan"}
+                 </Link>
+diff --git a/src/app/lms/admin/profile/page.tsx b/src/app/lms/admin/profile/page.tsx
+index 4e706b7..77a5239 100644
+--- a/src/app/lms/admin/profile/page.tsx
++++ b/src/app/lms/admin/profile/page.tsx
+@@ -44,7 +44,7 @@ function ProfilePageInner() {
+             onClick={() => setTab(t.key)}
+             className={`flex-1 rounded-full px-5 py-2 transition sm:flex-none ${
+               tab === t.key
+-                ? "bg-site-primary text-white"
++                ? "bg-site-primary text-[#fff]"
+                 : "text-white/60 hover:text-white"
+             }`}
+           >
+diff --git a/src/app/lms/admin/staff/page.tsx b/src/app/lms/admin/staff/page.tsx
+index b072e86..908913f 100644
+--- a/src/app/lms/admin/staff/page.tsx
++++ b/src/app/lms/admin/staff/page.tsx
+@@ -271,7 +271,7 @@ export default function OwnerStaffPage() {
+           <button
+             type="submit"
+             disabled={inviting || !tenantId}
+-            className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++            className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+           >
+             {inviting ? "Sending…" : "Send invite"}
+           </button>
+diff --git a/src/app/lms/admin/students/page.tsx b/src/app/lms/admin/students/page.tsx
+index a57c834..ec6a358 100644
+--- a/src/app/lms/admin/students/page.tsx
++++ b/src/app/lms/admin/students/page.tsx
+@@ -331,7 +331,7 @@ export default function OwnerStudentsPage() {
+             <button
+               type="submit"
+               disabled={inviting || !tenantId}
+-              className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++              className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+             >
+               {inviting ? "Sending…" : courseId ? "Invite to course" : "Send invites"}
+             </button>
+diff --git a/src/app/lms/admin/tracks/page.tsx b/src/app/lms/admin/tracks/page.tsx
+index 3466e22..dc74290 100644
+--- a/src/app/lms/admin/tracks/page.tsx
++++ b/src/app/lms/admin/tracks/page.tsx
+@@ -404,7 +404,7 @@ function TracksContent() {
+               <button
+                 type="submit"
+                 disabled={creating}
+-                className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++                className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+               >
+                 {creating ? "Creating…" : "Create cohort"}
+               </button>
+diff --git a/src/app/lms/agent/forgot-password/page.tsx b/src/app/lms/agent/forgot-password/page.tsx
+index 6e41e83..89aa0ac 100644
+--- a/src/app/lms/agent/forgot-password/page.tsx
++++ b/src/app/lms/agent/forgot-password/page.tsx
+@@ -34,7 +34,7 @@ export default function AgentForgotPasswordPage() {
+         <p className="mt-2 text-center text-sm text-white/70">Enter your Admission Marketer email to receive a reset link.</p>
+         <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
+           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required className="w-full rounded-xl border border-site-border bg-site-surface px-4 py-3 text-sm text-site-text outline-none focus:border-site-text/30" />
+-          <button type="submit" disabled={submitting} className="w-full rounded-full bg-site-primary px-6 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-50">
++          <button type="submit" disabled={submitting} className="w-full rounded-full bg-site-primary px-6 py-3 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-50">
+             {submitting ? ( <span className="inline-flex items-center gap-2"><span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> Sending...</span> ) : "Send Reset Link"}
+           </button>
+           {message ? <p className="text-sm text-white/80 text-center">{message}</p> : null}
+diff --git a/src/app/lms/agent/login/page.tsx b/src/app/lms/agent/login/page.tsx
+index e69c468..ed0ba90 100644
+--- a/src/app/lms/agent/login/page.tsx
++++ b/src/app/lms/agent/login/page.tsx
+@@ -58,7 +58,7 @@ export default function AgentLoginPage() {
+           </div>
+           {error ? <p className="text-sm text-red-400">{error}</p> : null}
+           <div className="flex items-center justify-between">
+-            <button type="submit" disabled={loading} className="rounded-full bg-site-primary px-6 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-50">
++            <button type="submit" disabled={loading} className="rounded-full bg-site-primary px-6 py-3 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-50">
+               {loading ? "Logging in..." : "Login"}
+             </button>
+             <a href="/lms/agent/forgot-password" className="text-sm text-site-primary underline transition hover:brightness-110">Forgot Password?</a>
+diff --git a/src/app/lms/agent/reset-password/page.tsx b/src/app/lms/agent/reset-password/page.tsx
+index 006b412..fae2e98 100644
+--- a/src/app/lms/agent/reset-password/page.tsx
++++ b/src/app/lms/agent/reset-password/page.tsx
+@@ -85,7 +85,7 @@ function PageContent() {
+             </button>
+           </div>
+ 
+-          <button type="submit" disabled={submitting} className="w-full rounded-full bg-site-primary px-6 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-50">
++          <button type="submit" disabled={submitting} className="w-full rounded-full bg-site-primary px-6 py-3 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-50">
+             {submitting ? <span className="inline-flex items-center gap-2"><span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> Resetting...</span> : "Reset Password"}
+           </button>
+         </form>
+diff --git a/src/app/lms/app/chats/page.tsx b/src/app/lms/app/chats/page.tsx
+index 2e283f7..17d3201 100644
+--- a/src/app/lms/app/chats/page.tsx
++++ b/src/app/lms/app/chats/page.tsx
+@@ -406,7 +406,7 @@ export default function StudentChatsPage() {
+         >
+           Class Group
+           {unreadGroup > 0 && chatTab !== "track" ? (
+-            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-site-primary px-1 text-[10px] font-bold text-white">
++            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-site-primary px-1 text-[10px] font-bold text-[#fff]">
+               {unreadGroup > 99 ? "99+" : unreadGroup}
+             </span>
+           ) : null}
+@@ -417,7 +417,7 @@ export default function StudentChatsPage() {
+         >
+           Instructor
+           {unreadDm > 0 && chatTab !== "dm" ? (
+-            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-site-primary px-1 text-[10px] font-bold text-white">
++            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-site-primary px-1 text-[10px] font-bold text-[#fff]">
+               {unreadDm > 99 ? "99+" : unreadDm}
+             </span>
+           ) : null}
+diff --git a/src/app/page.tsx b/src/app/page.tsx
+index bd368a7..1e9793e 100644
+--- a/src/app/page.tsx
++++ b/src/app/page.tsx
+@@ -1,15 +1,18 @@
+-import Hero from "@/components/landing/Hero";
++import EditorialHero from "@/components/landing/EditorialHero";
++import LandingBento from "@/components/landing/LandingBento";
++import LandingCta from "@/components/landing/LandingCta";
+ import { default as IungoBanner } from "@/components/landing/IungoBanner";
+-import TrainingInstituteBanner from "@/components/landing/TrainingInstituteBanner";
+-import Newsletter from "@/components/landing/Newsletter";
+ 
++// Editorial redesign (Seraphine serif, black ground, red precision accents).
++// The previous hero lives on at components/landing/Hero.tsx, unused, so
++// the redesign is a one-file revert.
+ export default function Home() {
+   return (
+     <>
+-      <Hero />
++      <EditorialHero />
++      <LandingBento />
+       <IungoBanner />
+-      {/* <TrainingInstituteBanner /> */}
+-      {/* <Newsletter /> */}
++      <LandingCta />
+     </>
+   );
+ }
+diff --git a/src/app/policies/page.tsx b/src/app/policies/page.tsx
+index f5e3160..a31a01f 100644
+--- a/src/app/policies/page.tsx
++++ b/src/app/policies/page.tsx
+@@ -83,7 +83,7 @@ function PolicyBody({ policy }: { policy: Policy }) {
+ 
+   return (
+     <article className="max-w-3xl">
+-      <h2 className="text-2xl font-bold" style={{ fontFamily: "var(--font-display)" }}>
++      <h2 className="font-editorial text-3xl leading-[1.08]">
+         {policy.title}
+       </h2>
+       {(policy.lastUpdated || policy.effectiveDate) && (
+@@ -200,7 +200,7 @@ function PoliciesContent() {
+                     aria-current={isActive ? "true" : undefined}
+                     className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition lg:whitespace-normal lg:text-left ${
+                       isActive
+-                        ? "bg-[#ed180d] text-white"
++                        ? "bg-[#ed180d] text-[#fff]"
+                         : "border border-site-border/30 text-site-text/70 hover:border-site-border/60 hover:text-site-text"
+                     }`}
+                   >
+diff --git a/src/app/pricing/page.tsx b/src/app/pricing/page.tsx
+index 7c998b5..afe6652 100644
+--- a/src/app/pricing/page.tsx
++++ b/src/app/pricing/page.tsx
+@@ -26,7 +26,7 @@ export default function PricingPage() {
+               }`}
+             >
+               {plan.popular && (
+-                <span className="mb-3 inline-block w-fit rounded-full bg-[#ed180d] px-3 py-1 text-xs font-semibold text-white">
++                <span className="mb-3 inline-block w-fit rounded-full bg-[#ed180d] px-3 py-1 text-xs font-semibold text-[#fff]">
+                   Most popular
+                 </span>
+               )}
+@@ -48,7 +48,7 @@ export default function PricingPage() {
+               ) : (
+                 <Link
+                   href={`/signup?plan=${plan.slug}`}
+-                  className="mt-6 inline-flex justify-center rounded-full bg-[#ed180d] px-5 py-2 text-sm font-semibold text-white transition hover:brightness-110"
++                  className="mt-6 inline-flex justify-center rounded-full bg-[#ed180d] px-5 py-2 text-sm font-semibold text-[#fff] transition hover:brightness-110"
+                 >
+                   Choose {plan.name}
+                 </Link>
+diff --git a/src/app/qoute/page.tsx b/src/app/qoute/page.tsx
+index ce978e9..51fdc54 100644
+--- a/src/app/qoute/page.tsx
++++ b/src/app/qoute/page.tsx
+@@ -1,16 +1,109 @@
+ import InnerPageHero from "@/components/layout/InnerPageHero";
+ import QuoteRequestForm from "@/components/QuoteRequestForm";
++import Reveal from "@/components/landing/Reveal";
++import { MailIcon, WhatsAppIcon } from "@/components/ContactIcons";
++
++// Prefilled WhatsApp enquiry text, same wording used in the site footer.
++const WA_TEXT = "?text=Hello%20Jorsas%20Tech%2C%20I%27d%20like%20to%20make%20an%20enquiry.";
++
++const CONTACT = {
++  email: "contact@jorsastech.com",
++  whatsapp: [
++    { label: "+234 803 458 5459", href: `https://wa.me/2348034585459${WA_TEXT}` },
++    { label: "+44 7882 144063", href: `https://wa.me/447882144063${WA_TEXT}` },
++  ],
++};
++
++// The short "how this goes" rail beside the form, so the visitor knows a
++// quote request is a conversation, not a form into the void.
++const STEPS = [
++  {
++    title: "You send the brief",
++    body: "Tell us what you want to build, roughly when you need it, and what success looks like.",
++  },
++  {
++    title: "We come back with questions",
++    body: "Within a few hours we reply on WhatsApp or email, and we ask whatever the brief leaves open.",
++  },
++  {
++    title: "You get a scoped estimate",
++    body: "A clear plan with timeline and cost. No jargon, no surprises, no pressure.",
++  },
++];
++
++const colHeading = "text-[10px] font-semibold uppercase tracking-[0.25em] text-site-text/50";
+ 
+ export default function QoutePage() {
+   return (
+     <section>
+-      <InnerPageHero title="Request a Quote" subtitle="Get In Touch">
+-        <p>Share your project details and we will provide a scoped estimate.</p>
++      <InnerPageHero title="Request a Quote" subtitle="GET IN TOUCH">
++        <p>
++          Share your project details and we will come back with a scoped
++          estimate. No jargon, no surprises.
++        </p>
+       </InnerPageHero>
+ 
+-      <div className="container-wide py-14">
+-        <div className="mx-auto max-w-3xl rounded-xl border border-white/20 bg-white/5 p-6 md:p-10">
+-          <QuoteRequestForm />
++      <div className="container-wide section-pad">
++        <div className="grid gap-12 lg:grid-cols-5 lg:gap-16">
++          {/* The form */}
++          <div className="lg:col-span-3">
++            <Reveal>
++              <h2 className="font-editorial text-4xl leading-[1.05]">
++                Tell us about your project<span style={{ color: "var(--color-primary)" }}>.</span>
++              </h2>
++              <div className="mt-8">
++                <QuoteRequestForm />
++              </div>
++            </Reveal>
++          </div>
++
++          {/* What happens next + direct lines */}
++          <aside className="lg:col-span-2">
++            <Reveal variant="right">
++              <p className={colHeading} style={{ color: "var(--color-primary)" }}>
++                What happens next
++              </p>
++              <div className="mt-6 space-y-6">
++                {STEPS.map((step, i) => (
++                  <div key={step.title} className="flex gap-5 border-b border-site-border/15 pb-6">
++                    <span className="font-editorial text-lg leading-none" style={{ color: "var(--color-primary)" }}>
++                      0{i + 1}
++                    </span>
++                    <div>
++                      <p className="font-editorial text-xl leading-snug">{step.title}</p>
++                      <p className="mt-2 text-sm leading-7 text-site-text/65">{step.body}</p>
++                    </div>
++                  </div>
++                ))}
++              </div>
++
++              <div className="mt-8">
++                <p className={colHeading}>Prefer to talk?</p>
++                <div className="mt-4 space-y-2.5">
++                  {CONTACT.whatsapp.map((w) => (
++                    <a
++                      key={w.href}
++                      href={w.href}
++                      target="_blank"
++                      rel="noopener noreferrer"
++                      className="flex items-center gap-3 text-sm font-medium text-site-text/90 transition hover:text-site-primary"
++                    >
++                      <WhatsAppIcon />
++                      {w.label}
++                    </a>
++                  ))}
++                  <a
++                    href={`mailto:${CONTACT.email}`}
++                    className="flex items-center gap-3 text-sm font-medium text-site-text/90 transition hover:text-site-primary"
++                  >
++                    <MailIcon />
++                    {CONTACT.email}
++                  </a>
++                </div>
++                <p className="mt-5 text-sm text-site-text/55">Mon - Sat: 8 am - 5 pm</p>
++              </div>
++            </Reveal>
++          </aside>
+         </div>
+       </div>
+     </section>
+diff --git a/src/app/signup/page.tsx b/src/app/signup/page.tsx
+index 89efcb6..1fc614f 100644
+--- a/src/app/signup/page.tsx
++++ b/src/app/signup/page.tsx
+@@ -160,29 +160,34 @@ function SignupInner() {
+     }
+   };
+ 
+-  const inputCls = "w-full rounded-xl border border-white/20 bg-black/30 px-4 py-3 text-sm text-white";
++  // Theme-token inputs, same treatment as the contact + quote forms.
++  const inputCls =
++    "w-full rounded-xl border border-site-border/30 bg-site-surface-soft px-4 py-3 text-sm text-site-text placeholder:text-site-muted/70 outline-none transition focus:border-site-primary/60";
+ 
+   // Free-plan success: the institute is live and the setup email is on its way.
+   if (done) {
+     return (
+-      <section className="section-pad section-divider">
+-        <div className="container-wide max-w-xl rounded-[20px] border border-white/20 bg-white/[0.04] p-8 text-center">
+-          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
++      <section className="section-pad">
++        <div className="container-wide max-w-xl rounded-2xl border border-site-border/20 p-8 text-center md:p-10">
++          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
+             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+               <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+             </svg>
+           </div>
+-          <h1 className="mb-2 text-2xl font-bold text-white">Your Online Academy is ready</h1>
+-          <p className="mb-4 text-sm text-site-muted">{done.message}</p>
+-          <p className="mb-6 text-sm text-site-muted">
+-            We&apos;ve emailed a setup link to <span className="font-semibold text-white">{done.email}</span>. Open it to
++          <h1 className="font-editorial text-3xl leading-tight">
++            Your Online Academy is ready<span style={{ color: "var(--color-primary)" }}>.</span>
++          </h1>
++          <p className="mt-4 text-sm leading-7 text-site-text/65">{done.message}</p>
++          <p className="mt-2 text-sm leading-7 text-site-text/65">
++            We&apos;ve emailed a setup link to <span className="font-semibold text-site-text">{done.email}</span>. Open it to
+             choose your password and sign in. Don&apos;t see it? Check your spam folder.
+           </p>
+           <Link
+             href={done.slug ? `/lms/admin/login?tenant=${encodeURIComponent(done.slug)}` : "/lms/admin/login"}
+-            className="inline-flex rounded-full bg-[#ed180d] px-6 py-3 text-sm font-semibold text-white transition hover:brightness-110"
++            className="font-editorial mt-8 inline-flex items-center gap-2 rounded-full bg-site-primary px-8 py-4 text-sm font-semibold text-[#fff] shadow-lg shadow-site-primary/25 transition hover:shadow-xl hover:shadow-site-primary/35 hover:brightness-110"
+           >
+             Go to sign in
++            <span aria-hidden="true">↗</span>
+           </Link>
+         </div>
+       </section>
+@@ -190,34 +195,36 @@ function SignupInner() {
+   }
+ 
+   return (
+-    <section className="section-pad section-divider">
+-      <div className="container-wide max-w-3xl rounded-[20px] border border-white/20 bg-white/[0.04] p-8">
+-        <h1 className="mb-2 text-3xl font-bold text-white">Create your Online Academy</h1>
+-        <p className="mb-6 text-sm text-site-muted">
+-          Register your school or training organisation to get a dedicated LMS. Start free in minutes, or choose a
+-          paid plan for more features. Free Online Academies are ready right away; paid plans are set up the moment
+-          your payment is confirmed.
++    <section className="section-pad">
++      <div className="container-wide max-w-4xl">
++        <h1 className="font-editorial text-4xl leading-[1.05] md:text-5xl">
++          Create your Online Academy<span style={{ color: "var(--color-primary)" }}>.</span>
++        </h1>
++        <p className="mt-5 max-w-2xl text-base leading-8 text-site-text/70">
++          Register your school or training organisation to get a dedicated LMS. Start free in
++          minutes, or choose a paid plan for more features. Free Online Academies are ready right
++          away; paid plans are set up the moment your payment is confirmed.
+         </p>
+ 
+         {error && (
+-          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
++          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-500">
+             {error}
+           </div>
+         )}
+ 
+-        <form onSubmit={handleSubmit} className="grid gap-6 md:grid-cols-2">
++        <form onSubmit={handleSubmit} className="mt-10 grid gap-6 md:grid-cols-2">
+           <div>
+-            <label className="mb-2 block text-sm text-white/80">First name</label>
++            <label className="mb-2 block text-sm font-medium text-site-text/85">First name</label>
+             <input name="first_name" required placeholder="First name" className={inputCls} />
+           </div>
+ 
+           <div>
+-            <label className="mb-2 block text-sm text-white/80">Last name</label>
++            <label className="mb-2 block text-sm font-medium text-site-text/85">Last name</label>
+             <input name="last_name" placeholder="Last name" className={inputCls} />
+           </div>
+ 
+           <div className="md:col-span-2">
+-            <label className="mb-2 block text-sm text-white/80">Email</label>
++            <label className="mb-2 block text-sm font-medium text-site-text/85">Email</label>
+             <input name="email" required type="email" placeholder="you@example.com" className={inputCls} />
+             <p className="mt-2 text-xs text-site-muted">
+               After payment we&apos;ll email a setup link to this address so you can choose your password and sign in.
+@@ -225,12 +232,12 @@ function SignupInner() {
+           </div>
+ 
+           <div className="md:col-span-2">
+-            <label className="mb-2 block text-sm text-white/80">Choose your plan</label>
++            <label className="mb-2 block text-sm font-medium text-site-text/85">Choose your plan</label>
+             {plans === null ? (
+               // Skeleton while the catalogue loads.
+               <div className="grid gap-4 sm:grid-cols-3">
+                 {[0, 1, 2].map((i) => (
+-                  <div key={i} className="h-64 animate-pulse rounded-[20px] border border-white/10 bg-white/[0.04]" />
++                  <div key={i} className="h-64 animate-pulse rounded-[20px] border border-site-border/15 bg-site-surface-soft/50" />
+                 ))}
+               </div>
+             ) : (
+@@ -247,12 +254,12 @@ function SignupInner() {
+                         aria-pressed={selected}
+                         className={`relative flex w-full flex-col rounded-[22px] border p-6 text-left transition ${
+                           selected
+-                            ? "border-white/45 bg-white/[0.08] ring-1 ring-site-primary"
+-                            : "border-white/15 bg-white/[0.04] hover:border-white/25"
++                            ? "border-site-primary bg-site-surface-soft ring-1 ring-site-primary"
++                            : "border-site-border/25 bg-site-surface-soft/50 hover:border-site-border/50"
+                         }`}
+                       >
+                         {p.slug === "basic" ? (
+-                          <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-white/90">
++                          <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-site-primary px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-[#fff]">
+                             Popular
+                           </span>
+                         ) : null}
+@@ -262,16 +269,16 @@ function SignupInner() {
+ 
+                         <span
+                           className={`mt-5 inline-flex items-center gap-2 text-xs font-semibold ${
+-                            selected ? "text-white" : "text-site-muted"
++                            selected ? "text-site-text" : "text-site-muted"
+                           }`}
+                         >
+                           <span
+                             className={`flex h-4 w-4 items-center justify-center rounded-full border ${
+-                              selected ? "border-site-primary bg-site-primary" : "border-white/30"
++                              selected ? "border-site-primary bg-site-primary" : "border-site-border/50"
+                             }`}
+                           >
+                             {selected && (
+-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" className="text-white">
++                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" className="text-[#fff]">
+                                 <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                               </svg>
+                             )}
+@@ -293,12 +300,12 @@ function SignupInner() {
+ 
+             {/* Enterprise is contact-sales, unlimited everything, custom terms. Not a
+                 self-serve checkout plan, so it sits below the selectable grid as an enquiry CTA. */}
+-            <div className="mt-4 rounded-[20px] border border-white/20 bg-white/[0.04] p-5">
++            <div className="mt-4 rounded-[20px] border border-site-border/25 p-5">
+               <div className="flex flex-wrap items-center justify-between gap-3">
+                 <div>
+                   <div className="flex items-center gap-2">
+-                    <span className="text-sm font-semibold uppercase tracking-wide text-white">Enterprise</span>
+-                    <span className="rounded-full border border-white/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/70">
++                    <span className="text-sm font-semibold uppercase tracking-wide text-site-text">Enterprise</span>
++                    <span className="rounded-full border border-site-border/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-site-text/60">
+                       Unlimited
+                     </span>
+                   </div>
+@@ -309,7 +316,7 @@ function SignupInner() {
+                 </div>
+                 <a
+                   href="mailto:contact@jorsastech.com?subject=Enterprise%20plan%20enquiry"
+-                  className="shrink-0 rounded-full border border-white/40 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
++                  className="font-editorial shrink-0 rounded-full border border-site-border/40 px-5 py-2.5 text-sm font-semibold text-site-text transition hover:border-site-text/60 hover:bg-site-text/5"
+                 >
+                   Contact sales
+                 </a>
+@@ -318,12 +325,12 @@ function SignupInner() {
+           </div>
+ 
+           <div className="md:col-span-2">
+-            <label className="mb-2 block text-sm text-white/80">Online Academy name</label>
++            <label className="mb-2 block text-sm font-medium text-site-text/85">Online Academy name</label>
+             <input name="tenant_name" required placeholder="e.g. Bright Future Academy" className={inputCls} />
+           </div>
+ 
+           <div className="md:col-span-2">
+-            <label className="mb-2 block text-sm text-white/80">What does your academy teach?</label>
++            <label className="mb-2 block text-sm font-medium text-site-text/85">What does your academy teach?</label>
+             <select
+               value={niche}
+               onChange={(e) => setNiche(e.target.value)}
+@@ -358,7 +365,7 @@ function SignupInner() {
+           </div>
+ 
+           <div className="md:col-span-2">
+-            <label className="mb-2 block text-sm text-white/80">Subdomain (optional)</label>
++            <label className="mb-2 block text-sm font-medium text-site-text/85">Subdomain (optional)</label>
+             <input
+               name="subdomain"
+               value={subdomain}
+@@ -369,12 +376,12 @@ function SignupInner() {
+               autoCorrect="off"
+               spellCheck={false}
+             />
+-            <div className="mt-2 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs text-site-muted">
+-              <p className="text-white/80">This becomes your Online Academy&apos;s own web address.</p>
++            <div className="mt-2 rounded-xl border border-site-border/20 bg-site-surface-soft px-4 py-3 text-xs text-site-muted">
++              <p className="text-site-text/80">This becomes your Online Academy&apos;s own web address.</p>
+               <p className="mt-1">
+                 It&apos;s the link you share with students and staff, so they can browse your courses and sign in,
+                 instead of the main Jorsas site. Your page will live at{" "}
+-                <span className="font-semibold text-white">
++                <span className="font-semibold text-site-text">
+                   {subdomain || "youracademy"}.{APP_DOMAIN}
+                 </span>
+                 .
+@@ -389,7 +396,7 @@ function SignupInner() {
+             <button
+               type="submit"
+               disabled={loading}
+-              className="rounded-full bg-[#ed180d] px-6 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++              className="font-editorial inline-flex items-center gap-3 rounded-full bg-site-primary px-8 py-4 text-sm font-semibold text-[#fff] shadow-lg shadow-site-primary/25 transition hover:shadow-xl hover:shadow-site-primary/35 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+             >
+               {loading
+                 ? isFreePlan
+@@ -398,10 +405,11 @@ function SignupInner() {
+                 : isFreePlan
+                   ? "Create my Online Academy"
+                   : "Continue to payment"}
++              <span aria-hidden="true">↗</span>
+             </button>
+             <p className="text-sm text-site-muted">
+               Already have one?{" "}
+-              <Link href="/lms/admin/login" className="text-white underline">
++              <Link href="/lms/admin/login" className="text-site-text underline transition hover:text-site-primary">
+                 Sign in
+               </Link>
+             </p>
+diff --git a/src/app/signup/verify/page.tsx b/src/app/signup/verify/page.tsx
+index e5d3a08..149e110 100644
+--- a/src/app/signup/verify/page.tsx
++++ b/src/app/signup/verify/page.tsx
+@@ -100,7 +100,7 @@ function PageContent() {
+               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+                 <Link
+                   href={ownerLoginHref}
+-                  className="rounded-full bg-[#ed180d] px-6 py-3 text-sm font-semibold text-white transition hover:brightness-110"
++                  className="rounded-full bg-[#ed180d] px-6 py-3 text-sm font-semibold text-[#fff] transition hover:brightness-110"
+                 >
+                   Owner sign in
+                 </Link>
+@@ -126,7 +126,7 @@ function PageContent() {
+                 <button
+                   type="button"
+                   onClick={verify}
+-                  className="rounded-full bg-[#ed180d] px-6 py-3 text-sm font-semibold text-white transition hover:brightness-110"
++                  className="rounded-full bg-[#ed180d] px-6 py-3 text-sm font-semibold text-[#fff] transition hover:brightness-110"
+                 >
+                   Check again
+                 </button>
+diff --git a/src/components/AiMaterialsWorkspace.tsx b/src/components/AiMaterialsWorkspace.tsx
+index 1d64a31..de5ecd0 100644
+--- a/src/components/AiMaterialsWorkspace.tsx
++++ b/src/components/AiMaterialsWorkspace.tsx
+@@ -528,7 +528,7 @@ export default function AiMaterialsWorkspace({ variant }: { variant: AiVariant }
+           <button
+             type="submit"
+             disabled={busy}
+-            className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++            className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+           >
+             {phase === "starting" ? "Starting…" : phase === "pending" ? "Generating…" : "Generate with AI"}
+           </button>
+@@ -592,7 +592,7 @@ export default function AiMaterialsWorkspace({ variant }: { variant: AiVariant }
+                     href={resultUrl}
+                     target="_blank"
+                     rel="noreferrer"
+-                    className="rounded-full bg-site-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110"
++                    className="rounded-full bg-site-primary px-5 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110"
+                   >
+                     Open in Gamma
+                   </a>
+@@ -685,7 +685,7 @@ export default function AiMaterialsWorkspace({ variant }: { variant: AiVariant }
+                     type="button"
+                     onClick={save}
+                     disabled={saving || !courses.length || !resultUrl}
+-                    className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++                    className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+                   >
+                     {saving ? "Saving…" : saveModuleId ? "Save to module" : "Save to course"}
+                   </button>
+diff --git a/src/components/ContactForm.tsx b/src/components/ContactForm.tsx
+index c4c7863..1ecb921 100644
+--- a/src/components/ContactForm.tsx
++++ b/src/components/ContactForm.tsx
+@@ -1,4 +1,4 @@
+-"use client";
++﻿"use client";
+ 
+ import { useState, type FormEvent } from "react";
+ 
+@@ -55,14 +55,17 @@ export default function ContactForm() {
+     }
+   };
+ 
++  // Theme-token inputs: white/* utilities are only rescues for dark mode and
++  // fall apart in light mode; these read the CSS vars in both themes.
+   const inputClasses =
+-    "w-full rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/50 focus:bg-white/10";
++    "w-full rounded-xl border border-site-border/30 bg-site-surface-soft px-4 py-3 text-sm text-site-text placeholder:text-site-muted/70 outline-none transition focus:border-site-primary/60";
++  const labelClasses = "mb-2 block text-sm font-medium text-site-text/85";
+ 
+   return (
+     <form onSubmit={handleSubmit} className="space-y-5">
+       <div className="grid gap-5 sm:grid-cols-2">
+         <div>
+-          <label htmlFor="contact-name" className="mb-2 block text-sm font-medium text-white/85">
++          <label htmlFor="contact-name" className={labelClasses}>
+             Full Name <span className="text-red-500">*</span>
+           </label>
+           <input
+@@ -77,7 +80,7 @@ export default function ContactForm() {
+           />
+         </div>
+         <div>
+-          <label htmlFor="contact-email" className="mb-2 block text-sm font-medium text-white/85">
++          <label htmlFor="contact-email" className={labelClasses}>
+             Email Address <span className="text-red-500">*</span>
+           </label>
+           <input
+@@ -95,7 +98,7 @@ export default function ContactForm() {
+ 
+       <div className="grid gap-5 sm:grid-cols-2">
+         <div>
+-          <label htmlFor="contact-phone" className="mb-2 block text-sm font-medium text-white/85">
++          <label htmlFor="contact-phone" className={labelClasses}>
+             Phone / WhatsApp
+           </label>
+           <input
+@@ -108,7 +111,7 @@ export default function ContactForm() {
+           />
+         </div>
+         <div>
+-          <label htmlFor="contact-subject" className="mb-2 block text-sm font-medium text-white/85">
++          <label htmlFor="contact-subject" className={labelClasses}>
+             Subject
+           </label>
+           <input
+@@ -124,7 +127,7 @@ export default function ContactForm() {
+       </div>
+ 
+       <div>
+-        <label htmlFor="contact-content" className="mb-2 block text-sm font-medium text-white/85">
++        <label htmlFor="contact-content" className={labelClasses}>
+           Message <span className="text-red-500">*</span>
+         </label>
+         <textarea
+@@ -139,7 +142,7 @@ export default function ContactForm() {
+         />
+       </div>
+ 
+-      <label className="flex items-start gap-3 text-sm text-white/75">
++      <label className="flex items-start gap-3 text-sm text-site-text/75">
+         <input
+           type="checkbox"
+           required
+@@ -149,7 +152,7 @@ export default function ContactForm() {
+         />
+         <span>
+           I agree to the{" "}
+-          <a href="/policies" className="text-white underline">
++          <a href="/policies" className="text-site-text underline transition hover:text-site-primary">
+             Terms and Policy
+           </a>{" "}
+           <span className="text-red-500">*</span>
+@@ -170,9 +173,9 @@ export default function ContactForm() {
+       <button
+         type="submit"
+         disabled={state === "submitting"}
+-        className="inline-flex items-center gap-3 rounded-[var(--radius-pill)] border border-transparent bg-site-primary px-6 py-3 text-sm font-semibold tracking-wide text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
++        className="font-editorial inline-flex items-center gap-3 rounded-full bg-site-primary px-8 py-4 text-sm font-semibold text-[#fff] shadow-lg shadow-site-primary/25 transition hover:shadow-xl hover:shadow-site-primary/35 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+       >
+-        {state === "submitting" ? "Sending..." : "Send Message"}
++        {state === "submitting" ? "Sending..." : "Send message"}
+         <span aria-hidden="true">↗</span>
+       </button>
+     </form>
+diff --git a/src/components/OwnerSidebar.tsx b/src/components/OwnerSidebar.tsx
+index 14751bd..b55ac36 100644
+--- a/src/components/OwnerSidebar.tsx
++++ b/src/components/OwnerSidebar.tsx
+@@ -101,7 +101,7 @@ function IdentityCard({ identity }: { identity: OwnerIdentity | null }) {
+           className="h-9 w-9 shrink-0 rounded-full object-contain ring-1 ring-white/20"
+         />
+       ) : (
+-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-site-primary text-sm font-bold text-white ring-1 ring-white/20">
++        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-site-primary text-sm font-bold text-[#fff] ring-1 ring-white/20">
+           {initials}
+         </span>
+       )}
+diff --git a/src/components/OwnerTopbar.tsx b/src/components/OwnerTopbar.tsx
+index 2ec03ef..798b890 100644
+--- a/src/components/OwnerTopbar.tsx
++++ b/src/components/OwnerTopbar.tsx
+@@ -132,7 +132,7 @@ export default function OwnerTopbar({
+               className="h-9 w-9 shrink-0 rounded-full object-contain ring-1 ring-white/20"
+             />
+           ) : (
+-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-site-primary text-sm font-bold text-white ring-1 ring-white/20">
++            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-site-primary text-sm font-bold text-[#fff] ring-1 ring-white/20">
+               {initials}
+             </span>
+           )}
+@@ -168,7 +168,7 @@ export default function OwnerTopbar({
+             className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-2 pr-3 text-white/80 transition hover:bg-white/10 [html.light_&]:border-black/10 [html.light_&]:bg-black/5 [html.light_&]:text-black/80 [html.light_&]:hover:bg-black/[0.08]"
+             aria-label="Account menu"
+           >
+-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-site-primary text-[11px] font-bold text-white">
++            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-site-primary text-[11px] font-bold text-[#fff]">
+               {initials}
+             </span>
+             <svg className="h-3.5 w-3.5 opacity-70" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+diff --git a/src/components/QuoteRequestForm.tsx b/src/components/QuoteRequestForm.tsx
+index b7d2839..59a8ecf 100644
+--- a/src/components/QuoteRequestForm.tsx
++++ b/src/components/QuoteRequestForm.tsx
+@@ -49,14 +49,17 @@ export default function QuoteRequestForm() {
+     }
+   };
+ 
++  // Theme-token inputs: white/* utilities only work in dark mode; these read
++  // the CSS vars so the form is at home in light mode too.
+   const inputClasses =
+-    "w-full rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/50 focus:bg-white/10";
++    "w-full rounded-xl border border-site-border/30 bg-site-surface-soft px-4 py-3 text-sm text-site-text placeholder:text-site-muted/70 outline-none transition focus:border-site-primary/60";
++  const labelClasses = "mb-2 block text-sm font-medium text-site-text/85";
+ 
+   return (
+     <form onSubmit={handleSubmit} className="space-y-5" noValidate={false}>
+       <div className="grid gap-5 sm:grid-cols-2">
+         <div>
+-          <label htmlFor="quote-name" className="mb-2 block text-sm font-medium text-white/85">
++          <label htmlFor="quote-name" className={labelClasses}>
+             Full Name <span className="text-red-500">*</span>
+           </label>
+           <input
+@@ -71,7 +74,7 @@ export default function QuoteRequestForm() {
+           />
+         </div>
+         <div>
+-          <label htmlFor="quote-email" className="mb-2 block text-sm font-medium text-white/85">
++          <label htmlFor="quote-email" className={labelClasses}>
+             Email Address <span className="text-red-500">*</span>
+           </label>
+           <input
+@@ -89,7 +92,7 @@ export default function QuoteRequestForm() {
+ 
+       <div className="grid gap-5 sm:grid-cols-2">
+         <div>
+-          <label htmlFor="quote-phone" className="mb-2 block text-sm font-medium text-white/85">
++          <label htmlFor="quote-phone" className={labelClasses}>
+             Phone Number
+           </label>
+           <input
+@@ -102,7 +105,7 @@ export default function QuoteRequestForm() {
+           />
+         </div>
+         <div>
+-          <label htmlFor="quote-subject" className="mb-2 block text-sm font-medium text-white/85">
++          <label htmlFor="quote-subject" className={labelClasses}>
+             Project Type / Subject
+           </label>
+           <input
+@@ -118,7 +121,7 @@ export default function QuoteRequestForm() {
+       </div>
+ 
+       <div>
+-        <label htmlFor="quote-content" className="mb-2 block text-sm font-medium text-white/85">
++        <label htmlFor="quote-content" className={labelClasses}>
+           Project Details <span className="text-red-500">*</span>
+         </label>
+         <textarea
+@@ -133,7 +136,7 @@ export default function QuoteRequestForm() {
+         />
+       </div>
+ 
+-      <label className="flex items-start gap-3 text-sm text-white/75">
++      <label className="flex items-start gap-3 text-sm text-site-text/75">
+         <input
+           type="checkbox"
+           required
+@@ -142,7 +145,7 @@ export default function QuoteRequestForm() {
+           className="mt-0.5 h-4 w-4 accent-site-primary"
+         />
+         <span>
+-          I agree to the <span className="text-white underline">Terms and Policy</span> <span className="text-red-500">*</span>
++          I agree to the <a href="/policies" className="text-site-text underline transition hover:text-site-primary">Terms and Policy</a> <span className="text-red-500">*</span>
+         </span>
+       </label>
+ 
+@@ -156,9 +159,9 @@ export default function QuoteRequestForm() {
+       <button
+         type="submit"
+         disabled={state === "submitting"}
+-        className="inline-flex items-center gap-3 rounded-[var(--radius-pill)] border border-transparent bg-site-primary px-6 py-3 text-sm font-semibold tracking-wide text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
++        className="font-editorial inline-flex items-center gap-3 rounded-full bg-site-primary px-8 py-4 text-sm font-semibold text-[#fff] shadow-lg shadow-site-primary/25 transition hover:shadow-xl hover:shadow-site-primary/35 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+       >
+-        {state === "submitting" ? "Sending..." : "Request a Quote"}
++        {state === "submitting" ? "Sending..." : "Request a quote"}
+         <span aria-hidden="true">↗</span>
+       </button>
+     </form>
+diff --git a/src/components/StaffLayoutClient.tsx b/src/components/StaffLayoutClient.tsx
+index b7f9fee..83dedad 100644
+--- a/src/components/StaffLayoutClient.tsx
++++ b/src/components/StaffLayoutClient.tsx
+@@ -8,6 +8,7 @@ import ErrorBoundary from "./ErrorBoundary";
+ import ToastProvider from "./ToastProvider";
+ import LmsNavbar from "./LmsNavbar";
+ import DynamicFavicon from "./DynamicFavicon";
++import AppInstallPrompt from "./AppInstallPrompt";
+ import { STAFF_API, PUBLIC_API } from "@/lib/api";
+ import { apiFetchStaff, okJson } from "@/lib/fetch-with-timeout";
+ import type { NavbarSearchItem } from "@/components/NavbarSearch";
+@@ -168,6 +169,11 @@ export default function StaffLayoutClient({ children }: { children: React.ReactN
+         markText={branding?.name ?? null}
+       />
+       {!hideSidebar && <IdleLogout tokenKeys={["lms_staff_token"]} redirectTo={() => tenantLoginPath("staff")} />}
++      {/* Offer the per-academy app install only on the logged-in portal, never
++          on the public auth screens (see AppInstallPrompt). */}
++      {!hideSidebar && (
++        <AppInstallPrompt role="staff" name={branding?.name ?? null} logoUrl={branding?.logo_url ?? null} />
++      )}
+       <div className="section-divider pt-6" style={{ ...brandingStyle(branding), ...storefrontBackgroundStyle(branding) }} data-branded={isBranded(branding) ? "" : undefined}>
+         <div className={`container-wide grid items-start gap-4 md:gap-6 ${hideSidebar ? "" : "lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)]"}`}>
+           {!hideSidebar && <StaffSidebar />}
+diff --git a/src/components/StudentLayoutClient.tsx b/src/components/StudentLayoutClient.tsx
+index 15f18e8..90e4b4b 100644
+--- a/src/components/StudentLayoutClient.tsx
++++ b/src/components/StudentLayoutClient.tsx
+@@ -6,6 +6,7 @@ import StudentSidebar from "./StudentSidebar";
+ import StudentGuard from "./StudentGuard";
+ import LmsNavbar from "./LmsNavbar";
+ import DynamicFavicon from "./DynamicFavicon";
++import AppInstallPrompt from "./AppInstallPrompt";
+ import { STUDENT_API, STUDENT_MODULE_API, PUBLIC_API } from "@/lib/api";
+ import { apiFetch, okJson } from "@/lib/fetch-with-timeout";
+ import type { NavbarSearchItem } from "@/components/NavbarSearch";
+@@ -124,6 +125,11 @@ export default function StudentLayoutClient({ children }: { children: React.Reac
+         markText={branding?.name ?? null}
+       />
+       {!hideSidebar && <IdleLogout tokenKeys={["lms_student_token"]} redirectTo={() => tenantLoginPath("student")} />}
++      {/* Offer the per-academy app install only on the logged-in portal, never
++          on the public auth screens (see AppInstallPrompt). */}
++      {!hideSidebar && (
++        <AppInstallPrompt role="student" name={branding?.name ?? null} logoUrl={branding?.logo_url ?? null} />
++      )}
+       <div className="section-divider pt-6" style={{ ...brandingStyle(branding), ...storefrontBackgroundStyle(branding) }} data-branded={isBranded(branding) ? "" : undefined}>
+          <div className={`container-wide grid items-start gap-4 md:gap-6 ${hideSidebar ? "" : "lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)]"}`}>
+           {!hideSidebar && <StudentSidebar />}
+diff --git a/src/components/chat/ChatLayout.tsx b/src/components/chat/ChatLayout.tsx
+index 19dbb73..4b0baf1 100644
+--- a/src/components/chat/ChatLayout.tsx
++++ b/src/components/chat/ChatLayout.tsx
+@@ -185,7 +185,7 @@ function ChatBubble({ message, role, isMe, showAvatar, avatarUrl, senderName, at
+         <div
+           className={`w-full break-words rounded-2xl px-3.5 py-2 text-sm leading-relaxed border ${
+             isMe
+-              ? "rounded-br-md border-site-primary bg-site-primary text-white"
++              ? "rounded-br-md border-site-primary bg-site-primary text-[#fff]"
+               : "rounded-bl-md border-site-border bg-site-surface-soft text-site-text"
+           }`}
+         >
+@@ -488,7 +488,7 @@ function InputBar({ value, onChange, placeholder, onSend, sending, attachmentVal
+           type="button"
+           onClick={onSend}
+           disabled={sending || !value.trim()}
+-          className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-xl bg-site-primary text-white transition hover:opacity-90 disabled:opacity-40"
++          className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-xl bg-site-primary text-[#fff] transition hover:opacity-90 disabled:opacity-40"
+         >
+           {sending ? (
+             <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+@@ -568,7 +568,7 @@ export default function ChatLayout(props: AnyObj) {
+                     #track
+                   </p>
+                   {unreadGroup > 0 && chatTab !== "track" ? (
+-                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-site-primary px-1 text-[10px] font-bold text-white">
++                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-site-primary px-1 text-[10px] font-bold text-[#fff]">
+                       {unreadGroup > 99 ? "99+" : unreadGroup}
+                     </span>
+                   ) : null}
+@@ -590,7 +590,7 @@ export default function ChatLayout(props: AnyObj) {
+                     @instructor
+                   </p>
+                   {unreadDm > 0 && chatTab !== "dm" ? (
+-                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-site-primary px-1 text-[10px] font-bold text-white">
++                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-site-primary px-1 text-[10px] font-bold text-[#fff]">
+                       {unreadDm > 99 ? "99+" : unreadDm}
+                     </span>
+                   ) : null}
+diff --git a/src/components/institute/InstituteContactFooter.tsx b/src/components/institute/InstituteContactFooter.tsx
+index 160ab13..e76a89f 100644
+--- a/src/components/institute/InstituteContactFooter.tsx
++++ b/src/components/institute/InstituteContactFooter.tsx
+@@ -42,10 +42,10 @@ export default function InstituteContactFooter({
+   return (
+     <section id="contact" className="section-pad border-t border-site-border/30">
+       <div className="container-wide">
+-        <h2 className="text-2xl font-bold text-site-text" style={{ fontFamily: "var(--font-display)" }}>
+-          Get in touch
++        <h2 className="font-editorial text-4xl leading-[1.05] text-site-text md:text-5xl">
++          Get in touch<span style={{ color: "var(--color-primary)" }}>.</span>
+         </h2>
+-        <p className="mt-2 max-w-2xl text-sm text-site-text/70">
++        <p className="mt-5 max-w-2xl text-sm leading-7 text-site-text/65">
+           Have a question about a program at {instituteName}? Reach out through any of the channels below.
+         </p>
+ 
+diff --git a/src/components/institute/InstituteStorefront.tsx b/src/components/institute/InstituteStorefront.tsx
+index fde0bbf..342ff24 100644
+--- a/src/components/institute/InstituteStorefront.tsx
++++ b/src/components/institute/InstituteStorefront.tsx
+@@ -1,10 +1,10 @@
+ import Link from "next/link";
+ import type { CSSProperties } from "react";
+-import SectionHeading from "@/components/ui/SectionHeading";
+ import StarRating from "@/components/ui/StarRating";
+ import AgentBanner from "@/components/landing/AgentBanner";
+ import InstituteContactFooter from "@/components/institute/InstituteContactFooter";
+ import CurrencySwitcher from "@/components/institute/CurrencySwitcher";
++import Reveal from "@/components/landing/Reveal";
+ import { brandingStyle, academyLabel, type OwnerBranding } from "@/lib/owner-branding";
+ import { formatPrice } from "@/lib/currency";
+ import type { InstituteProfile } from "@/lib/institute-profile";
+@@ -138,7 +138,7 @@ export default function InstituteStorefront({
+   const hasCover = !!profile?.cover_url;
+   return (
+     <section style={brandingStyle(branding)}>
+-      <section className="section-pad relative overflow-hidden border-b border-site-border/30">
++      <section className="hero-dots section-pad relative overflow-hidden border-b border-site-border/30">
+         {profile?.cover_url ? (
+           <>
+             {/* Cover photo sits INSIDE the hero as its background layer, masked
+@@ -156,7 +156,7 @@ export default function InstituteStorefront({
+             <div className="pointer-events-none absolute inset-0" style={heroOverlayStyle(branding)} />
+           </>
+         ) : null}
+-        <div className="container-wide relative z-10 space-y-6">
++        <div className="container-wide relative z-10 space-y-8">
+           {showHeroLogo && branding.logo_url ? (
+             // eslint-disable-next-line @next/next/no-img-element
+             <img
+@@ -166,16 +166,25 @@ export default function InstituteStorefront({
+               style={hasCover ? { backgroundColor: "rgba(255,255,255,0.1)" } : undefined}
+             />
+           ) : null}
+-          <SectionHeading
+-            title={institute.name}
+-            subtitle={profile?.tagline || academyLabel(branding).singular}
+-            onImage={hasCover}
+-          />
+-          <div className="max-w-3xl" style={hasCover ? { color: "rgba(255,255,255,0.92)" } : undefined}>
++          <div>
++            <p
++              className="text-[10px] font-semibold uppercase tracking-[0.25em]"
++              style={hasCover ? { color: "rgba(255,255,255,0.85)" } : { color: "var(--color-muted)" }}
++            >
++              {profile?.tagline || academyLabel(branding).singular}
++            </p>
++            <h1
++              className="font-editorial mt-4 max-w-5xl text-[clamp(2.4rem,6.5vw,5.25rem)] leading-[1.04]"
++              style={hasCover ? { color: "#ffffff", textShadow: "0 2px 14px rgba(0,0,0,0.55)" } : undefined}
++            >
++              {institute.name}
++            </h1>
++          </div>
++          <div className="max-w-2xl text-base leading-8">
+             {profile?.about ? (
+-              <p className={`whitespace-pre-line ${hasCover ? "" : "text-site-text/75"}`}>{profile.about}</p>
++              <p className={`whitespace-pre-line ${hasCover ? "text-white/90" : "text-site-text/75"}`}>{profile.about}</p>
+             ) : (
+-              <p className={hasCover ? "" : "text-site-text/75"}>
++              <p className={hasCover ? "text-white/90" : "text-site-text/75"}>
+                 Join practical, career-focused programs taught by experienced instructors.
+                 Learn with structured classes, guided materials, and mentorship.
+               </p>
+@@ -184,22 +193,29 @@ export default function InstituteStorefront({
+         </div>
+       </section>
+ 
+-      <div className="container-wide py-14">
+-        {courses.some((c) => c.price > 0) ? (
+-          <div className="mb-6 flex items-center justify-end gap-2 text-sm text-site-text/70">
+-            <span>Prices in</span>
+-            <CurrencySwitcher active={courses.find((c) => c.price > 0)?.display_currency ?? "NGN"} />
+-          </div>
+-        ) : null}
++      <div className="container-wide py-14 md:py-20">
++        <div className="mb-10 flex flex-wrap items-end justify-between gap-6 md:mb-14">
++          <Reveal>
++            <h2 className="font-editorial text-4xl leading-[1.05] md:text-5xl">
++              Our programs
++            </h2>
++          </Reveal>
++          {courses.some((c) => c.price > 0) ? (
++            <div className="flex items-center gap-2 pb-1 text-sm text-site-text/70">
++              <span>Prices in</span>
++              <CurrencySwitcher active={courses.find((c) => c.price > 0)?.display_currency ?? "NGN"} />
++            </div>
++          ) : null}
++        </div>
+         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+-          {courses.map((course) => {
++          {courses.map((course, i) => {
+             const original = courseOriginalPrice(course);
+             const rated = (course.rating_count ?? 0) > 0;
+             return (
++            <Reveal key={course.id} delay={(i % 3) * 100}>
+             <Link
+-              key={course.id}
+               href={`${hrefBase}/${course.slug}`}
+-              className="group flex flex-col overflow-hidden rounded-xl border border-site-border/30 bg-site-surface-soft transition hover:border-site-border/60 hover:bg-site-surface"
++              className="group flex h-full flex-col overflow-hidden rounded-xl border border-site-border/20 bg-site-surface transition duration-300 hover:-translate-y-1 hover:border-site-border/50 hover:shadow-xl hover:shadow-black/10"
+             >
+               <article className="flex h-full flex-col">
+                 {/* Cover, owner upload, or a branded initial placeholder (never a
+@@ -210,7 +226,7 @@ export default function InstituteStorefront({
+                     <img
+                       src={course.cover_image_url}
+                       alt={course.title}
+-                      className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
++                      className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+                     />
+                   ) : (
+                     <div
+@@ -229,8 +245,8 @@ export default function InstituteStorefront({
+                   ) : null}
+                 </div>
+ 
+-                <div className="flex flex-1 flex-col p-4">
+-                  <h3 className="line-clamp-2 text-base font-bold leading-snug text-site-text" style={{ fontFamily: "var(--font-display)" }}>
++                <div className="flex flex-1 flex-col p-5">
++                  <h3 className="font-editorial line-clamp-2 text-xl leading-snug text-site-text">
+                     {course.title}
+                   </h3>
+                   {course.instructor_name ? (
+@@ -273,12 +289,13 @@ export default function InstituteStorefront({
+                 </div>
+               </article>
+             </Link>
++            </Reveal>
+             );
+           })}
+         </div>
+ 
+         {courses.length === 0 ? (
+-          <div className="rounded-xl border border-site-border/30 bg-site-surface-soft p-8 text-center text-site-text/70">
++          <div className="rounded-xl border border-site-border/20 p-10 text-center text-site-text/60">
+             No courses available at the moment. Check back soon.
+           </div>
+         ) : null}
+diff --git a/src/components/landing/AgentBanner.tsx b/src/components/landing/AgentBanner.tsx
+index 004b048..9760048 100644
+--- a/src/components/landing/AgentBanner.tsx
++++ b/src/components/landing/AgentBanner.tsx
+@@ -1,5 +1,6 @@
+ import Link from "next/link";
+ import Image from "next/image";
++import Reveal from "./Reveal";
+ import agentBanner from "../../../public/images/sections/work.png"
+ 
+ // `tenantSlug` scopes the CTA to a specific academy's agent program
+@@ -13,29 +14,32 @@ export default function AgentBanner({ tenantSlug }: { tenantSlug?: string }) {
+   return (
+     <section className="section-pad section-divider">
+       <div className="container-wide">
+-        <div className="reveal overflow-hidden rounded-[24px] border border-site-border/30 bg-site-surface-soft">
++        <Reveal>
++        <div className="overflow-hidden rounded-2xl border border-site-border/20">
+           <div className="grid lg:grid-cols-[1.1fr_0.9fr]">
+             <div className="p-8 md:p-12">
+-              <p className="text-xs uppercase tracking-[0.18em] text-site-text/70">Become an Admission Marketer</p>
+-              <h2 className="mt-4 text-3xl font-bold md:text-5xl" style={{ fontFamily: "var(--font-display)" }}>
+-                Earn 10% Commission
++              <p className="text-[10px] font-semibold uppercase tracking-[0.25em]" style={{ color: "var(--color-primary)" }}>
++                Become an Admission Marketer
++              </p>
++              <h2 className="font-editorial mt-5 text-3xl leading-[1.08] md:text-5xl">
++                Earn 10% commission<span style={{ color: "var(--color-primary)" }}>.</span>
+               </h2>
+-              <p className="mt-5 max-w-2xl text-base leading-8 text-site-text/75">
++              <p className="mt-5 max-w-2xl text-base leading-8 text-site-text/70">
+                 Refer students to our courses and earn 10% commission on every enrollment.
+                 Your students get 5% off too. Join our Admission-Marketer network and start earning today.
+               </p>
+               <div className="mt-8 flex flex-wrap gap-4">
+                 <Link
+                   href={applyHref}
+-                  className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold !text-white transition hover:opacity-90"
+-                  style={{ backgroundColor: "var(--color-primary)" }}
++                  className="font-editorial inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-sm font-semibold text-[#fff] shadow-lg transition hover:brightness-110"
++                  style={{ backgroundColor: "var(--color-primary)", boxShadow: "0 10px 25px -8px color-mix(in srgb, var(--color-primary) 45%, transparent)" }}
+                 >
+                   Apply Now
+                   <span aria-hidden="true">↗</span>
+                 </Link>
+                 <Link
+                   href={applyHref}
+-                  className="inline-flex items-center gap-2 rounded-full border border-site-border/30 px-6 py-3 text-sm font-semibold text-site-text transition hover:bg-site-surface"
++                  className="font-editorial inline-flex items-center gap-2 rounded-full border border-site-border/40 px-7 py-3.5 text-sm font-semibold text-site-text transition hover:border-site-text/60 hover:bg-site-text/5"
+                 >
+                   Learn More
+                 </Link>
+@@ -52,6 +56,7 @@ export default function AgentBanner({ tenantSlug }: { tenantSlug?: string }) {
+             </div>
+           </div>
+         </div>
++        </Reveal>
+       </div>
+     </section>
+   );
+diff --git a/src/components/landing/IungoBanner.tsx b/src/components/landing/IungoBanner.tsx
+index 96aed9f..d65fcad 100644
+--- a/src/components/landing/IungoBanner.tsx
++++ b/src/components/landing/IungoBanner.tsx
+@@ -1,83 +1,94 @@
+ import Link from "next/link";
+ import Image from "next/image";
++import Parallax from "./Parallax";
++import Reveal from "./Reveal";
+ 
++const steps = ["Create your profile", "Set your rate", "Start earning"];
++
++/**
++ * Featured product band for IUNGO, restyled to match the editorial
++ * landing: quiet bordered card, serif headline, hairline step rows with
++ * the red-dot treatment, white primary pill, and the flyer in a framed
++ * tile with an ambient red glow.
++ */
+ export default function IungoBanner() {
+   return (
+     <section className="section-pad">
+       <div className="container-wide">
+-        <div className="reveal relative overflow-hidden rounded-[24px]">
+-          {/* Background */}
+-          {/* <Image
+-            src="/images/iungo-banner.png"
+-            alt=""
+-            fill
+-            className="object-cover"
+-            sizes="(max-width: 1320px) 92vw, 1320px"
+-          /> */}
+-          {/* Overlay */}
+-          {/* <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/70 to-black/50 [html.light_&]:from-white/90 [html.light_&]:via-white/75 [html.light_&]:to-white/50" /> */}
+-
+-          {/* Red accent bar */}
+-          {/* <div className="absolute left-0 top-0 z-10 h-full w-1.5 bg-site-primary" /> */}
+-
+-          <div className="relative z-10 px-6  md:px-14 md:py-5 ">
+-            <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+-              <div className="max-w-4xl">
+-                <div className="mb-10 flex items-center gap-3">
+-
+-                  {/* <span className="text-sm font-semibold uppercase tracking-[0.15em] text-site-primary">IUNGO</span> */}
+-                  <h2 className="text-xl font-bold leading-tight md:text-5xl" style={{ fontFamily: "var(--font-display)" }}>
+-                    Official Creator of The IUNGO App
+-                  </h2>
++        <div className="relative overflow-hidden rounded-2xl border border-site-border/20 bg-site-surface/50 p-8 md:p-14">
++          {/* Ambient red glow behind the copy */}
++          <div
++            aria-hidden="true"
++            className="pointer-events-none absolute -left-24 -top-24 h-96 w-96 rounded-full bg-site-primary/10 blur-[120px]"
++          />
+ 
+-                </div>
++          <div className="relative grid gap-12 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
++            <Reveal variant="left">
++              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-site-primary">
++                Featured product
++              </p>
++              <h2
++                className="font-editorial mt-6 max-w-xl text-3xl leading-[1.1] md:text-5xl"
++              >
++                Official creator of the IUNGO app
++              </h2>
++              <p className="mt-5 max-w-md text-sm leading-7 text-site-text/65 md:text-base md:leading-8">
++                We built IUNGO, an app where you get paid for taking calls.
++                Set your rate, share your link, and get paid for every
++                conversation.
++              </p>
+ 
++              {/* Steps — same hairline rows as the hero CTAs */}
++              <div className="mt-8 max-w-md divide-y divide-site-border/15 border-y border-site-border/20">
++                {steps.map((step, i) => (
++                  <Reveal key={step} delay={250 + i * 120}>
++                    <div className="flex items-center gap-4 py-4">
++                      <span className="font-editorial text-lg text-site-text/30">
++                        {String(i + 1).padStart(2, "0")}
++                      </span>
++                      <span className="font-editorial text-xl leading-none md:text-2xl">
++                        {step}
++                      </span>
++                    </div>
++                  </Reveal>
++                ))}
++              </div>
+ 
+-                <p className="mt-4 max-w-xl text-base leading-7 text-site-text/70 md:text-lg">
+-                  We built IUNGO; an app where you get paid for taking calls.
+-                  Set your rate, share your link, and get paid for every conversation.
+-                </p>
+-
+-                <div className="mt-7 flex flex-wrap gap-6">
+-                  <div className="flex items-center gap-2">
+-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-site-primary/20 text-xs font-bold text-site-primary">1</span>
+-                    <span className="text-sm text-site-text/80">Create your profile</span>
+-                  </div>
+-                  <div className="flex items-center gap-2">
+-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-site-primary/20 text-xs font-bold text-site-primary">2</span>
+-                    <span className="text-sm text-site-text/80">Set your rate</span>
+-                  </div>
+-                  <div className="flex items-center gap-2">
+-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-site-primary/20 text-xs font-bold text-site-primary">3</span>
+-                    <span className="text-sm text-site-text/80">Start earning</span>
+-                  </div>
+-                </div>
+-
+-                <div className="mt-8">
+-                  <Link
+-                    href="https://www.iungo.app"
+-                    target="_blank"
+-                    rel="noreferrer"
+-                    className="inline-flex items-center gap-2 rounded-full bg-site-primary px-7 py-3.5 text-sm font-semibold !text-white shadow-lg shadow-site-primary/25 transition hover:brightness-110 hover:shadow-xl hover:shadow-site-primary/30"
++              <div className="mt-9">
++                <Link
++                  href="https://www.iungo.app"
++                  target="_blank"
++                  rel="noreferrer"
++                  className="group inline-flex items-center gap-3 rounded-full bg-site-primary px-8 py-4 text-sm font-semibold text-[#fff] shadow-lg shadow-site-primary/25 transition hover:shadow-xl hover:shadow-site-primary/35 hover:brightness-110 font-editorial"
++                >
++                  Download IUNGO
++                  <span
++                    aria-hidden="true"
++                    className="transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                   >
+-                    Download iungo
+-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+-                      <path d="M7 17L17 7M17 7H7M17 7V17" />
+-                    </svg>
+-                  </Link>
+-                </div>
++                    ↗
++                  </span>
++                </Link>
+               </div>
++            </Reveal>
+ 
+-              <div className="shrink-0">
++            {/* Flyer */}
++            <Reveal variant="right" className="relative mx-auto w-fit">
++              <div
++                aria-hidden="true"
++                className="pointer-events-none absolute inset-0 scale-110 rounded-full bg-site-primary/15 blur-[100px]"
++              />
++              <Parallax distance={24}>
+                 <Image
+                   src="/images/iungo-flyer.jpeg"
+                   alt="IUNGO Flyer"
+                   width={360}
+                   height={450}
+-                  className="h-auto w-[280px] rounded-2xl object-cover shadow-2xl md:w-[360px]"
++                  priority={false}
++                  className="relative h-auto w-[260px] rounded-xl border border-site-border/25 object-cover shadow-2xl md:w-[340px]"
+                 />
+-              </div>
+-            </div>
++              </Parallax>
++            </Reveal>
+           </div>
+         </div>
+       </div>
+diff --git a/src/components/layout/Footer.tsx b/src/components/layout/Footer.tsx
+index 15dce98..efbc987 100644
+--- a/src/components/layout/Footer.tsx
++++ b/src/components/layout/Footer.tsx
+@@ -3,111 +3,155 @@
+ import Link from "next/link";
+ import { navLinks } from "@/lib/content";
+ 
++const WhatsAppIcon = () => (
++  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 text-[#25D366]" aria-hidden="true">
++    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
++  </svg>
++);
++
++const whatsappNumbers = [
++  { value: "+234 803 458 5459", href: "https://wa.me/2348034585459?text=Hello%20Jorsas%20Tech%2C%20I%27d%20like%20to%20make%20an%20enquiry." },
++  { value: "+44 7882 144063", href: "https://wa.me/447882144063?text=Hello%20Jorsas%20Tech%2C%20I%27d%20like%20to%20make%20an%20enquiry." },
++];
++
++const socials = [
++  {
++    label: "Facebook",
++    href: "https://www.facebook.com/",
++    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" /></svg>,
++  },
++  {
++    label: "Instagram",
++    href: "https://www.instagram.com/",
++    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" /><line x1="17.5" y1="6.5" x2="17.51" y2="6.5" /></svg>,
++  },
++  {
++    label: "X (Twitter)",
++    href: "https://www.x.com/",
++    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>,
++  },
++];
++
++const colHeading = "text-[10px] font-semibold uppercase tracking-[0.25em] text-site-text/50";
++
++/**
++ * Editorial footer: no big wordmark, no closing statement (the landing CTA
++ * section owns that). A quiet four-column band — brand, contact, explore,
++ * company — over a baseline that echoes the hero headline in the serif.
++ */
+ export default function Footer() {
+   return (
+-    <footer className="global-marketing-footer py-14">
+-      <div className="container-wide space-y-9">
+-        <div className="grid gap-4 border-y border-site-border/30 py-8 md:grid-cols-3">
+-          <div>
+-            <p className="text-xs uppercase tracking-[0.22em] text-site-text/60">Working Hours</p>
+-            <p className="mt-2 font-semibold">Mon - Sat: 8 am - 5 pm, Sunday: CLOSED</p>
+-          </div>
+-          <div>
+-            <p className="text-xs uppercase tracking-[0.22em] text-site-text/60">Email</p>
+-            <p className="mt-2 font-semibold">contact@jorsastech.com</p>
+-          </div>
+-          <div>
+-            <p className="text-xs uppercase tracking-[0.22em] text-site-text/60">WhatsApp Chat</p>
+-            <div className="mt-3 flex flex-col items-start gap-3">
+-              <a
+-                href="https://wa.me/2348034585459?text=Hello%20Jorsas%20Tech%2C%20I%27d%20like%20to%20make%20an%20enquiry."
+-                target="_blank"
+-                rel="noreferrer"
+-                className="inline-flex items-center gap-2 font-semibold transition hover:text-site-primary"
+-              >
+-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-[#25D366]" aria-hidden="true">
+-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+-                </svg>
+-                +234 803 458 5459
+-              </a>
+-              <a
+-                href="https://wa.me/447882144063?text=Hello%20Jorsas%20Tech%2C%20I%27d%20like%20to%20make%20an%20enquiry."
+-                target="_blank"
+-                rel="noreferrer"
+-                className="inline-flex items-center gap-2 font-semibold transition hover:text-site-primary"
+-              >
+-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-[#25D366]" aria-hidden="true">
+-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+-                </svg>
+-                +44 7882 144063
+-              </a>
+-            </div>
+-          </div>
+-        </div>
+-
+-        <div className="grid gap-8 md:grid-cols-[1.1fr_0.7fr_0.8fr]">
++    <footer className="global-marketing-footer border-t border-site-border/15">
++      <div className="container-wide py-14">
++        <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_0.7fr_0.8fr] lg:gap-10">
++          {/* Brand */}
+           <div>
+-            <h3 className="mb-3 text-xl font-bold" style={{ fontFamily: "var(--font-display)" }}>
+-              Jorsas Tech
+-            </h3>
+-            <p className="max-w-sm text-sm text-site-text/70">
+-              We have a team of experts across different strata of Software Development and would provide you with the clear insight your business needs to create an amazing future.
++            <Link href="/" aria-label="Jorsas home" className="inline-flex items-center">
++              <img src="/images/jorsas-logo-white.png" alt="Jorsas Tech" className="h-7 w-auto [html.light_&]:hidden" />
++              <img src="/images/jorsas-logo-light-mode.png" alt="Jorsas Tech" className="hidden h-7 w-auto [html.light_&]:block" />
++            </Link>
++            <p className="mt-5 max-w-xs text-sm leading-7 text-site-text/65">
++              A team of experts across every strata of software development,
++              giving your business the clear insight it needs to create an
++              amazing future.
+             </p>
+-            <div className="mt-5 flex gap-3">
+-              {[
+-                { 
+-                  label: "Facebook", href: "https://www.facebook.com/",
+-                  icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" /></svg>
+-                },
+-                { 
+-                  label: "Instagram", href: "https://www.instagram.com/",
+-                  icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" /><line x1="17.5" y1="6.5" x2="17.51" y2="6.5" /></svg>
+-                },
+-                { 
+-                  label: "X (Twitter)", href: "https://www.x.com/",
+-                  icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
+-                },
+-
+-              ].map((social) => (
++            <div className="mt-6 flex gap-3">
++              {socials.map((social) => (
+                 <a
+                   key={social.label}
+                   href={social.href}
+                   target="_blank"
+                   rel="noreferrer"
+                   aria-label={social.label}
+-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-site-border/35 text-site-text transition hover:bg-site-text hover:text-site-bg"
++                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-site-border/35 text-site-text transition hover:border-site-primary hover:bg-site-primary hover:text-[#fff]"
+                 >
+                   {social.icon}
+                 </a>
+               ))}
+             </div>
+           </div>
+-          <div>
+-            <h4 className="mb-3 text-sm uppercase tracking-[0.2em] text-site-text/70">Quick Links</h4>
+-            <ul className="space-y-2 text-sm text-site-text/85">
++
++          {/* Contact */}
++          <div className="space-y-6">
++            <div>
++              <p className={colHeading}>Email</p>
++              <a
++                href="mailto:contact@jorsastech.com"
++                className="mt-2.5 inline-block text-sm font-medium transition hover:text-site-primary"
++              >
++                contact@jorsastech.com
++              </a>
++            </div>
++            <div>
++              <p className={colHeading}>WhatsApp</p>
++              <div className="mt-2.5 space-y-2 space-x-2">
++                {whatsappNumbers.map((wa) => (
++                  <a
++                    key={wa.value}
++                    href={wa.href}
++                    target="_blank"
++                    rel="noreferrer"
++                    className="inline-flex items-center gap-2 text-sm font-medium transition hover:text-site-primary"
++                  >
++                    <WhatsAppIcon />
++                    {wa.value}
++                  </a>
++                ))}
++              </div>
++            </div>
++            <div>
++              <p className={colHeading}>Working hours</p>
++              <p className="mt-2.5 text-sm font-medium">Mon - Sat: 8 am - 5 pm</p>
++              <p className="mt-1 text-sm text-site-text/55">Sunday: Closed</p>
++            </div>
++          </div>
++
++          {/* Explore */}
++          <nav>
++            <p className={colHeading}>Explore</p>
++            <ul className="mt-4 space-y-2.5 text-sm">
+               {navLinks.map((link) => (
+                 <li key={link.href}>
+-                  <Link href={link.href} className="underline underline-offset-4 transition hover:text-site-primary">
++                  <Link
++                    href={link.href}
++                    className="text-site-text/80 underline decoration-site-border/50 underline-offset-4 transition hover:text-site-primary hover:decoration-site-primary"
++                  >
+                     {link.label}
+                   </Link>
+                 </li>
+               ))}
+             </ul>
+-          </div>
++          </nav>
++
++          {/* Company */}
+           <div>
+-            <h4 className="mb-3 text-sm uppercase tracking-[0.2em] text-site-text/70">Company</h4>
+-            <ul className="space-y-2 text-sm text-site-text/85">
+-              <li><Link href="/policies?policy=privacy-policy" className="underline underline-offset-4 transition hover:text-site-primary">Privacy Policy</Link></li>
+-              <li><Link href="/policies?policy=intellectual-property" className="underline underline-offset-4 transition hover:text-site-primary">Trademarks</Link></li>
+-              <li><Link href="/policies?policy=terms-and-conditions" className="underline underline-offset-4 transition hover:text-site-primary">Terms &amp; Conditions</Link></li>
+-              {/* <li><Link href="/policies">Cookies Policies</Link></li> */}
++            <p className={colHeading}>Company</p>
++            <ul className="mt-4 space-y-2.5 text-sm">
++              <li>
++                <Link href="/policies?policy=privacy-policy" className="text-site-text/80 underline decoration-site-border/50 underline-offset-4 transition hover:text-site-primary hover:decoration-site-primary">
++                  Privacy Policy
++                </Link>
++              </li>
++              <li>
++                <Link href="/policies?policy=intellectual-property" className="text-site-text/80 underline decoration-site-border/50 underline-offset-4 transition hover:text-site-primary hover:decoration-site-primary">
++                  Trademarks
++                </Link>
++              </li>
++              <li>
++                <Link href="/policies?policy=terms-and-conditions" className="text-site-text/80 underline decoration-site-border/50 underline-offset-4 transition hover:text-site-primary hover:decoration-site-primary">
++                  Terms &amp; Conditions
++                </Link>
++              </li>
+             </ul>
+           </div>
+         </div>
+ 
+-        <div className="border-t border-site-border/15 pt-6 text-sm text-site-text/70 md:flex md:items-center md:justify-between">
+-          <p>© 2026 Jorsas Tech. All right reserved.</p>
+-          {/* <p>Cookie Policy</p> */}
++        {/* Baseline */}
++        <div className="mt-12 flex flex-col gap-3 border-t border-site-border/15 pt-7 text-xs text-site-text/55 md:flex-row md:items-center md:justify-between">
++          <p>© 2026 Jorsas Tech. All rights reserved.</p>
++          <p className="font-editorial text-sm text-site-text/45">
++            Born in Africa. Built for the world.
++          </p>
+         </div>
+       </div>
+     </footer>
+diff --git a/src/components/layout/Header.tsx b/src/components/layout/Header.tsx
+index 9f35e37..17ad566 100644
+--- a/src/components/layout/Header.tsx
++++ b/src/components/layout/Header.tsx
+@@ -1,6 +1,6 @@
+ "use client";
+ 
+-import { useState } from "react";
++import { useEffect, useState } from "react";
+ import Link from "next/link";
+ import { usePathname } from "next/navigation";
+ import { navLinks } from "@/lib/content";
+@@ -9,9 +9,24 @@ export default function Header() {
+   const pathname = usePathname();
+   const [drawerOpen, setDrawerOpen] = useState(false);
+   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+-  // Theme toggle is hidden for now while light mode is being finished; the app
+-  // runs dark-only (see the force-dark theme-init in app/layout.tsx). Restore
+-  // the theme state, effect, toggleTheme and the toggle button to bring it back.
++  // Light/dark follows the saved 'theme' key (written here and read by the
++  // theme-init pre-paint script in app/layout.tsx).
++  const [isLight, setIsLight] = useState(false);
++
++  useEffect(() => {
++    setIsLight(document.documentElement.classList.contains("light"));
++  }, []);
++
++  const toggleTheme = () => {
++    const next = !isLight;
++    document.documentElement.classList.toggle("light", next);
++    try {
++      localStorage.setItem("theme", next ? "light" : "dark");
++    } catch {
++      // Private mode / blocked storage — the class toggle above still applies.
++    }
++    setIsLight(next);
++  };
+ 
+   return (
+     <>
+@@ -22,14 +37,18 @@ export default function Header() {
+             <img src="/images/jorsas-logo-light-mode.png" alt="Jorsas" className="hidden h-7 w-auto sm:h-9 [html.light_&]:block" />
+           </Link>
+ 
+-          <nav className="hidden items-center gap-14 text-sm text-white lg:flex [html.light_&]:text-site-text">
++          <nav className="hidden items-center gap-12 text-[13px] text-white lg:flex [html.light_&]:text-site-text">
+             {navLinks.map((link) => {
+               const active = pathname === link.href;
+               return (
+                 <Link
+                   key={link.href}
+                   href={link.href}
+-                  className={active ? "font-bold text-white [html.light_&]:text-site-text" : "text-white/75 transition hover:text-white [html.light_&]:text-site-text/75 [html.light_&]:hover:text-site-text"}
++                  className={`nav-link transition hover:text-white [html.light_&]:hover:text-site-text ${
++                    active
++                      ? "nav-link-active font-semibold text-white [html.light_&]:text-site-text"
++                      : "text-white/75 [html.light_&]:text-site-text/75"
++                  }`}
+                 >
+                   {link.label}
+                 </Link>
+@@ -41,9 +60,9 @@ export default function Header() {
+             <div className="hidden items-center gap-3 md:flex">
+               <Link
+                 href="/qoute"
+-                className="inline-flex items-center rounded-full bg-[#ed180d] px-5 py-3 text-sm font-semibold text-white transition hover:brightness-110"
++                className="font-editorial inline-flex items-center rounded-full bg-[#ed180d] px-5 py-3 text-sm font-semibold text-[#fff] transition hover:brightness-110"
+               >
+-                Request a Qoute
++                Request a Quote
+               </Link>
+ 
+               <button
+@@ -60,6 +79,26 @@ export default function Header() {
+               </button>
+             </div>
+ 
++            <button
++              type="button"
++              aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
++              onClick={toggleTheme}
++              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/35 text-white transition hover:bg-white/10 [html.light_&]:border-site-border/35 [html.light_&]:text-site-text [html.light_&]:hover:bg-site-text/10"
++            >
++              {isLight ? (
++                /* Moon — current theme is light, clicking goes dark */
++                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
++                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
++                </svg>
++              ) : (
++                /* Sun — current theme is dark, clicking goes light */
++                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
++                  <circle cx="12" cy="12" r="4" />
++                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
++                </svg>
++              )}
++            </button>
++
+             <button
+               type="button"
+               aria-label="Open menu"
+@@ -129,9 +168,9 @@ export default function Header() {
+               <Link
+                 href="/qoute"
+                 onClick={() => setMobileNavOpen(false)}
+-                className="flex w-full items-center justify-center rounded-full bg-[#ed180d] px-5 py-3 text-sm font-semibold text-white transition hover:brightness-110"
++                className="font-editorial flex w-full items-center justify-center rounded-full bg-[#ed180d] px-5 py-3 text-sm font-semibold text-[#fff] transition hover:brightness-110"
+               >
+-                Request a Qoute
++                Request a Quote
+               </Link>
+             </div>
+           </aside>
+diff --git a/src/components/layout/InnerPageHero.tsx b/src/components/layout/InnerPageHero.tsx
+index d7c86fe..0b31df8 100644
+--- a/src/components/layout/InnerPageHero.tsx
++++ b/src/components/layout/InnerPageHero.tsx
+@@ -1,18 +1,42 @@
+ import type { ReactNode } from "react";
+-import SectionHeading from "@/components/ui/SectionHeading";
++import Reveal from "@/components/landing/Reveal";
+ 
+ type InnerPageHeroProps = {
+   title: string;
+-  subtitle: string;
++  subtitle?: string;
+   children?: ReactNode;
+ };
+ 
++/**
++ * Shared editorial hero for every inner page: the landing's dot-pattern
++ * background, a sans micro-label, a big Seraphine display title, and the
++ * body copy at reading width. Same shape as the institute storefront hero,
++ * so all pages read as one system.
++ */
+ export default function InnerPageHero({ title, subtitle, children }: InnerPageHeroProps) {
+   return (
+-    <section className="section-pad border-b border-site-border/30">
+-      <div className="container-wide space-y-6">
+-        <SectionHeading title={title} subtitle={subtitle} />
+-        {children ? <div className="max-w-3xl text-site-text/75">{children}</div> : null}
++    <section className="hero-dots section-pad relative overflow-hidden border-b border-site-border/30">
++      <div className="container-wide relative z-10 space-y-8">
++        <Reveal>
++          {subtitle ? (
++            <p className="text-[10px] font-semibold uppercase tracking-[0.25em]" style={{ color: "var(--color-muted)" }}>
++              {subtitle}
++            </p>
++          ) : null}
++          <h1 className="font-editorial mt-4 max-w-5xl text-[clamp(2.2rem,5vw,4.25rem)] leading-[1.06]">
++            {title}
++            {/* Red full stop, the display signature across the site. Skipped
++                when the title already ends in punctuation. */}
++            {/[.!?]$/.test(title) ? null : (
++              <span style={{ color: "var(--color-primary)" }}>.</span>
++            )}
++          </h1>
++        </Reveal>
++        {children ? (
++          <Reveal delay={120}>
++            <div className="max-w-2xl text-base leading-8 text-site-text/70">{children}</div>
++          </Reveal>
++        ) : null}
+       </div>
+     </section>
+   );
+diff --git a/src/components/owner/BrandingEditor.tsx b/src/components/owner/BrandingEditor.tsx
+index 3f8c6f0..beba518 100644
+--- a/src/components/owner/BrandingEditor.tsx
++++ b/src/components/owner/BrandingEditor.tsx
+@@ -347,7 +347,7 @@ export default function BrandingEditor() {
+                 type="button"
+                 onClick={saveLabel}
+                 disabled={savingLabel}
+-                className="shrink-0 rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++                className="shrink-0 rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+               >
+                 {savingLabel ? "Saving..." : "Save label"}
+               </button>
+@@ -383,7 +383,7 @@ export default function BrandingEditor() {
+                 type="button"
+                 onClick={saveName}
+                 disabled={savingName}
+-                className="shrink-0 rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++                className="shrink-0 rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+               >
+                 {savingName ? "Saving..." : "Save name"}
+               </button>
+@@ -411,7 +411,7 @@ export default function BrandingEditor() {
+                   type="button"
+                   onClick={() => fileRef.current?.click()}
+                   disabled={uploading}
+-                  className="rounded-full bg-site-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++                  className="rounded-full bg-site-primary px-5 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+                 >
+                   {uploading ? "Uploading..." : logoUrl ? "Replace logo" : "Upload logo"}
+                 </button>
+@@ -504,7 +504,7 @@ export default function BrandingEditor() {
+               type="button"
+               onClick={saveColors}
+               disabled={saving}
+-              className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++              className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+             >
+               {saving ? "Saving..." : "Save changes"}
+             </button>
+diff --git a/src/components/owner/CoverPositioner.tsx b/src/components/owner/CoverPositioner.tsx
+index d58fc91..8c095c2 100644
+--- a/src/components/owner/CoverPositioner.tsx
++++ b/src/components/owner/CoverPositioner.tsx
+@@ -140,7 +140,7 @@ export default function CoverPositioner({ file, aspect, busy, onCancel, onConfir
+             type="button"
+             onClick={confirm}
+             disabled={working || busy || !url}
+-            className="rounded-full bg-site-primary px-6 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++            className="rounded-full bg-site-primary px-6 py-2 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+           >
+             {working || busy ? "Working…" : "Use cover"}
+           </button>
+diff --git a/src/components/owner/PayoutSettings.tsx b/src/components/owner/PayoutSettings.tsx
+index d5e3d40..9fde45d 100644
+--- a/src/components/owner/PayoutSettings.tsx
++++ b/src/components/owner/PayoutSettings.tsx
+@@ -466,7 +466,7 @@ export default function PayoutSettings() {
+           <button
+             onClick={link}
+             disabled={saving}
+-            className="mt-6 rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++            className="mt-6 rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+           >
+             {saving ? "Linking…" : "Link payout account"}
+           </button>
+@@ -502,7 +502,7 @@ export default function PayoutSettings() {
+             <button
+               onClick={saveAgentRate}
+               disabled={savingRate}
+-              className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++              className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+             >
+               {savingRate ? "Saving…" : "Save rate"}
+             </button>
+diff --git a/src/components/owner/PersonalDetailsEditor.tsx b/src/components/owner/PersonalDetailsEditor.tsx
+index 93cd26f..9256658 100644
+--- a/src/components/owner/PersonalDetailsEditor.tsx
++++ b/src/components/owner/PersonalDetailsEditor.tsx
+@@ -269,7 +269,7 @@ export default function PersonalDetailsEditor() {
+         <button
+           onClick={saveDetails}
+           disabled={saving}
+-          className="mt-6 rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++          className="mt-6 rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+         >
+           {saving ? "Saving…" : "Save details"}
+         </button>
+@@ -324,7 +324,7 @@ export default function PersonalDetailsEditor() {
+         <button
+           onClick={savePassword}
+           disabled={savingPassword}
+-          className="mt-6 rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++          className="mt-6 rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+         >
+           {savingPassword ? "Updating…" : "Update password"}
+         </button>
+diff --git a/src/components/owner/PublicPageEditor.tsx b/src/components/owner/PublicPageEditor.tsx
+index c758400..1beacda 100644
+--- a/src/components/owner/PublicPageEditor.tsx
++++ b/src/components/owner/PublicPageEditor.tsx
+@@ -302,7 +302,7 @@ export default function PublicPageEditor() {
+               type="button"
+               onClick={() => fileRef.current?.click()}
+               disabled={uploading}
+-              className="rounded-full bg-site-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++              className="rounded-full bg-site-primary px-5 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+             >
+               {uploading ? "Uploading..." : coverUrl ? "Replace cover" : "Upload cover"}
+             </button>
+@@ -387,7 +387,7 @@ export default function PublicPageEditor() {
+           type="button"
+           onClick={save}
+           disabled={saving}
+-          className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
++          className="rounded-full bg-site-primary px-6 py-2.5 text-sm font-semibold text-[#fff] transition hover:brightness-110 disabled:opacity-60"
+         >
+           {saving ? "Saving..." : "Save changes"}
+         </button>
+diff --git a/src/components/plans/PlanCardBody.tsx b/src/components/plans/PlanCardBody.tsx
+index 4cf2a63..e39d9db 100644
+--- a/src/components/plans/PlanCardBody.tsx
++++ b/src/components/plans/PlanCardBody.tsx
+@@ -38,7 +38,7 @@ export default function PlanCardBody({ plan }: { plan: Plan }) {
+             const on = features[key];
+             return (
+               <li key={key} className={`flex items-center gap-2 ${on ? "text-white/85" : "text-site-muted"}`}>
+-                <span className={on ? "text-emerald-400" : "text-white/30"}>{on ? "✓" : "—"}</span>
++                <span className={on ? "text-emerald-400" : "text-site-text/30"}>{on ? "✓" : "·"}</span>
+                 <span className={on ? "" : "opacity-70"}>{FEATURE_LABELS[key]}</span>
+               </li>
+             );
+diff --git a/src/components/ui/Button.tsx b/src/components/ui/Button.tsx
+index 6316578..83be03e 100644
+--- a/src/components/ui/Button.tsx
++++ b/src/components/ui/Button.tsx
+@@ -11,8 +11,10 @@ type ButtonProps = {
+ };
+ 
+ const variantClasses: Record<ButtonVariant, string> = {
++  // text-[#fff] (not text-white) so the light-mode .text-white override in
++  // globals.css can't flip button text to dark on the red/white grounds.
+   primary:
+-    "bg-site-primary text-white hover:brightness-110 border-transparent",
++    "bg-site-primary text-[#fff] hover:brightness-110 border-transparent",
+   secondary:
+     "bg-site-surface-soft text-site-text hover:brightness-105 border-site-border/30",
+   outline:
+diff --git a/src/lib/content.ts b/src/lib/content.ts
+index 2e0eda6..9d79654 100644
+--- a/src/lib/content.ts
++++ b/src/lib/content.ts
+@@ -228,7 +228,7 @@ export const routeIntros: Record<string, RouteIntro> = {
+   about: {
+     title: "Turning Bold Ideas Into Quality Technology",
+     subtitle: "WHO WE ARE",
+-    body: "A Born in Africa. Built to global standards. Designed for the world.Jorsas Tech is a technology company founded in Nigeria with a global outlook. We build high-quality, human-centred technology designed to solve real-world problems and create opportunities at scale. We believe technology should do more than demonstrate what is possible. It should be useful, reliable, accessible and worth what people pay for it. That belief shapes everything we build. Our approach is simple: understand real human needs, challenge conventional thinking, and turn ambitious ideas into practical digital products that people and businesses can genuinely benefit from. We pursue innovation with purpose, not technology for technology’s sake. At Jorsas Tech, quality and value for money are non-negotiable. We believe exceptional technology does not need unnecessary complexity or excessive cost. Every product bearing the Jorsas Tech name should be thoughtfully designed, reliably delivered and built to create meaningful value.Our culture is driven by excellence, creativity, ownership, integrity and continuous improvement. We encourage our people to think boldly, collaborate openly and take responsibility for building products we are proud to put our name on.From Africa to the world, our ambition is to build a globally recognised technology company known not simply for creating products, but for creating technology that matters. Our Promise Quality you can trust. Technology that delivers. Value that makes sense. Our Philosophy Think boldly. Build properly. Deliver value.",
++    body: "Jorsas Tech is a technology company founded in Nigeria with a global outlook. We build high-quality, human-centred technology designed to solve real-world problems and create opportunities at scale.",
+   },
+   services: {
+     title: "Spotlight some most important features We have",
+@@ -242,17 +242,29 @@ export const routeIntros: Record<string, RouteIntro> = {
+   },
+ };
+ 
++export const aboutParagraphs: string[] = [
++  "Jorsas Tech is a technology company founded in Nigeria with a global outlook. We build high-quality, human-centred technology designed to solve real-world problems and create opportunities at scale.",
++  "We believe technology should do more than demonstrate what is possible. It should be useful, reliable, accessible and worth what people pay for it. That belief shapes everything we build.",
++  "Our approach is simple: understand real human needs, challenge conventional thinking, and turn ambitious ideas into practical digital products that people and businesses can genuinely benefit from. We pursue innovation with purpose, not technology for technology's sake.",
++  "At Jorsas Tech, quality and value for money are non-negotiable. We believe exceptional technology does not need unnecessary complexity or excessive cost. Every product bearing the Jorsas Tech name should be thoughtfully designed, reliably delivered and built to create meaningful value.",
++  "Our culture is driven by excellence, creativity, ownership, integrity and continuous improvement. We encourage our people to think boldly, collaborate openly and take responsibility for building products we are proud to put our name on.",
++  "From Africa to the world, our ambition is to build a globally recognised technology company known not simply for creating products, but for creating technology that matters.",
++];
++
++export const aboutPromise = "Quality you can trust. Technology that delivers. Value that makes sense.";
++export const aboutPhilosophy = "Think boldly. Build properly. Deliver value.";
++
+ export const aboutCoreFeatures: ServiceCard[] = [
+   {
+-    title: "WEB DEVELOPMENT",
++    title: "Web Development",
+     description: "Over the years, we've made a reputation for building websites that look great & are easy-to-use in 7 days. Just think about the website and allow us develop it.",
+   },
+   {
+-    title: "MOBILE APP DEVELOPMENT",
++    title: "Mobile App Development",
+     description: "At Jorsas, our skilled Mobile Developers are always available to handle projects using modern technologies (Flutter) to develop mobile applications accessible on IOS and Android platforms.",
+   },
+   {
+-    title: "UI/UX DESIGNS",
++    title: "UI/UX Design",
+     description: "Understanding the human experience is essential for creating useful and effective products. At Jorsas, our designers enjoy using their skill sets to empower people to accomplish their goals. We create digital experiences that make life easier.",
+   },
+ ];

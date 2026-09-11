@@ -16,6 +16,10 @@ class LmsMaterial extends Model
         'title',
         'type',
         'file_url',
+        // Local uploaded file (PDF/document from a staffer's PC), on the public
+        // disk; kept so deleting the material also deletes the file. Videos
+        // never set this (their bytes live on Bunny Stream).
+        'file_path',
         'session_id',
         // Externally-hosted video (Bunny Stream) pointers, bytes never on our server.
         'provider',

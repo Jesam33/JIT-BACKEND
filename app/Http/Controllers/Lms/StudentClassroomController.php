@@ -104,6 +104,7 @@ class StudentClassroomController extends BaseLmsController
 
         $classType = $data['class_type'] ?? 'classroom';
         $classroom = null;
+        $scheduled = null;
 
         if ($classType === 'scheduled') {
             $scheduled = LmsScheduledClass::query()->findOrFail($id);
@@ -125,10 +126,20 @@ class StudentClassroomController extends BaseLmsController
             'email' => $student->email,
         ], false);
 
-        // Only classroom-type classes track attendance (scheduled classes never did).
+        // Both delivery types track attendance: legacy course classrooms AND
+        // module-based scheduled classes. The row is created on join (here) and
+        // closed out by attendanceLeave() when the embedded room tears down.
+        // firstOrCreate() is the dedupe (the old DB unique was dropped with the
+        // scheduled-class migration: a composite unique can't span two nullable
+        // id columns in MySQL, NULLs never collide).
         if ($classroom) {
             LmsAttendance::query()->firstOrCreate(
-                ['student_id' => $session->user_id, 'classroom_id' => $classroom->id],
+                ['student_id' => $session->user_id, 'class_type' => 'classroom', 'classroom_id' => $classroom->id],
+                ['joined_at' => now(), 'first_joined_at' => now()]
+            );
+        } elseif ($scheduled) {
+            LmsAttendance::query()->firstOrCreate(
+                ['student_id' => $session->user_id, 'class_type' => 'scheduled', 'scheduled_class_id' => $scheduled->id, 'classroom_id' => null],
                 ['joined_at' => now(), 'first_joined_at' => now()]
             );
         }
@@ -153,11 +164,67 @@ class StudentClassroomController extends BaseLmsController
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        // Only classroom-type classes track attendance (scheduled classes never did).
+        // Both delivery types close out attendance: legacy course classrooms
+        // AND module-based scheduled classes.
         $classType = $request->input('class_type', 'classroom');
 
         if ($classType === 'scheduled') {
-            return response()->json(['recorded' => false]);
+            $scheduled = LmsScheduledClass::query()->findOrFail($id);
+
+            $attendance = LmsAttendance::query()
+                ->where('student_id', $session->user_id)
+                ->where('class_type', 'scheduled')
+                ->where('scheduled_class_id', $scheduled->id)
+                ->first();
+
+            if (! $attendance) {
+                return response()->json(['recorded' => false]);
+            }
+
+            $firstJoined = $attendance->first_joined_at ?? $attendance->joined_at ?? now();
+            $leftAt = now();
+            $totalSeconds = max(0, Carbon::parse($leftAt)->diffInSeconds(Carbon::parse($firstJoined)));
+
+            $durationMinutes = (int) round($totalSeconds / 60);
+
+            $classDurationMinutes = $scheduled->starts_at && $scheduled->ends_at
+                ? (int) round($scheduled->starts_at->diffInMinutes($scheduled->ends_at))
+                : 60;
+
+            $threshold = max(1, (int) round($classDurationMinutes * 0.75));
+
+            $status = $durationMinutes >= $threshold
+                ? 'present'
+                : ($durationMinutes > 0 ? 'partial' : 'absent');
+
+            $attendance->update([
+                'first_joined_at' => $firstJoined,
+                'last_left_at' => $leftAt,
+                'total_seconds' => $totalSeconds,
+                'status' => $status,
+                'calculated_at' => now(),
+            ]);
+
+            LmsAttendanceRecord::query()->updateOrCreate(
+                [
+                    'class_type' => 'scheduled',
+                    'scheduled_class_id' => $scheduled->id,
+                    'classroom_id' => null,
+                    'student_id' => $attendance->student_id,
+                ],
+                [
+                    'total_seconds' => $totalSeconds,
+                    'first_joined_at' => $firstJoined,
+                    'status' => $status,
+                    'calculated_at' => now(),
+                ]
+            );
+
+            return response()->json([
+                'recorded' => true,
+                'status' => $status,
+                'total_seconds' => $totalSeconds,
+            ]);
         }
 
         $classroom = LmsClassroom::query()->findOrFail($id);
@@ -197,6 +264,7 @@ class StudentClassroomController extends BaseLmsController
 
         LmsAttendanceRecord::query()->updateOrCreate(
             [
+                'class_type' => 'classroom',
                 'classroom_id' => $classroom->id,
                 'student_id' => $attendance->student_id,
             ],

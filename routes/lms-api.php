@@ -269,6 +269,9 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::post('/api/frontend/lms/owner/ai/materials/generate', [OwnerGammaController::class, 'generate'])->middleware('throttle:20,1');
     Route::get('/api/frontend/lms/owner/ai/materials/{id}', [OwnerGammaController::class, 'status']);
     Route::post('/api/frontend/lms/owner/ai/materials/save', [OwnerGammaController::class, 'save']);
+    // "Download copy" when Word was chosen: fetches the pptx export, converts,
+    // streams the .docx back as an attachment (nothing persisted).
+    Route::post('/api/frontend/lms/owner/ai/materials/docx', [OwnerGammaController::class, 'downloadDocx']);
     // Modules of one owner course — populates the AI-materials "save into module"
     // picker. Tenant-scoped + ai_materials-gated inside the controller.
     Route::get('/api/frontend/lms/owner/courses/{course}/modules', [OwnerGammaController::class, 'courseModules']);
@@ -391,6 +394,9 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     // Staff Materials
     Route::get('/api/frontend/lms/staff/materials', [StaffPortalController::class, 'materials']);
     Route::post('/api/frontend/lms/staff/materials', [StaffPortalController::class, 'storeMaterial']);
+    // Non-video file upload (PDF/document/…) onto the platform's public disk;
+    // videos go straight to Bunny via /staff/videos/upload instead.
+    Route::post('/api/frontend/lms/staff/materials/upload', [StaffPortalController::class, 'uploadMaterialFile']);
     Route::delete('/api/frontend/lms/staff/materials/{id}', [StaffPortalController::class, 'deleteMaterial']);
 
     // Staff Modules
@@ -451,6 +457,8 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::post('/api/frontend/lms/staff/ai/materials/generate', [StaffGammaController::class, 'generate'])->middleware('throttle:20,1');
     Route::get('/api/frontend/lms/staff/ai/materials/{id}', [StaffGammaController::class, 'status']);
     Route::post('/api/frontend/lms/staff/ai/materials/save', [StaffGammaController::class, 'save']);
+    // Word (.docx) one-off download, inherited from OwnerGammaController.
+    Route::post('/api/frontend/lms/staff/ai/materials/docx', [StaffGammaController::class, 'downloadDocx']);
     // Modules of one assigned course — populates the staff AI-materials
     // "save into module" picker (assigned-course-scoped inside the controller).
     Route::get('/api/frontend/lms/staff/courses/{course}/modules', [StaffGammaController::class, 'courseModules']);

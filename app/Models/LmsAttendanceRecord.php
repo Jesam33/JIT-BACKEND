@@ -12,6 +12,8 @@ class LmsAttendanceRecord extends Model
 
     protected $fillable = [
         'classroom_id',
+        'class_type',
+        'scheduled_class_id',
         'student_id',
         'total_seconds',
         'joined_within_10min',
@@ -37,5 +39,13 @@ class LmsAttendanceRecord extends Model
     public function classroom(): BelongsTo
     {
         return $this->belongsTo(LmsClassroom::class, 'classroom_id');
+    }
+
+    // Module-based delivery events (LmsScheduledClass) also track attendance
+    // since 2026-09-11; exactly one of classroom/scheduledClass is set,
+    // discriminated by class_type.
+    public function scheduledClass(): BelongsTo
+    {
+        return $this->belongsTo(LmsScheduledClass::class, 'scheduled_class_id');
     }
 }
