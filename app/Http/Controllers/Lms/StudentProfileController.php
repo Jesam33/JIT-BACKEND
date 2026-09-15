@@ -197,10 +197,24 @@ class StudentProfileController extends BaseLmsController
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        // Mapped (not raw models) because the printable certificate view needs
+        // the joined names/dates — a bare row has only the ids.
         $certificates = LmsCertificate::query()
+            ->with(['course:id,title', 'track:id,name'])
             ->where('student_id', $session->user_id)
             ->orderByDesc('created_at')
-            ->get();
+            ->get()
+            ->map(fn (LmsCertificate $c) => [
+                'id' => $c->id,
+                'title' => $c->title,
+                'course_title' => $c->course?->title,
+                'track_name' => $c->track?->name,
+                'serial' => $c->serialNumber(),
+                'start_date' => $c->start_date?->toDateString(),
+                'end_date' => $c->end_date?->toDateString(),
+                'issued_at' => optional($c->issued_at)->toIso8601String(),
+                'file_url' => $c->file_url,
+            ]);
 
         return response()->json($certificates);
     }

@@ -24,9 +24,27 @@ Schedule::command('lms:send-notification-emails')
     ->everyMinute()
     ->withoutOverlapping();
 
+// Attendance safety net: close out join rows for ended classes where the
+// student's browser never posted the leave close-out (tab close, crash, app
+// switch). NOTE this used to live only in app/Console/Kernel.php, which is
+// DEAD in this app — the Laravel 11+ bootstrap registers schedules from this
+// file, so the Kernel's schedule() never ran.
+Schedule::command('lms:calculate-attendance')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
 // CEO's Forum: invite owners when a forum is scheduled, remind ~1h before start,
 // and advance forum status (scheduled → live → ended). Per-forum stamps keep each
 // sweep idempotent, so running every minute never double-sends.
 Schedule::command('lms:send-ceo-forum-emails')
     ->everyMinute()
+    ->withoutOverlapping();
+
+// Ended-cohort certificates, step 1: when a cohort's end_date passes, email the
+// owner once (per-cohort ended_notified_at stamp keeps it idempotent). The
+// cohort then waits in the owner bell + Certificates page panel until the owner
+// accepts and the certificates are issued. Hourly is plenty — the panel is the
+// durable record, this email is the nudge.
+Schedule::command('lms:notify-ended-cohorts')
+    ->hourly()
     ->withoutOverlapping();

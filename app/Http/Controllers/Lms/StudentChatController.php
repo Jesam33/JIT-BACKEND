@@ -19,6 +19,22 @@ use Illuminate\Validation\Rule;
 
 class StudentChatController extends BaseLmsController
 {
+    // Upload a file the student picked in the chat composer (any allowed type:
+    // documents, images, audio, small video clips). Returns {url, path}; the
+    // composer sends the url as attachment_url with the next message.
+    public function uploadAttachment(Request $request): JsonResponse
+    {
+        $this->ensureLmsEnabled();
+
+        $session = $this->sessionFromRequest($request, 'student');
+
+        if (! $session) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        return $this->storeChatAttachment($request);
+    }
+
     private function markGroupAsRead(int $studentId, int $chatId): void
     {
         LmsChatReadState::query()->updateOrCreate(

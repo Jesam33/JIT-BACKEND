@@ -229,11 +229,37 @@ class StudentDashboardController extends BaseLmsController
                     'instructions' => $task->instructions,
                     'due_at' => $task->due_at?->toIso8601String(),
                     'submission_type' => $task->submission_type,
+                    'attachments' => $this->taskAttachments($task),
                     'status' => $submission?->graded_at ? 'graded' : ($submission ? 'submitted' : 'pending'),
                     'submitted_at' => $submission?->created_at?->toIso8601String(),
                     'score' => $submission?->score,
                 ];
             });
+
+        // Task progress: earned points over every task in the course worth 100
+        // (unsubmitted / ungraded count as 0), so the number grows as the
+        // course goes — 70 + 50 on 2 tasks = 120/200. Overall progress
+        // averages module %, attendance % and task %, counting only the
+        // components that exist (a pre-recorded course has no delivered
+        // classes, so attendance never drags the average down).
+        $tasksTotal = $tasks->count();
+        $taskScoreTotal = (int) $taskSubmissions->sum('score');
+        $taskProgress = $tasksTotal > 0 ? (int) round(($taskScoreTotal / ($tasksTotal * 100)) * 100) : 0;
+        $moduleProgress = $totalModules > 0 ? (int) round(($completedModules / $totalModules) * 100) : 0;
+
+        $overallComponents = [];
+        if ($totalModules > 0) {
+            $overallComponents[] = $moduleProgress;
+        }
+        if ($classesTotal > 0) {
+            $overallComponents[] = $attendanceRate;
+        }
+        if ($tasksTotal > 0) {
+            $overallComponents[] = $taskProgress;
+        }
+        $overallProgress = $overallComponents !== []
+            ? (int) round(array_sum($overallComponents) / count($overallComponents))
+            : 0;
 
         $notifications = LmsNotification::query()
             ->where('student_id', $studentId)
@@ -286,6 +312,11 @@ class StudentDashboardController extends BaseLmsController
                 'attendance_rate' => $attendanceRate,
                 'modules_total' => $totalModules,
                 'modules_completed' => $completedModules,
+                'module_progress' => $moduleProgress,
+                'tasks_total' => $tasksTotal,
+                'task_score_total' => $taskScoreTotal,
+                'task_progress' => $taskProgress,
+                'overall_progress' => $overallProgress,
             ],
             'upcoming_class' => $upcomingClass,
             'next_lesson' => $nextLesson,
@@ -295,6 +326,22 @@ class StudentDashboardController extends BaseLmsController
             'notifications' => $notifications,
             'rating' => $rating,
         ]);
+    }
+
+    // Files the teacher attached to a task, as students see them: the
+    // public URL is all they need to download — the internal storage path is
+    // stripped.
+    private function taskAttachments(LmsTask $task): array
+    {
+        return collect($task->attachments ?? [])
+            ->map(fn ($a) => [
+                'name' => $a['name'] ?? 'Attachment',
+                'url' => $a['url'] ?? null,
+                'size' => $a['size'] ?? null,
+            ])
+            ->filter(fn ($a) => ! empty($a['url']))
+            ->values()
+            ->all();
     }
 
     public function tasks(Request $request): JsonResponse
@@ -336,6 +383,7 @@ class StudentDashboardController extends BaseLmsController
                     'instructions' => $task->instructions,
                     'due_at' => $task->due_at?->toIso8601String(),
                     'submission_type' => $task->submission_type,
+                    'attachments' => $this->taskAttachments($task),
                     'status' => $submission?->graded_at ? 'graded' : ($submission ? 'submitted' : 'pending'),
                     'submitted_at' => $submission?->created_at?->toIso8601String(),
                     'score' => $submission?->score,
@@ -369,8 +417,10 @@ class StudentDashboardController extends BaseLmsController
             'instructions' => $task->instructions,
             'due_at' => $task->due_at?->toIso8601String(),
             'submission_type' => $task->submission_type,
+            'attachments' => $this->taskAttachments($task),
             'submission' => $submission ? [
                 'submitted_link' => $submission->submitted_link,
+                'links' => $submission->links ?? [],
                 'submitted_file_url' => $submission->submitted_file_url,
                 'submitted_at' => $submission->created_at?->toIso8601String(),
                 'score' => $submission->score,
@@ -392,6 +442,24 @@ class StudentDashboardController extends BaseLmsController
 
         $task = LmsTask::query()->findOrFail($id);
 
+        // Multiple labelled links (label + url + optional comment) work for
+        // both submission paths: JSON bodies and multipart form submissions,
+        // so a student can submit a file AND links for the same task.
+        $validatedLinks = $request->validate([
+            'links' => ['nullable', 'array', 'max:20'],
+            'links.*.label' => ['required', 'string', 'max:255'],
+            'links.*.url' => ['required', 'string', 'max:2048'],
+            'links.*.comment' => ['nullable', 'string', 'max:1000'],
+        ])['links'] ?? [];
+        $links = array_values(array_map(
+            fn ($l) => [
+                'label' => $l['label'],
+                'url' => $l['url'],
+                'comment' => $l['comment'] ?? null,
+            ],
+            $validatedLinks
+        ));
+
         $submittedFileUrl = null;
         $submittedLink = null;
 
@@ -412,6 +480,7 @@ class StudentDashboardController extends BaseLmsController
             [
                 'submitted_file_url' => $submittedFileUrl,
                 'submitted_link' => $submittedLink,
+                'links' => $links,
                 'submitted_at' => now(),
             ]
         );

@@ -17,6 +17,22 @@ use Illuminate\Validation\Rule;
 
 class StaffChatController extends BaseLmsController
 {
+    // Upload a file the staffer picked in the chat composer (group or DM).
+    // Returns {url, path}; the composer sends the url as attachment_url with
+    // the next message. Staff twin of StudentChatController::uploadAttachment.
+    public function uploadAttachment(Request $request): JsonResponse
+    {
+        $this->ensureLmsEnabled();
+
+        $session = $this->sessionFromRequest($request, 'staff');
+
+        if (! $session) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        return $this->storeChatAttachment($request);
+    }
+
     public function groupMessages(Request $request): JsonResponse
     {
         $this->ensureLmsEnabled();

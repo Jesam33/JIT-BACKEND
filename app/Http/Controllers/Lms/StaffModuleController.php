@@ -136,6 +136,25 @@ class StaffModuleController extends BaseLmsController
         return response()->json($module);
     }
 
+    /**
+     * One-click module zip (see BaseLmsController::moduleZipResponse), scoped
+     * to the teacher's assigned courses like every other module endpoint.
+     */
+    public function download(Request $request, int $id)
+    {
+        $this->ensureLmsEnabled();
+        $teacher = $this->teacherOrFail($request);
+        $courseIds = $this->assignedCourseIds($teacher);
+
+        $module = LmsModule::query()->findOrFail($id);
+
+        if (!in_array($module->course_id, $courseIds)) {
+            return response()->json(['message' => 'Module not in your assignment'], 403);
+        }
+
+        return $this->moduleZipResponse($module);
+    }
+
     public function update(Request $request, int $id): JsonResponse
     {
         $this->ensureLmsEnabled();
@@ -198,7 +217,7 @@ class StaffModuleController extends BaseLmsController
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
-            'type' => 'required|in:slides,pdf,video,link,text,code,file,doc',
+            'type' => 'required|in:slides,pdf,video,link,text,code,file,doc,image',
             'content_url' => 'nullable|string',
             'content_body' => 'nullable|string',
             // Locally uploaded file (see uploadContentFile), stored so the file
@@ -241,7 +260,7 @@ class StaffModuleController extends BaseLmsController
 
         $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
-            'type' => 'sometimes|in:slides,pdf,video,link,text,code,file,doc',
+            'type' => 'sometimes|in:slides,pdf,video,link,text,code,file,doc,image',
             'content_url' => 'nullable|string',
             'content_body' => 'nullable|string',
             // A newly uploaded replacement file; the file it supersedes is

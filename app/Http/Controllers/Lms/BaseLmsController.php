@@ -10,11 +10,13 @@ use App\Models\LmsEnrollment;
 use App\Models\LmsGroupChat;
 use App\Models\LmsMessage;
 use App\Models\LmsMessageReaction;
+use App\Models\LmsModule;
 use App\Models\LmsPasswordReset;
 use App\Models\LmsSession;
 use App\Models\LmsTrack;
 use App\Scopes\TenantScope;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -386,6 +388,93 @@ abstract class BaseLmsController extends Controller
     protected function publicFileUrl(string $path): string
     {
         return '/storage/' . ltrim($path, '/');
+    }
+
+    /**
+     * Store a chat attachment (any file a student or staffer picks in the chat
+     * composer) on the platform's public disk and return its {url, path}. The
+     * endpoint wrappers (Student/StaffChatController::uploadAttachment) do the
+     * auth; this is just the shared storage step.
+     *
+     * The mimes list is deliberately broad — "attach anything" — but keeps
+     * executable-ish types (php/html/svg/js) off the same-origin storage host,
+     * exactly like StaffPortalController::uploadMaterialFile. Videos are allowed
+     * here (unlike materials) because chat clips are expected to be small; the
+     * 25MB cap is the guard, large training videos belong on Bunny Stream.
+     */
+    protected function storeChatAttachment(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'file' => [
+                'required',
+                'file',
+                'max:25600',
+                'mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,csv,txt,rtf,zip,rar,7z,tar,gz,png,jpg,jpeg,webp,gif,bmp,heic,mp3,wav,m4a,aac,ogg,mp4,webm,mov,mkv,avi,3gp,json',
+            ],
+        ]);
+
+        $path = $validated['file']->store('chat-attachments', 'public');
+
+        return response()->json([
+            'url' => $this->publicFileUrl($path),
+            'path' => $path,
+        ], 201);
+    }
+
+    /**
+     * One-click module download: a zip of every downloadable file in the module
+     * (platform-disk uploads — PDFs, documents, slides, images) plus a README
+     * listing everything that can't be zipped: pasted links, text/code bodies
+     * and Bunny-hosted videos (the server never holds those bytes, so they stay
+     * as watch-online links). Shared by the student and staff download
+     * endpoints; callers do their own access checks first.
+     */
+    protected function moduleZipResponse(LmsModule $module)
+    {
+        $contents = $module->contents()->orderBy('sort_order')->get();
+
+        $zipPath = tempnam(sys_get_temp_dir(), 'lmsmodule_');
+        $zip = new \ZipArchive();
+        if (! $zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE)) {
+            @unlink($zipPath);
+            abort(500, 'Could not create the module archive.');
+        }
+
+        $readme = [$module->title, str_repeat('=', strlen($module->title))];
+        if ($module->description) {
+            $readme[] = $module->description;
+        }
+        $readme[] = '';
+
+        foreach ($contents as $i => $c) {
+            $n = $i + 1;
+            $readme[] = sprintf('%d. %s (%s)', $n, $c->title, $c->type);
+
+            if (in_array($c->type, ['text', 'code']) && $c->content_body) {
+                // Bodies are inlined into the README — no separate file needed.
+                $readme[] = $c->content_body;
+            } elseif ($c->file_path && Storage::disk('public')->exists($c->file_path)) {
+                $name = sprintf(
+                    '%02d-%s.%s',
+                    $n,
+                    Str::slug($c->title) ?: 'content',
+                    pathinfo($c->file_path, PATHINFO_EXTENSION) ?: 'bin'
+                );
+                $zip->addFromString($name, Storage::disk('public')->get($c->file_path));
+                $readme[] = 'Included in this zip: ' . $name;
+            } elseif ($c->content_url) {
+                $readme[] = ($c->type === 'video' ? 'Video (watch online): ' : 'Link: ') . $c->content_url;
+            }
+            $readme[] = '';
+        }
+
+        $zip->addFromString('README.txt', implode("\n", $readme) . "\n");
+        $zip->close();
+
+        // deleteFileAfterSend cleans the temp file once the response streams.
+        return response()
+            ->download($zipPath, (Str::slug($module->title) ?: 'module') . '.zip')
+            ->deleteFileAfterSend(true);
     }
 
     /**

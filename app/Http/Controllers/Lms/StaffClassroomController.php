@@ -6,6 +6,8 @@ use App\Models\LmsAttendance;
 use App\Models\LmsAttendanceEvent;
 use App\Models\LmsAttendanceRecord;
 use App\Models\LmsClassroom;
+use App\Models\LmsEnrollment;
+use App\Models\LmsNotification;
 use App\Models\LmsScheduledClass;
 use App\Models\LmsTeacher;
 use Carbon\Carbon;
@@ -82,6 +84,29 @@ class StaffClassroomController extends BaseLmsController
         $this->maybeFillPasscode($validated);
 
         $classroom = LmsClassroom::query()->create($validated);
+
+        // Notify every student enrolled in the course: a live class with no
+        // attendees is the whole feature silently failing. Mirrors the fan-out
+        // in StaffModuleController::scheduleClass (module scheduled classes);
+        // the email sweep (lms:send-notification-emails) picks these up like
+        // any other notification. The meeting password is deliberately NOT
+        // included — students join in-portal via a minted JWT, they never
+        // type the passcode.
+        $studentIds = LmsEnrollment::query()
+            ->whereHas('track', fn ($q) => $q->where('course_id', $classroom->course_id))
+            ->pluck('student_id')
+            ->unique();
+
+        foreach ($studentIds as $studentId) {
+            LmsNotification::create([
+                'student_id' => $studentId,
+                'type' => 'class_scheduled',
+                'title' => 'New live class: ' . $classroom->title,
+                'body' => 'A live class "' . $classroom->title . '" has been scheduled for ' . $classroom->starts_at . '. Join it from your Classroom page.',
+                'reference_type' => 'classroom',
+                'reference_id' => $classroom->id,
+            ]);
+        }
 
         return response()->json($classroom, 201);
     }

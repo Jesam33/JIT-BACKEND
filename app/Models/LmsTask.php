@@ -20,10 +20,12 @@ class LmsTask extends Model
         'instructions',
         'due_at',
         'submission_type',
+        'attachments',
     ];
 
     protected $casts = [
         'due_at' => 'datetime',
+        'attachments' => 'array',
     ];
 
     public function submissions(): \Illuminate\Database\Eloquent\Relations\HasMany

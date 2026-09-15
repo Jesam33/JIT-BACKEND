@@ -183,7 +183,10 @@ class StudentClassroomController extends BaseLmsController
 
             $firstJoined = $attendance->first_joined_at ?? $attendance->joined_at ?? now();
             $leftAt = now();
-            $totalSeconds = max(0, Carbon::parse($leftAt)->diffInSeconds(Carbon::parse($firstJoined)));
+            // earlier->diffInSeconds(later): Carbon 3 returns SIGNED diffs, so
+            // the order matters — later->diffInSeconds(earlier) is negative and
+            // the max(0, ...) clamp would silently zero out every stay.
+            $totalSeconds = max(0, Carbon::parse($firstJoined)->diffInSeconds(Carbon::parse($leftAt)));
 
             $durationMinutes = (int) round($totalSeconds / 60);
 
@@ -191,7 +194,10 @@ class StudentClassroomController extends BaseLmsController
                 ? (int) round($scheduled->starts_at->diffInMinutes($scheduled->ends_at))
                 : 60;
 
-            $threshold = max(1, (int) round($classDurationMinutes * 0.75));
+            // 70% of the class = present; any shorter stay (but over a minute)
+            // = partial. The same rule is stated to students in the portal's
+            // pre-join step, so what they're told matches what gets recorded.
+            $threshold = max(1, (int) round($classDurationMinutes * 0.70));
 
             $status = $durationMinutes >= $threshold
                 ? 'present'
@@ -240,7 +246,10 @@ class StudentClassroomController extends BaseLmsController
 
         $firstJoined = $attendance->first_joined_at ?? $attendance->joined_at ?? now();
         $leftAt = now();
-        $totalSeconds = max(0, Carbon::parse($leftAt)->diffInSeconds(Carbon::parse($firstJoined)));
+        // earlier->diffInSeconds(later): Carbon 3 returns SIGNED diffs, so
+        // the order matters — later->diffInSeconds(earlier) is negative and
+        // the max(0, ...) clamp would silently zero out every stay.
+        $totalSeconds = max(0, Carbon::parse($firstJoined)->diffInSeconds(Carbon::parse($leftAt)));
 
         $durationMinutes = (int) round($totalSeconds / 60);
 
@@ -248,7 +257,10 @@ class StudentClassroomController extends BaseLmsController
             ? (int) round($classroom->starts_at->diffInMinutes($classroom->ends_at))
             : 60;
 
-        $threshold = max(1, (int) round($classDurationMinutes * 0.75));
+        // 70% of the class = present; any shorter stay (but over a minute)
+        // = partial. The same rule is stated to students in the portal's
+        // pre-join step, so what they're told matches what gets recorded.
+        $threshold = max(1, (int) round($classDurationMinutes * 0.70));
 
         $status = $durationMinutes >= $threshold
             ? 'present'

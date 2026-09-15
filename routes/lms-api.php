@@ -226,6 +226,9 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::get('/api/frontend/lms/owner/certificates', [OwnerAdminController::class, 'certificates']);
     Route::post('/api/frontend/lms/owner/certificates', [OwnerAdminController::class, 'issueCertificate']);
     Route::delete('/api/frontend/lms/owner/certificates/{id}', [OwnerAdminController::class, 'revokeCertificate']);
+    // Ended-cohort auto-issue flow: bulk-issue to an ended cohort's students + retire the panel.
+    Route::post('/api/frontend/lms/owner/certificates/cohort', [OwnerAdminController::class, 'issueCohortCertificates']);
+    Route::post('/api/frontend/lms/owner/certificates/cohort/{id}/dismiss', [OwnerAdminController::class, 'dismissCohortCertificates']);
 
     // Owner white-label branding (logo / colors / font)
     Route::get('/api/frontend/lms/owner/branding', [OwnerAdminController::class, 'branding']);
@@ -331,6 +334,9 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
         Route::post('/api/frontend/lms/chats/group/messages/{id}/delete', [StudentChatController::class, 'deleteGroupMessage']);
         Route::put('/api/frontend/lms/chats/group/messages/{id}', [StudentChatController::class, 'editGroupMessage']);
         Route::get('/api/frontend/lms/chats/group/mentionable', [StudentChatController::class, 'mentionableUsers']);
+        // Chat composer file picker (any allowed type) → {url, path}; the url is
+        // sent as attachment_url with the next message. Staff twin below.
+        Route::post('/api/frontend/lms/chats/upload', [StudentChatController::class, 'uploadAttachment']);
         Route::get('/api/frontend/lms/chats/dm/messages', [StudentChatController::class, 'dmMessages']);
         Route::post('/api/frontend/lms/chats/dm/messages', [StudentChatController::class, 'sendDmMessage']);
         Route::post('/api/frontend/lms/chats/dm/messages/{id}/delete', [StudentChatController::class, 'deleteDmMessage']);
@@ -348,9 +354,15 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::get('/api/frontend/lms/staff/dashboard', [StaffAuthController::class, 'dashboard']);
     Route::get('/api/frontend/lms/staff/me', [StaffAuthController::class, 'me']);
 
-    // Staff Tasks
+    // Staff Tasks. listTasks/showTask live in StaffPortalController (below);
+    // update/delete are scoped to the teacher's assigned courses inside the
+    // controller.
     Route::post('/api/frontend/lms/staff/tasks', [StaffTaskController::class, 'createTask']);
+    Route::put('/api/frontend/lms/staff/tasks/{taskId}', [StaffTaskController::class, 'updateTask']);
+    Route::delete('/api/frontend/lms/staff/tasks/{taskId}', [StaffTaskController::class, 'deleteTask']);
     Route::post('/api/frontend/lms/staff/tasks/{taskId}/submissions/{submissionId}/grade', [StaffTaskController::class, 'gradeSubmission']);
+    // All submissions across the teacher's tasks — backing for the Submissions tab.
+    Route::get('/api/frontend/lms/staff/task-submissions', [StaffTaskController::class, 'submissions']);
 
     // Staff Chat — messaging gated to paid plans (plan.chat); unread stays open.
     Route::middleware('plan.chat')->group(function () {
@@ -361,6 +373,8 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
         Route::post('/api/frontend/lms/staff/chats/dm/messages/{id}/delete', [StaffChatController::class, 'deleteDmMessage']);
         Route::put('/api/frontend/lms/staff/chats/dm/messages/{id}', [StaffChatController::class, 'editDmMessage']);
         Route::get('/api/frontend/lms/staff/chats/group/mentionable', [StaffChatController::class, 'mentionableUsers']);
+        // Staff twin of the student chat file upload.
+        Route::post('/api/frontend/lms/staff/chats/upload', [StaffChatController::class, 'uploadAttachment']);
         Route::get('/api/frontend/lms/staff/chats/dm/messages', [StaffChatController::class, 'dmMessages']);
         Route::post('/api/frontend/lms/staff/chats/dm/messages', [StaffChatController::class, 'sendDmMessage']);
         // Reactions — one endpoint for both group & DM; the controller resolves
@@ -403,6 +417,8 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::get('/api/frontend/lms/staff/modules', [StaffModuleController::class, 'index']);
     Route::post('/api/frontend/lms/staff/modules', [StaffModuleController::class, 'store']);
     Route::get('/api/frontend/lms/staff/modules/{id}', [StaffModuleController::class, 'show']);
+    // One-click module zip for staffers (same archive as the students' button).
+    Route::get('/api/frontend/lms/staff/modules/{id}/download', [StaffModuleController::class, 'download']);
     Route::put('/api/frontend/lms/staff/modules/{id}', [StaffModuleController::class, 'update']);
     Route::delete('/api/frontend/lms/staff/modules/{id}', [StaffModuleController::class, 'destroy']);
     Route::post('/api/frontend/lms/staff/modules/{moduleId}/contents', [StaffModuleController::class, 'addContent']);
@@ -424,10 +440,17 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     // Student Modules & Timetable
     Route::get('/api/frontend/lms/modules', [StudentModuleController::class, 'index']);
     Route::get('/api/frontend/lms/modules/{id}', [StudentModuleController::class, 'show']);
+    // One-click module zip (files + README of links/text/videos). Registered
+    // before the catch-all show() would matter only if paths collided; they
+    // don't (3 segments vs 2), order here just keeps the group readable.
+    Route::get('/api/frontend/lms/modules/{id}/download', [StudentModuleController::class, 'download']);
     Route::get('/api/frontend/lms/timetable', [StudentModuleController::class, 'timetable']);
 
     // Staff Attendance
     Route::get('/api/frontend/lms/staff/attendance', [StaffPortalController::class, 'attendance']);
+
+    // Staff Leaderboard: students ranked by average graded-task score.
+    Route::get('/api/frontend/lms/staff/leaderboard', [StaffPortalController::class, 'leaderboard']);
 
     // Staff Certificates
     Route::get('/api/frontend/lms/staff/certificates', [StaffPortalController::class, 'certificates']);

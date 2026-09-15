@@ -11,6 +11,7 @@ use App\Models\LmsClassroom;
 use App\Models\LmsCourse;
 use App\Models\LmsEnrollment;
 use App\Models\LmsMaterial;
+use App\Models\LmsModule;
 use App\Models\LmsScheduledClass;
 use App\Models\LmsStudent;
 use App\Models\LmsTask;
@@ -144,6 +145,7 @@ class StaffPortalController extends BaseLmsController
         $tasks = LmsTask::query()
             ->whereIn('course_id', $courseIds)
             ->withCount('submissions')
+            ->withCount(['submissions as ungraded_count' => fn ($q) => $q->whereNull('graded_at')])
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -310,6 +312,118 @@ class StaffPortalController extends BaseLmsController
             ->get();
 
         return response()->json($records);
+    }
+
+    // ─── Leaderboard ─────────────────────────────────────────
+
+    /**
+     * Students ranked by performance: average graded-task score first, then
+     * modules completed, then attendance. Scoped to the teacher's assigned
+     * courses (optionally narrowed with ?course_id=). Batched like the rest
+     * of the speed pass: a fixed number of queries, never one per student.
+     */
+    public function leaderboard(Request $request): JsonResponse
+    {
+        $this->ensureLmsEnabled();
+        $teacher = $this->getTeacher($request);
+        if (! $teacher) return response()->json(['message' => 'Unauthorized'], 401);
+
+        $courseIds = array_values(array_unique($this->getCourseIds($teacher)));
+        if ($request->filled('course_id')) {
+            $courseId = $request->integer('course_id');
+            $courseIds = in_array($courseId, $courseIds) ? [$courseId] : [];
+        }
+        if (empty($courseIds)) {
+            return response()->json(['rows' => [], 'modules_total' => 0]);
+        }
+
+        // Everyone enrolled in one of the teacher's (filtered) courses.
+        $studentIds = LmsEnrollment::query()
+            ->whereHas('track', fn ($q) => $q->whereIn('course_id', $courseIds))
+            ->pluck('student_id')
+            ->unique()
+            ->values();
+        if ($studentIds->isEmpty()) {
+            return response()->json(['rows' => [], 'modules_total' => 0]);
+        }
+
+        $taskIds = LmsTask::query()->whereIn('course_id', $courseIds)->pluck('id');
+
+        // Average graded score per student (ungraded submissions don't count).
+        $avgScore = LmsTaskSubmission::query()
+            ->whereIn('student_id', $studentIds)
+            ->whereIn('task_id', $taskIds)
+            ->whereNotNull('score')
+            ->groupBy('student_id')
+            ->selectRaw('student_id, ROUND(AVG(score), 1) as avg_score, COUNT(*) as graded_count')
+            ->get()
+            ->keyBy('student_id');
+
+        // Modules completed per student, using the same >= 70% pass rule the
+        // dashboard and certificates use. A module counts once no matter how
+        // many of its tasks were passed.
+        $moduleTotal = (int) LmsModule::query()->whereIn('course_id', $courseIds)->count();
+        $taskModules = LmsTask::query()
+            ->whereIn('course_id', $courseIds)
+            ->whereNotNull('module_id')
+            ->pluck('module_id', 'id');
+        $modulePasses = LmsTaskSubmission::query()
+            ->whereIn('student_id', $studentIds)
+            ->whereIn('task_id', $taskModules->keys())
+            ->where('score', '>=', 70)
+            ->get(['student_id', 'task_id']);
+        $modulesDone = [];
+        foreach ($modulePasses as $p) {
+            $modulesDone[$p->student_id][$taskModules[$p->task_id]] = true;
+        }
+
+        // Attendance across this teacher's sessions (both delivery types):
+        // present = 1, partial = 0.5, absent = 0.
+        $classroomIds = LmsClassroom::query()->where('teacher_id', $teacher->id)->pluck('id');
+        $scheduledIds = LmsScheduledClass::query()->where('teacher_id', $teacher->id)->pluck('id');
+        $attendance = LmsAttendanceRecord::query()
+            ->where(function ($q) use ($classroomIds, $scheduledIds) {
+                $q->where(function ($w) use ($classroomIds) {
+                    $w->where('class_type', 'classroom')->whereIn('classroom_id', $classroomIds);
+                })->orWhere(function ($w) use ($scheduledIds) {
+                    $w->where('class_type', 'scheduled')->whereIn('scheduled_class_id', $scheduledIds);
+                });
+            })
+            ->whereIn('student_id', $studentIds)
+            ->get(['student_id', 'status']);
+        $attendanceScore = []; // student_id => [weighted, sessions]
+        foreach ($attendance as $a) {
+            $s = $a->student_id;
+            $attendanceScore[$s] = $attendanceScore[$s] ?? [0.0, 0];
+            $attendanceScore[$s][0] += $a->status === 'present' ? 1 : ($a->status === 'partial' ? 0.5 : 0);
+            $attendanceScore[$s][1] += 1;
+        }
+
+        $students = LmsStudent::query()->whereIn('id', $studentIds)->get()->keyBy('id');
+
+        $rows = $studentIds->map(function ($id) use ($students, $avgScore, $modulesDone, $attendanceScore) {
+            $student = $students[$id] ?? null;
+            $avg = $avgScore[$id] ?? null;
+            [$weighted, $sessions] = $attendanceScore[$id] ?? [0, 0];
+            return [
+                'student_id' => $id,
+                'name' => $student ? trim(($student->first_name ?? '') . ' ' . ($student->last_name ?? '')) : ('Student #' . $id),
+                'email' => $student->email ?? null,
+                'avg_score' => $avg !== null ? (float) $avg->avg_score : null,
+                'graded_count' => (int) ($avg->graded_count ?? 0),
+                'modules_completed' => isset($modulesDone[$id]) ? count($modulesDone[$id]) : 0,
+                'attendance_pct' => $sessions > 0 ? (int) round($weighted / $sessions * 100) : null,
+                'attendance_sessions' => $sessions,
+            ];
+        });
+
+        // Rank: average score, then modules completed, then attendance.
+        $rows = $rows->sort(function ($a, $b) {
+            return [$b['avg_score'] ?? -1, $b['modules_completed'], $b['attendance_pct'] ?? -1]
+                <=> [$a['avg_score'] ?? -1, $a['modules_completed'], $a['attendance_pct'] ?? -1];
+        })->values();
+
+        return response()->json(['rows' => $rows, 'modules_total' => $moduleTotal]);
     }
 
     // ─── Certificates ────────────────────────────────────────

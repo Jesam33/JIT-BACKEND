@@ -18,6 +18,7 @@ use App\Models\Tenant;
 use App\Models\TrainingRegistration;
 use App\Models\User;
 use App\Services\PaystackService;
+use App\Support\CohortCompletion;
 use App\Support\CourseCards;
 use App\Support\PlanGate;
 use Illuminate\Http\JsonResponse;
@@ -801,6 +802,24 @@ class OwnerAdminController extends BaseLmsController
             return response()->json(['message' => 'Not authorized.'], 403);
         }
 
+        // Cohorts whose end date has passed and whose certificates haven't been
+        // issued (or dismissed) yet. Unlike the activity items below, these are
+        // persistent action items: they stay in the bell until handled on the
+        // Certificates page, which is the point — "program ended, review it".
+        $endedCohorts = LmsTrack::query()
+            ->whereNotNull('end_date')
+            ->where('end_date', '<', now()->toDateString())
+            ->whereNull('certificates_issued_at')
+            ->orderBy('end_date')
+            ->get()
+            ->map(fn (LmsTrack $t) => [
+                'id' => 'cohort-ended-' . $t->id,
+                'type' => 'cohort_ended',
+                'title' => 'Cohort ended: ' . $t->name,
+                'body' => $t->end_date?->format('M j, Y') . ' — review students and issue certificates.',
+                'at' => $t->end_date?->endOfDay()->toIso8601String(),
+            ]);
+
         $students = LmsStudent::query()
             ->latest('id')
             ->limit(10)
@@ -825,7 +844,7 @@ class OwnerAdminController extends BaseLmsController
                 'at' => optional($t->created_at)->toIso8601String(),
             ]);
 
-        $items = $students->concat($staff)
+        $items = $endedCohorts->concat($students)->concat($staff)
             ->filter(fn ($i) => $i['at'] !== null)
             ->sortByDesc('at')
             ->values()
@@ -1844,7 +1863,193 @@ class OwnerAdminController extends BaseLmsController
             'certificates' => $certificates,
             'students' => $students,
             'courses' => $courses,
+            'ended_cohorts' => $this->endedCohortsPayload(),
         ]);
+    }
+
+    /**
+     * Cohorts whose end date has passed and whose certificates haven't been
+     * issued (or dismissed) — the "accept and auto-issue" panel on the
+     * certificates page. Each carries its enrolled students with a completion
+     * flag (all modules passed at >= 70%, the dashboard rule) and whether they
+     * already hold a certificate for this cohort, so the frontend can pre-check
+     * the completed ones and disable the issued ones.
+     *
+     * Bounded cost: a handful of queries per PENDING cohort (there are few —
+     * they leave this list once issued or dismissed).
+     */
+    private function endedCohortsPayload(): array
+    {
+        $tracks = LmsTrack::query()
+            ->with('course:id,title')
+            ->whereNotNull('end_date')
+            ->where('end_date', '<', now()->toDateString())
+            ->whereNull('certificates_issued_at')
+            ->orderByDesc('end_date')
+            ->get();
+
+        return $tracks
+            ->map(function (LmsTrack $track) {
+                $completion = CohortCompletion::forTrack($track);
+                $issuedIds = LmsCertificate::query()
+                    ->where('track_id', $track->id)
+                    ->pluck('student_id')
+                    ->all();
+
+                $students = $track->enrollments()
+                    ->with('student:id,first_name,last_name,email')
+                    ->get()
+                    ->map(function ($enrollment) use ($completion, $issuedIds) {
+                        $student = $enrollment->student;
+                        $completedModules = $completion['per_student'][$student->id] ?? 0;
+
+                        return [
+                            'id' => $student->id,
+                            'name' => trim("{$student->first_name} {$student->last_name}") ?: ($student->email ?? 'Student'),
+                            'email' => $student->email,
+                            'completed' => CohortCompletion::isCompleted($completion['modules_total'], $completedModules),
+                            'modules_completed' => $completedModules,
+                            'modules_total' => $completion['modules_total'],
+                            'already_issued' => in_array($student->id, $issuedIds),
+                        ];
+                    })
+                    ->values()
+                    ->all();
+
+                return [
+                    'id' => $track->id,
+                    'name' => $track->name,
+                    'course_title' => $track->course?->title,
+                    'start_date' => $track->start_date?->toDateString(),
+                    'end_date' => $track->end_date?->toDateString(),
+                    'modules_total' => $completion['modules_total'],
+                    'completed_count' => count(array_filter($students, fn ($s) => $s['completed'])),
+                    'students' => $students,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The "accept" of the ended-cohort flow: issue one certificate per selected
+     * student of an ended cohort. Idempotent per student (the student+track
+     * unique skips anyone who already holds one), each certificate carries the
+     * student's name via the row itself plus the cohort's start/end dates and a
+     * serial, and each student is notified in-app (the email sweep then emails
+     * the notification). Stamps certificates_issued_at so the panel + bell
+     * retire the cohort.
+     */
+    public function issueCohortCertificates(Request $request): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        $validated = $request->validate([
+            'track_id' => ['required', 'integer'],
+            'student_ids' => ['required', 'array', 'min:1'],
+            'student_ids.*' => ['integer'],
+        ]);
+
+        $track = LmsTrack::query()->find($validated['track_id']);
+        if (! $track) {
+            return response()->json(['message' => 'That cohort does not exist in your institute.'], 422);
+        }
+        // Ended cohorts only: this flow is the "program finished" flow. A
+        // cohort still in session (or without dates) uses the manual form.
+        if (! $track->end_date) {
+            return response()->json(['message' => 'That cohort has no end date.'], 422);
+        }
+        if (! $track->end_date->endOfDay()->isPast()) {
+            return response()->json(['message' => 'That cohort has not ended yet.'], 422);
+        }
+
+        // Only enrolled students of THIS cohort — a foreign id (or one from a
+        // sibling cohort) is silently filtered out rather than smuggled in.
+        $enrolledIds = $track->enrollments()->pluck('student_id')->unique()->all();
+        $targetIds = array_values(array_intersect($validated['student_ids'], $enrolledIds));
+        if (empty($targetIds)) {
+            return response()->json(['message' => 'None of those students are enrolled in this cohort.'], 422);
+        }
+
+        $alreadyIssued = LmsCertificate::query()
+            ->where('track_id', $track->id)
+            ->whereIn('student_id', $targetIds)
+            ->pluck('student_id')
+            ->all();
+
+        $issued = 0;
+        foreach ($targetIds as $studentId) {
+            if (in_array($studentId, $alreadyIssued)) {
+                continue;
+            }
+
+            $certificate = LmsCertificate::query()->create([
+                'student_id' => $studentId,
+                'course_id' => $track->course_id,
+                'track_id' => $track->id,
+                'title' => 'Certificate of Completion',
+                'file_url' => null,
+                'start_date' => $track->start_date,
+                'end_date' => $track->end_date,
+                'issued_at' => now(),
+            ]);
+            $certificate->serialNumber(); // stamps the printed number (e.g. 2026-000123)
+
+            // Best-effort in-app notice; the email sweep turns it into an email.
+            try {
+                LmsNotification::query()->create([
+                    'student_id' => $studentId,
+                    'type' => 'certificate',
+                    'title' => 'You earned a certificate',
+                    'body' => 'Certificate of Completion' . ($track->course?->title ? ' — ' . $track->course->title : ''),
+                    'reference_type' => 'certificate',
+                    'reference_id' => $certificate->id,
+                ]);
+            } catch (\Throwable $e) {
+                // Notification is a nicety; a schema hiccup must not 500 the issue.
+            }
+
+            $issued++;
+        }
+
+        if (! $track->certificates_issued_at) {
+            $track->forceFill(['certificates_issued_at' => now()])->save();
+        }
+
+        return response()->json([
+            'message' => $issued > 0
+                ? "{$issued} certificate" . ($issued === 1 ? '' : 's') . " issued."
+                : 'Those students already have certificates for this cohort.',
+            'issued' => $issued,
+        ]);
+    }
+
+    /**
+     * Retire an ended cohort from the panel + bell without issuing (the owner
+     * judged nobody should get a certificate, or handled it another way).
+     * Stamps certificates_issued_at; revocable only by issuing later via the
+     * manual form, which is the pre-existing path.
+     */
+    public function dismissCohortCertificates(Request $request, int $id): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        $track = LmsTrack::query()->find($id);
+        if (! $track) {
+            return response()->json(['message' => 'That cohort does not exist in your institute.'], 404);
+        }
+
+        if (! $track->certificates_issued_at) {
+            $track->forceFill(['certificates_issued_at' => now()])->save();
+        }
+
+        return response()->json(['message' => 'Cohort removed from the certificate panel.']);
     }
 
     /**

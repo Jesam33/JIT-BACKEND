@@ -15,6 +15,7 @@ class LmsTaskSubmission extends Model
         'task_id',
         'student_id',
         'submitted_link',
+        'links',
         'submitted_file_url',
         'submitted_at',
         'score',
@@ -26,6 +27,8 @@ class LmsTaskSubmission extends Model
     protected $casts = [
         'submitted_at' => 'datetime',
         'graded_at' => 'datetime',
+        // [{label, url, comment}] — multiple labelled links per submission.
+        'links' => 'array',
     ];
 
     public function task(): \Illuminate\Database\Eloquent\Relations\BelongsTo

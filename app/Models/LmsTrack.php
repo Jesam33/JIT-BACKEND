@@ -20,12 +20,16 @@ class LmsTrack extends Model
         'start_date',
         'end_date',
         'registration_deadline',
+        'ended_notified_at',
+        'certificates_issued_at',
     ];
 
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
         'registration_deadline' => 'date',
+        'ended_notified_at' => 'datetime',
+        'certificates_issued_at' => 'datetime',
     ];
 
     public function batch()
@@ -36,6 +40,16 @@ class LmsTrack extends Model
     public function course()
     {
         return $this->belongsTo(LmsCourse::class, 'course_id');
+    }
+
+    public function enrollments()
+    {
+        return $this->hasMany(LmsEnrollment::class, 'track_id');
+    }
+
+    public function certificates()
+    {
+        return $this->hasMany(LmsCertificate::class, 'track_id');
     }
 
     /**

@@ -86,6 +86,41 @@ class StudentModuleController extends BaseLmsController
         return response()->json($module);
     }
 
+    /**
+     * One-click module zip (see BaseLmsController::moduleZipResponse). Guarded
+     * by a student session plus the same sequential-unlock rule as show():
+     * every earlier published module must have had a delivered class.
+     */
+    public function download(Request $request, int $id)
+    {
+        $this->ensureLmsEnabled();
+        $session = $this->sessionFromRequest($request, 'student');
+        if (! $session) return response()->json(['message' => 'Unauthorized'], 401);
+
+        $module = LmsModule::query()
+            ->where('id', $id)
+            ->where('status', 'published')
+            ->firstOrFail();
+
+        $prevModules = LmsModule::where('course_id', $module->course_id)
+            ->where('status', 'published')
+            ->where('sort_order', '<', $module->sort_order)
+            ->orderBy('sort_order')
+            ->get();
+
+        if ($prevModules->isNotEmpty()) {
+            $taughtModuleIds = $this->taughtModuleIds($prevModules->pluck('id'));
+
+            foreach ($prevModules as $prev) {
+                if (! $taughtModuleIds->has($prev->id)) {
+                    return response()->json(['message' => 'Previous module not yet taught.'], 403);
+                }
+            }
+        }
+
+        return $this->moduleZipResponse($module);
+    }
+
     public function timetable(Request $request): JsonResponse
     {
         $this->ensureLmsEnabled();

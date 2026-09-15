@@ -60,8 +60,13 @@ class NotificationLinks
                 'group_chat' => '/lms/app/chats',
                 'dm_thread' => '/lms/app/chats',
                 'scheduled_class' => '/lms/app/classroom',
+                // Legacy course classrooms (staff-created live classes) also
+                // land on the classroom page, same destination as a scheduled
+                // module class: the page lists both delivery types.
+                'classroom' => '/lms/app/classroom',
                 'module' => $id ? '/lms/app/modules/' . $id : '/lms/app/modules',
                 'course' => '/lms/app/modules',
+                'certificate' => '/lms/app/certificates',
                 default => '/lms/app/notifications',
             },
         };
