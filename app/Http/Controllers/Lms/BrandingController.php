@@ -26,7 +26,7 @@ class BrandingController extends BaseLmsController
             ? $tenant->brandingArray()
             : Tenant::defaultBranding();
 
-        return response()->json(['branding' => $branding]);
+        return response()->json(['branding' => $this->withPlanFlags($branding, $tenant)]);
     }
 
     /**
@@ -49,7 +49,23 @@ class BrandingController extends BaseLmsController
             ? $tenant->brandingArray()
             : Tenant::defaultBranding();
 
-        return response()->json(['branding' => $branding]);
+        return response()->json(['branding' => $this->withPlanFlags($branding, $tenant)]);
+    }
+
+    /**
+     * Attach the plan-derived white-label gate to a branding payload: paid plans
+     * that include the remove_branding feature (Basic+) suppress the "Powered by
+     * Jorsastech" credit on institute surfaces (same rule as the public
+     * storefront, see PublicInstituteController). Defaults to true (show the
+     * credit) for the primary palette fallback, where no tenant resolved.
+     */
+    private function withPlanFlags(array $branding, ?Tenant $tenant): array
+    {
+        $branding['show_powered_by'] = $tenant instanceof Tenant
+            ? ! $tenant->planFeature('remove_branding')
+            : true;
+
+        return $branding;
     }
 
     private function resolvePublicBrandingTenant(Request $request): ?Tenant

@@ -300,7 +300,9 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::get('/api/frontend/lms/tasks/{id}', [StudentDashboardController::class, 'taskDetail']);
     Route::post('/api/frontend/lms/tasks/{id}/submit', [StudentDashboardController::class, 'submitTask']);
     Route::get('/api/frontend/lms/notifications', [StudentDashboardController::class, 'notifications']);
+    Route::get('/api/frontend/lms/notifications/unread', [StudentDashboardController::class, 'notificationUnreadCount']);
     Route::post('/api/frontend/lms/notifications/{id}/read', [StudentDashboardController::class, 'markNotificationRead']);
+    Route::post('/api/frontend/lms/notifications/read-all', [StudentDashboardController::class, 'markAllNotificationsRead']);
     Route::get('/api/frontend/lms/attendance', [StudentDashboardController::class, 'attendance']);
 
     // Student course rating (Udemy-style ★). Enrolled-only gate lives in the

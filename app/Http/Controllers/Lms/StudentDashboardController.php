@@ -562,6 +562,44 @@ class StudentDashboardController extends BaseLmsController
         return response()->json(['message' => 'Notification marked as read.']);
     }
 
+    public function notificationUnreadCount(Request $request): JsonResponse
+    {
+        $this->ensureLmsEnabled();
+
+        $session = $this->sessionFromRequest($request, 'student');
+
+        if (! $session) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $count = LmsNotification::query()
+            ->where('student_id', $session->user_id)
+            ->where('is_read', false)
+            ->count();
+
+        return response()->json([
+            'unread_notifications' => $count,
+        ]);
+    }
+
+    public function markAllNotificationsRead(Request $request): JsonResponse
+    {
+        $this->ensureLmsEnabled();
+
+        $session = $this->sessionFromRequest($request, 'student');
+
+        if (! $session) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        LmsNotification::query()
+            ->where('student_id', $session->user_id)
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
+
+        return response()->json(['message' => 'All notifications marked as read.']);
+    }
+
     public function attendance(Request $request): JsonResponse
     {
         $this->ensureLmsEnabled();
