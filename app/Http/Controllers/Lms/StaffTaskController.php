@@ -15,16 +15,37 @@ use Illuminate\Validation\Rule;
 
 class StaffTaskController extends BaseLmsController
 {
-    // Courses the teacher has a cohort (LmsTrack) on — the same scope
+    // Courses the actor has a cohort (LmsTrack) on — the same scope
     // listTasks/showTask in StaffPortalController use, so a staffer can never
-    // touch another instructor's task by guessing its id.
+    // touch another instructor's task by guessing its id. Actor-aware: the
+    // academy owner's mirror resolves to every course in the academy
+    // (BaseLmsController::actorCourseIds).
     private function getCourseIds(LmsTeacher $teacher): array
     {
-        return LmsTrack::query()
-            ->where('instructor_id', $teacher->id)
-            ->pluck('course_id')
-            ->filter()
-            ->toArray();
+        return $this->actorCourseIds($teacher);
+    }
+
+    /**
+     * The acting teacher (a staff session's row, or the owner's academy-wide
+     * mirror), or null when neither token authorizes.
+     */
+    private function actor(Request $request): ?LmsTeacher
+    {
+        return $this->staffActor($request);
+    }
+
+    /**
+     * The module ids inside the actor's courses. Used to bound `module_id` on
+     * create/edit: a bare `exists:lms_modules,id` is a raw query-builder rule, so
+     * global scopes do NOT apply and it would happily accept another academy's
+     * module id.
+     */
+    private function moduleIds(LmsTeacher $teacher): array
+    {
+        return \App\Models\LmsModule::query()
+            ->whereIn('course_id', $this->getCourseIds($teacher))
+            ->pluck('id')
+            ->all();
     }
 
     // Task attachments (up to 5 files students download while working on the
@@ -69,16 +90,21 @@ class StaffTaskController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        $teacher = $this->actor($request);
 
-        if (! $session) {
+        if (! $teacher) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        $courseIds = $this->getCourseIds($teacher);
+
         $validated = $request->validate([
-            'course_id' => ['required', 'integer', 'exists:lms_courses,id'],
-            'module_id' => ['required', 'integer', 'exists:lms_modules,id'],
-            'track_id' => ['nullable', 'integer', 'exists:lms_tracks,id'],
+            // Bounded to the actor's own courses, not just `exists`: that rule
+            // runs on the raw query builder, so global scopes don't apply and it
+            // would accept another academy's course id.
+            'course_id' => ['required', 'integer', Rule::in($courseIds)],
+            'module_id' => ['required', 'integer', Rule::in($this->moduleIds($teacher))],
+            'track_id' => ['nullable', 'integer', Rule::in($this->actorTrackIds($teacher))],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string', 'max:5000'],
             'instructions' => ['required', 'string', 'max:10000'],
@@ -86,27 +112,26 @@ class StaffTaskController extends BaseLmsController
             'submission_type' => ['required', 'in:link,file_upload'],
         ]);
 
-        $validated['teacher_id'] = $session->user_id;
+        $validated['teacher_id'] = $teacher->id;
         $validated['attachments'] = $this->validateAttachments($request);
 
         $task = LmsTask::query()->create($validated);
 
-        $enrollments = \App\Models\LmsEnrollment::query()
-            ->whereHas('track', fn ($q) => $q->where('course_id', $validated['course_id']))
-            ->with('student')
-            ->get();
+        // Course audience, not enrollment audience — a student can be on the
+        // course with no cohort placement row yet (see
+        // BaseLmsController::studentIdsInCourses), and those are precisely the
+        // students an enrollment-only fan-out leaves uninformed.
+        $studentIds = $this->studentIdsInCourses(array_filter([$validated['course_id']]));
 
-        foreach ($enrollments as $enrollment) {
-            if ($enrollment->student) {
-                LmsNotification::query()->create([
-                    'student_id' => $enrollment->student->id,
-                    'type' => 'new_task',
-                    'title' => 'New Task: ' . $validated['title'],
-                    'body' => 'A new task has been assigned to you.',
-                    'reference_type' => 'task',
-                    'reference_id' => $task->id,
-                ]);
-            }
+        foreach ($studentIds as $studentId) {
+            LmsNotification::query()->create([
+                'student_id' => $studentId,
+                'type' => 'new_task',
+                'title' => 'New Task: ' . $validated['title'],
+                'body' => 'A new task has been assigned to you.',
+                'reference_type' => 'task',
+                'reference_id' => $task->id,
+            ]);
         }
 
         return response()->json($task, 201);
@@ -116,20 +141,15 @@ class StaffTaskController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        $teacher = $this->actor($request);
 
-        if (! $session) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        $teacher = LmsTeacher::query()->find($session->user_id);
         if (! $teacher) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        // Scoped to the teacher's assigned courses (same as listTasks/
-        // showTask): a task outside them resolves to 404, never 403, so
-        // guessing ids reveals nothing.
+        // Scoped to the actor's courses (same as listTasks/showTask): a task
+        // outside them resolves to 404, never 403, so guessing ids reveals
+        // nothing.
         $task = LmsTask::query()
             ->whereIn('course_id', $this->getCourseIds($teacher))
             ->findOrFail($taskId);
@@ -139,8 +159,8 @@ class StaffTaskController extends BaseLmsController
             // staffer move a task onto a course they don't teach, so only
             // validate it matches the task's own course.
             'course_id' => ['nullable', 'integer', Rule::in([$task->course_id])],
-            'module_id' => ['required', 'integer', 'exists:lms_modules,id'],
-            'track_id' => ['nullable', 'integer', 'exists:lms_tracks,id'],
+            'module_id' => ['required', 'integer', Rule::in($this->moduleIds($teacher))],
+            'track_id' => ['nullable', 'integer', Rule::in($this->actorTrackIds($teacher))],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string', 'max:5000'],
             'instructions' => ['required', 'string', 'max:10000'],
@@ -181,13 +201,8 @@ class StaffTaskController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        $teacher = $this->actor($request);
 
-        if (! $session) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        $teacher = LmsTeacher::query()->find($session->user_id);
         if (! $teacher) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
@@ -204,20 +219,15 @@ class StaffTaskController extends BaseLmsController
         return response()->json(['message' => 'Task deleted.']);
     }
 
-    // Every submission across the teacher's tasks — the backing for the staff
+    // Every submission across the actor's tasks — the backing for the staff
     // Submissions tab. Scoping is by course (same as listTasks/showTask), then
     // the task relationship carries the title the row groups under.
     public function submissions(Request $request): JsonResponse
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        $teacher = $this->actor($request);
 
-        if (! $session) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        $teacher = LmsTeacher::query()->find($session->user_id);
         if (! $teacher) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
@@ -235,9 +245,9 @@ class StaffTaskController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        $teacher = $this->actor($request);
 
-        if (! $session) {
+        if (! $teacher) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
@@ -246,14 +256,18 @@ class StaffTaskController extends BaseLmsController
             'feedback' => ['nullable', 'string', 'max:5000'],
         ]);
 
+        // The submission's task must be one this actor may grade. Without this
+        // the lookup was by submission id alone, so any signed-in staffer could
+        // grade (and thereby score) a task on a course they don't teach.
         $submission = LmsTaskSubmission::query()
             ->where('task_id', $taskId)
+            ->whereHas('task', fn ($q) => $q->whereIn('course_id', $this->getCourseIds($teacher)))
             ->findOrFail($submissionId);
 
         $submission->update([
             'score' => $validated['score'],
             'feedback' => $validated['feedback'] ?? null,
-            'graded_by_teacher_id' => $session->user_id,
+            'graded_by_teacher_id' => $teacher->id,
             'graded_at' => now(),
         ]);
 

@@ -84,7 +84,8 @@ class AdminController extends BaseLmsController
             ->selectRaw('tenant_id, COUNT(*) as aggregate')->groupBy('tenant_id')->pluck('aggregate', 'tenant_id');
 
         $studentCount = (int) $studentsByTenant->sum();
-        $teacherCount = (int) LmsTeacher::query()->withoutGlobalScope($scope)->count();
+        // staffOnly() hides each academy's owner-mirror row, an actor rather than a hire.
+        $teacherCount = (int) LmsTeacher::query()->withoutGlobalScope($scope)->staffOnly()->count();
         $courseCount = (int) $coursesByTenant->sum();
         $trackCount = (int) LmsTrack::query()->withoutGlobalScope($scope)->count();
         $newTenantsThisMonth = (int) Tenant::query()->where('created_at', '>=', now()->startOfMonth())->count();
@@ -477,7 +478,7 @@ class AdminController extends BaseLmsController
 
         return view('admin.lms.teachers.index', array_merge(
             $this->adminShellData(),
-            ['teachersList' => LmsTeacher::query()->orderByDesc('created_at')->get()]
+            ['teachersList' => LmsTeacher::query()->staffOnly()->orderByDesc('created_at')->get()]
         ));
     }
 
@@ -515,7 +516,8 @@ class AdminController extends BaseLmsController
         $this->ensureSuperAdmin($request);
 
         $coursesList = LmsCourse::query()->orderBy('title')->get();
-        $teachersList = LmsTeacher::query()->where('is_active', true)->orderBy('name')->get();
+        // staffOnly(): never offer an academy's synthetic owner-mirror as an instructor.
+        $teachersList = LmsTeacher::query()->staffOnly()->where('is_active', true)->orderBy('name')->get();
 
         $courseMap = $coursesList->keyBy('id');
         $teacherMap = $teachersList->keyBy('id');
@@ -584,7 +586,8 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        $teachersList = LmsTeacher::query()->where('is_active', true)->orderBy('name')->get();
+        // staffOnly(): never offer an academy's synthetic owner-mirror as an instructor.
+        $teachersList = LmsTeacher::query()->staffOnly()->where('is_active', true)->orderBy('name')->get();
         $coursesList = LmsCourse::query()->orderBy('title')->get();
         $batchesList = Batch::query()->orderByDesc('id')->get();
 

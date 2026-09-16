@@ -174,14 +174,6 @@ function toggleRow(el) {
                                 <div class="value">{{ $agent->home_address }}</div>
                             </div>
                             @if(is_array($answers) && count($answers))
-                            <div class="answer-card">
-                                <div class="label">Target Students</div>
-                                <div class="value">{{ $answers['target_students'] ?? 'N/A' }}</div>
-                            </div>
-                            <div class="answer-card">
-                                <div class="label">Experience</div>
-                                <div class="value">{{ $answers['experience'] ?? 'N/A' }}</div>
-                            </div>
                             <div class="answer-card full">
                                 <div class="label">Courses to Promote</div>
                                 <div class="value">{{ $answers['courses_to_promote'] ?? 'N/A' }}</div>

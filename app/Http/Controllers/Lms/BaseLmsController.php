@@ -91,6 +91,175 @@ abstract class BaseLmsController extends Controller
         }
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Staff-portal actor (staff OR academy owner)
+    |--------------------------------------------------------------------------
+    | The owner portal gives an academy owner every staff feature ("full parity").
+    | Rather than branch every staff endpoint, ONE resolver decides who is acting:
+    |
+    |   - a staff session            -> that staffer's own LmsTeacher row
+    |   - an owner session            -> the academy's owner-mirror LmsTeacher row
+    |                                    (LmsTeacher::ownerMirror, auto-provisioned)
+    |
+    | The mirror is a REAL row because the staff portal keys on a teacher id
+    | everywhere (cohort instructor, scheduled-class teacher, chat membership), so
+    | a virtual actor could not host a class or open a chat. It is flagged
+    | is_academy_owner, and that flag is the only difference that matters to the
+    | endpoints: scope. A staffer sees their assigned courses; the owner sees the
+    | WHOLE academy. Every staff controller must therefore take its course/track
+    | scope from actorCourseIds()/actorTrackIds() below, never from a raw
+    | `where('instructor_id', $teacher->id)`.
+    */
+
+    /**
+     * The owner (a `users` row) acting through the owner portal, or null when the
+     * bearer token is a staff session. Mirrors OwnerAdminController::ownerContext's
+     * authorization: the session must be role 'owner' AND belong to a tenant_admins
+     * row of the session's tenant, so a token alone can't claim owner powers.
+     */
+    protected function ownerFromRequest(Request $request): ?\App\Models\User
+    {
+        $session = $this->sessionFromRequest($request, 'owner');
+
+        if (! $session) {
+            return null;
+        }
+
+        $tenantId = $session->tenant_id
+            ?? (app()->bound('currentTenant') && app('currentTenant') ? app('currentTenant')->id : null);
+
+        if (! $tenantId) {
+            return null;
+        }
+
+        $tenant = \App\Models\Tenant::find($tenantId);
+        if (! $tenant) {
+            return null;
+        }
+
+        $isAdmin = \Illuminate\Support\Facades\DB::table('tenant_admins')
+            ->where('tenant_id', $tenant->id)
+            ->where('user_id', $session->user_id)
+            ->exists();
+
+        if (! $isAdmin) {
+            return null;
+        }
+
+        app()->instance('currentTenant', $tenant);
+
+        return \App\Models\User::find($session->user_id);
+    }
+
+    /**
+     * The acting teacher for a staff-portal endpoint: a staff session's own row,
+     * else the owner's academy-wide mirror. Null when neither token is valid, so
+     * callers keep their existing "Unauthorized" branch unchanged.
+     */
+    protected function staffActor(Request $request): ?\App\Models\LmsTeacher
+    {
+        $session = $this->sessionFromRequest($request, 'staff');
+
+        if ($session) {
+            return \App\Models\LmsTeacher::query()->find($session->user_id);
+        }
+
+        if (! $this->ownerFromRequest($request)) {
+            return null;
+        }
+
+        $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
+
+        return \App\Models\LmsTeacher::ownerMirror($tenant);
+    }
+
+    /** Whether this actor is an academy owner's mirror, i.e. scoped academy-wide. */
+    protected function actorIsOwner(?\App\Models\LmsTeacher $actor): bool
+    {
+        return (bool) ($actor && $actor->isAcademyOwner());
+    }
+
+    /**
+     * Course ids this actor may work on: every active course in the academy for an
+     * owner, else the courses of the cohorts they instruct. Mirrors the two
+     * hand-rolled scope helpers it replaces (StaffPortalController::getCourseIds,
+     * StaffModuleController::assignedCourseIds) so reads and writes agree.
+     */
+    protected function actorCourseIds(?\App\Models\LmsTeacher $actor): array
+    {
+        if (! $actor) {
+            return [];
+        }
+
+        if ($actor->isAcademyOwner()) {
+            // TenantScope already narrows this to the owner's academy.
+            return \App\Models\LmsCourse::query()->pluck('id')->all();
+        }
+
+        return \App\Models\LmsTrack::query()
+            ->where('instructor_id', $actor->id)
+            ->pluck('course_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /** Cohort ids this actor may work on: all of the academy's for an owner. */
+    protected function actorTrackIds(?\App\Models\LmsTeacher $actor): array
+    {
+        if (! $actor) {
+            return [];
+        }
+
+        if ($actor->isAcademyOwner()) {
+            return \App\Models\LmsTrack::query()->pluck('id')->all();
+        }
+
+        return \App\Models\LmsTrack::query()
+            ->where('instructor_id', $actor->id)
+            ->pluck('id')
+            ->all();
+    }
+
+    /**
+     * Legacy course classrooms this actor may work on. Owned via
+     * `lms_classrooms.teacher_id` (the module-based scheduled classes below are
+     * the other delivery type), so the owner's mirror covers every classroom in
+     * the academy — still tenant-scoped by TenantScope.
+     */
+    protected function actorClassroomIds(?\App\Models\LmsTeacher $actor): array
+    {
+        if (! $actor) {
+            return [];
+        }
+
+        $query = LmsClassroom::query();
+
+        if (! $actor->isAcademyOwner()) {
+            $query->where('teacher_id', $actor->id);
+        }
+
+        return $query->pluck('id')->all();
+    }
+
+    /** Module-based scheduled classes this actor may work on (see above). */
+    protected function actorScheduledClassIds(?\App\Models\LmsTeacher $actor): array
+    {
+        if (! $actor) {
+            return [];
+        }
+
+        $query = \App\Models\LmsScheduledClass::query();
+
+        if (! $actor->isAcademyOwner()) {
+            $query->where('teacher_id', $actor->id);
+        }
+
+        return $query->pluck('id')->all();
+    }
+
     /**
      * Return the currently-bound tenant, or fall back to the primary (JIT)
      * tenant and bind it. Used by public self-service flows (e.g. agent
@@ -193,17 +362,101 @@ abstract class BaseLmsController extends Controller
     }
 
     /**
+     * The cohort a student who is ALREADY committed to a course belongs in.
+     *
+     * Differs from {@see findActiveTrackForCourse} in exactly one way: it still
+     * answers once every cohort's registration window has closed. These are
+     * PLACEMENT moments, not signup moments — the owner invited this student by
+     * hand, or the student registered (and often paid) while the window was open
+     * and is only being set up now. The cutoff exists to stop strangers joining a
+     * finished intake, not to strand a student the academy has already accepted:
+     * resolving placement through the open-only lookup left that student enrolled
+     * in no cohort at all, which the student portal renders as "No course selected
+     * yet" with no way out, and which nothing told the owner about. An academy
+     * that leaves a cohort's dates blank is unaffected either way (blank dates
+     * never close registration).
+     *
+     * An open cohort still wins; otherwise the newest, i.e. the current intake.
+     */
+    protected function findTrackForCoursePlacement(?int $courseId): ?LmsTrack
+    {
+        if (! $courseId) return null;
+
+        $open = $this->findActiveTrackForCourse($courseId);
+
+        if ($open) {
+            return $open;
+        }
+
+        return LmsTrack::query()
+            ->with('batch')
+            ->where('course_id', $courseId)
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * The students who belong to any of these courses, for notification audiences.
+     *
+     * Two sources, unioned and deduped, because neither one alone is the whole
+     * roll: `lms_students.selected_course_id` is what the student portal actually
+     * keys off (their modules, tasks, materials, timetable), while `lms_enrollments`
+     * rows are per-cohort and only appear once a cohort has an instructor to be
+     * enrolled onto (see syncTrackEnrollments). An academy whose cohorts are still
+     * unassigned, or a student who chose the course but was never placed in a
+     * cohort, has no enrollment row at all — notifying from enrollments alone
+     * reaches NOBODY there. That is what "I scheduled a class / posted an
+     * announcement and the student got nothing" looks like from the owner's side,
+     * and it is not rare: it is every academy on the day it onboards.
+     *
+     * Course-scoped, not cohort-scoped: a student row carries a single
+     * selected_course_id and no track id, so on a course running several cohorts an
+     * announcement to one also reaches its siblings. Every other notification here
+     * already uses this audience (see StaffTaskController), so this stays
+     * consistent with what students already receive rather than inventing a
+     * narrower rule for some messages and a wider one for others.
+     *
+     * Both models are TenantAware, so this is only ever one academy's students —
+     * callers must have the tenant bound, which staff and owner requests both do.
+     *
+     * @param  int[]  $courseIds
+     * @return int[]
+     */
+    protected function studentIdsInCourses(array $courseIds): array
+    {
+        if ($courseIds === []) {
+            return [];
+        }
+
+        $byCourse = \App\Models\LmsStudent::query()
+            ->whereIn('selected_course_id', $courseIds)
+            ->pluck('id');
+
+        $byEnrollment = LmsEnrollment::query()
+            ->whereHas('track', fn ($q) => $q->whereIn('course_id', $courseIds))
+            ->pluck('student_id');
+
+        return $byCourse
+            ->merge($byEnrollment)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
      * Enroll a single student into the active track for a course, if one exists.
      * This is the registration/payment → staff-visibility bridge: a student is
      * only visible to a staffer through an LmsEnrollment on a track that staffer
      * teaches, so a paid student who is never enrolled stays invisible. Idempotent
      * (upsert keyed by student_id, one active track per student, matching the
-     * signup/setup path). No-op when the course has no track yet; the owner
-     * assigning an instructor later backfills it via syncTrackEnrollments().
+     * signup/setup path). No-op when the course has no track at all; the owner
+     * creating a cohort (or assigning its instructor) later backfills it via
+     * syncTrackEnrollments().
      */
     protected function enrollStudentIntoCourseTrack(int $studentId, ?int $courseId): void
     {
-        $track = $this->findActiveTrackForCourse($courseId);
+        $track = $this->findTrackForCoursePlacement($courseId);
 
         if ($track) {
             LmsEnrollment::query()->updateOrCreate(
@@ -993,7 +1246,8 @@ abstract class BaseLmsController extends Controller
             'studentCount' => \App\Models\LmsStudent::query()->count(),
             'tracks' => LmsTrack::query()->count(),
             'courses' => \App\Models\LmsCourse::query()->count(),
-            'teachers' => \App\Models\LmsTeacher::query()->count(),
+            // staffOnly(): the owner's mirror row is an actor, not a staff member.
+            'teachers' => \App\Models\LmsTeacher::query()->staffOnly()->count(),
             'classrooms' => LmsClassroom::query()->count(),
         ];
     }

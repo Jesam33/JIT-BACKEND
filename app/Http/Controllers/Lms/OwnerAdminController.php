@@ -123,11 +123,25 @@ class OwnerAdminController extends BaseLmsController
             'current_period_end' => $tenant->current_period_end,
             'counts' => [
                 'students' => LmsStudent::query()->count(),
-                'staff' => LmsTeacher::query()->count(),
+                // staffOnly() hides the owner's own academy-wide mirror row: it is
+                // an actor, not a staff member, so it must never consume a seat in
+                // the plan's staff limit or show up as a person to manage.
+                'staff' => LmsTeacher::query()->staffOnly()->count(),
                 'courses' => LmsCourse::query()->count(),
                 'tracks' => LmsTrack::query()->count(),
             ],
             'recent_students' => $recentStudents,
+            // Payout onboarding state, resolved here (not only on the payments
+            // page) because the owner shell gates the whole portal on it: a
+            // freshly-provisioned academy must link its settlement bank before it
+            // can use the dashboard. `billing_required` is the single decision
+            // (see Tenant::requiresPayoutSetup) and already accounts for the
+            // platform's own academy and for a deployment whose Paystack keys are
+            // not live — in both cases the gate stays off rather than locking an
+            // owner out with no way to comply.
+            'billing_required' => $tenant->requiresPayoutSetup(),
+            'billing_configured' => $tenant->payoutConfigured(),
+            'gateway_ready' => app(PaystackService::class)->isConfigured(),
             'branding' => $this->brandingFor($tenant),
         ]);
     }
@@ -497,7 +511,10 @@ class OwnerAdminController extends BaseLmsController
             // first enrolment. Paid invites are enrolled + counted in
             // completePayment after Paystack confirms.
             if (! $mustPay) {
-                $track = $this->findActiveTrackForCourse($course->id);
+                // Placement, not signup: the owner has already accepted this
+                // student, so a cohort whose registration window has closed must
+                // not leave them unenrolled (see findTrackForCoursePlacement).
+                $track = $this->findTrackForCoursePlacement($course->id);
                 if ($track) {
                     $enrollment = LmsEnrollment::query()->updateOrCreate(
                         ['student_id' => $student->id],
@@ -607,6 +624,9 @@ class OwnerAdminController extends BaseLmsController
         [$tenant] = $context;
 
         $staff = LmsTeacher::query()
+            // Real staff only: the synthetic owner-mirror row is an actor, never a
+            // row to show on the Staff Accounts page.
+            ->staffOnly()
             ->latest('id')
             ->get(['id', 'name', 'email', 'role', 'phone', 'is_active', 'created_at'])
             ->map(fn (LmsTeacher $t) => [
@@ -640,7 +660,10 @@ class OwnerAdminController extends BaseLmsController
             return response()->json(['message' => 'Not authorized.'], 403);
         }
 
-        $teacher = LmsTeacher::query()->findOrFail($id);
+        // staffOnly(): the owner's own academy-wide mirror row is excluded, so it
+        // can never be removed, suspended or "re-invited" from the Staff Accounts
+        // page — deleting it would silently strip the owner of every staff feature.
+        $teacher = LmsTeacher::query()->staffOnly()->findOrFail($id);
 
         $cohortCount = LmsTrack::query()->where('instructor_id', $teacher->id)->count();
         if ($cohortCount > 0) {
@@ -671,7 +694,10 @@ class OwnerAdminController extends BaseLmsController
 
         [$tenant] = $context;
 
-        $teacher = LmsTeacher::query()->findOrFail($id);
+        // staffOnly(): the owner's own academy-wide mirror row is excluded, so it
+        // can never be removed, suspended or "re-invited" from the Staff Accounts
+        // page — deleting it would silently strip the owner of every staff feature.
+        $teacher = LmsTeacher::query()->staffOnly()->findOrFail($id);
         if (! $teacher->email) {
             return response()->json(['message' => 'This staff member has no email address on file.'], 422);
         }
@@ -712,7 +738,10 @@ class OwnerAdminController extends BaseLmsController
             'is_active' => ['required', 'boolean'],
         ]);
 
-        $teacher = LmsTeacher::query()->findOrFail($id);
+        // staffOnly(): the owner's own academy-wide mirror row is excluded, so it
+        // can never be removed, suspended or "re-invited" from the Staff Accounts
+        // page — deleting it would silently strip the owner of every staff feature.
+        $teacher = LmsTeacher::query()->staffOnly()->findOrFail($id);
         $teacher->is_active = $validated['is_active'];
         $teacher->save();
 
@@ -787,7 +816,26 @@ class OwnerAdminController extends BaseLmsController
             'created_at' => $t->created_at,
         ]);
 
-        return response()->json(['tracks' => $payload]);
+        // The owner themselves, offered as a cohort's teacher.
+        //
+        // A teacher in this system IS `lms_tracks.instructor_id`: that column is
+        // what scopes a staff portal, decides whose students are whose, and keys
+        // the timetable, attendance and the cohort's group chat. An academy that
+        // has not hired anyone yet — every institute on day one — therefore had no
+        // teacher to name, so its cohorts stayed Unassigned, students had no
+        // instructor on record, and nobody could be @mentioned.
+        //
+        // The owner's own teacher row (LmsTeacher::ownerMirror) is deliberately
+        // kept out of the Staff Accounts list and its plan counts, so the picker
+        // cannot find it in /owner/staff. Returning it as its own field keeps that
+        // list clean while making the owner a first-class choice. Idempotent: the
+        // row is created on first call and reused after.
+        $mirror = LmsTeacher::ownerMirror($context[0]);
+
+        return response()->json([
+            'tracks' => $payload,
+            'self_instructor' => $mirror ? ['id' => $mirror->id, 'name' => $mirror->name] : null,
+        ]);
     }
 
     /**
@@ -833,6 +881,8 @@ class OwnerAdminController extends BaseLmsController
             ]);
 
         $staff = LmsTeacher::query()
+            // Real staff only (see self::staff); the owner mirror is not a hire.
+            ->staffOnly()
             ->latest('id')
             ->limit(10)
             ->get(['id', 'name', 'email', 'created_at'])

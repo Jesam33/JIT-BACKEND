@@ -12,6 +12,7 @@ use App\Models\LmsSession;
 use App\Models\LmsStudent;
 use App\Models\LmsTask;
 use App\Models\LmsTaskSubmission;
+use App\Support\AttendanceDuration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -627,6 +628,12 @@ class StudentDashboardController extends BaseLmsController
                 'starts_at' => ($a->classroom?->starts_at ?? $a->scheduledClass?->starts_at)?->toIso8601String(),
                 'status' => $a->calculated_at ? ($a->status ?? 'present') : ($a->joined_at ? 'present' : 'absent'),
                 'total_seconds' => $a->total_seconds ?? 0,
+                // "Stayed / lasted": minutes the student was in the room against
+                // the minutes the class was scheduled to run, so the portal shows
+                // the same figure the status was derived from (see
+                // App\Support\AttendanceDuration) instead of a bare badge.
+                'attended_minutes' => (int) round(($a->total_seconds ?? 0) / 60),
+                'duration_minutes' => AttendanceDuration::minutesFor($a->classroom ?? $a->scheduledClass),
                 'first_joined_at' => ($a->first_joined_at ?? $a->joined_at)?->toIso8601String(),
                 'calculated_at' => $a->calculated_at?->toIso8601String(),
             ]);

@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Lms;
 use App\Models\LmsCourse;
 use App\Models\LmsModule;
 use App\Models\LmsTeacher;
-use App\Models\LmsTrack;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
 
@@ -22,12 +21,15 @@ use Illuminate\Http\Request;
  *
  *  - resolveContext(): authenticates a STAFF bearer session (lms_staff_token)
  *    instead of an owner one, resolves the teacher, and (re)binds their tenant
- *    so all inherited TenantAware queries stay scoped to the institute.
+ *    so all inherited TenantAware queries stay scoped to the institute. An
+ *    OWNER bearer session resolves too, to the academy's owner-mirror teacher
+ *    (full parity: the owner keeps their own portal and the staff one).
  *  - authorizeCourseTarget()/authorizeModuleTarget(): restrict the save/browse
- *    targets to the courses the teacher is ASSIGNED to (the courses of their
- *    cohorts, LmsTrack.instructor_id), the same scoping StaffPortalController
- *    uses for materials — a teacher cannot write AI content into a course
- *    they don't teach, even within the same institute.
+ *    targets to the courses this actor may author into, the same scoping
+ *    StaffPortalController uses for materials — a teacher cannot write AI
+ *    content into a course they don't teach, even within the same institute.
+ *    For a staffer that is the courses of their cohorts
+ *    (LmsTrack.instructor_id); for the owner's mirror, the whole academy.
  *
  * The ai_materials PlanGate (Pro+) is inherited on every action; a 402 reaches
  * the staff page as an "ask your academy owner to upgrade" note, since staff
@@ -42,27 +44,23 @@ class StaffGammaController extends OwnerGammaController
 
     /**
      * Resolve the authenticated teacher + their tenant from the bearer session
-     * and bind the tenant. Returns [Tenant, LmsTeacher] or null when the
-     * caller is not a staff member. Mirrors StaffPortalController::getTeacher,
-     * plus the same currentTenant (re)bind the owner context does so the
-     * inherited TenantAware-scoped queries in save()/courseModules() scope to
-     * THIS teacher's institute.
+     * and bind the tenant. Returns [Tenant, LmsTeacher] or null when the caller
+     * is neither a staff member nor the academy owner. Mirrors
+     * StaffPortalController::getTeacher, plus the same currentTenant (re)bind the
+     * owner context does so the inherited TenantAware-scoped queries in
+     * save()/courseModules() scope to THIS actor's institute.
      */
     protected function resolveContext(Request $request): ?array
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
-        if (! $session) {
-            return null;
-        }
-
-        $teacher = LmsTeacher::query()->find($session->user_id);
+        // A staff session's own row, or the academy owner's academy-wide mirror.
+        $teacher = $this->staffActor($request);
         if (! $teacher) {
             return null;
         }
 
-        $tenantId = $session->tenant_id
+        $tenantId = $teacher->tenant_id
             ?? (app()->bound('currentTenant') && app('currentTenant') ? app('currentTenant')->id : null);
         if (! $tenantId) {
             return null;
@@ -76,12 +74,9 @@ class StaffGammaController extends OwnerGammaController
         app()->instance('currentTenant', $tenant);
 
         $this->teacher = $teacher;
-        $this->assignedCourseIds = LmsTrack::query()
-            ->where('instructor_id', $teacher->id)
-            ->pluck('course_id')
-            ->filter()
-            ->map(fn ($id) => (int) $id)
-            ->all();
+        // Courses this actor may author into: the whole academy for the owner's
+        // mirror, the assigned cohorts' courses for a staffer.
+        $this->assignedCourseIds = array_map('intval', $this->actorCourseIds($teacher));
 
         return [$tenant, $teacher];
     }

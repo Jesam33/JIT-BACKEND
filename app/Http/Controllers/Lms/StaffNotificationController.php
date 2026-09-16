@@ -12,14 +12,16 @@ class StaffNotificationController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff notification bell too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         $notifications = LmsTeacherNotification::query()
-            ->where('teacher_id', $session->user_id)
+            ->where('teacher_id', $actor->id)
             ->orderByDesc('created_at')
             ->get()
             ->map(fn ($n) => [
@@ -40,14 +42,16 @@ class StaffNotificationController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff notification bell too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         $count = LmsTeacherNotification::query()
-            ->where('teacher_id', $session->user_id)
+            ->where('teacher_id', $actor->id)
             ->where('is_read', false)
             ->count();
 
@@ -60,15 +64,17 @@ class StaffNotificationController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff notification bell too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         $notification = LmsTeacherNotification::query()
             ->where('id', $id)
-            ->where('teacher_id', $session->user_id)
+            ->where('teacher_id', $actor->id)
             ->firstOrFail();
 
         $notification->update(['is_read' => true]);
@@ -80,14 +86,16 @@ class StaffNotificationController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff notification bell too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         LmsTeacherNotification::query()
-            ->where('teacher_id', $session->user_id)
+            ->where('teacher_id', $actor->id)
             ->where('is_read', false)
             ->update(['is_read' => true]);
 

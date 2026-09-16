@@ -17,6 +17,33 @@ use Illuminate\Validation\Rule;
 
 class StaffChatController extends BaseLmsController
 {
+    /**
+     * The cohort whose group chat the actor is reading or writing.
+     *
+     * A group chat belongs to ONE cohort (lms_group_chats.track_id), so unlike the
+     * other staff surfaces this one cannot simply widen for an academy owner. It
+     * resolves to the cohort named by an optional `track_id` (bounded to the
+     * actor's own — see actorTrackIds), else the actor's first cohort, which is
+     * exactly what a single-cohort staffer already got. One resolver for both the
+     * @mention roster and the chat a message lands in, so the two cannot disagree.
+     */
+    private function groupChatTrack(Request $request, LmsTeacher $actor): ?LmsTrack
+    {
+        $trackIds = array_map('intval', $this->actorTrackIds($actor));
+
+        if (! $trackIds) {
+            return null;
+        }
+
+        $requested = $request->input('track_id');
+
+        if ($requested !== null && in_array((int) $requested, $trackIds, true)) {
+            return LmsTrack::query()->find((int) $requested);
+        }
+
+        return LmsTrack::query()->whereIn('id', $trackIds)->orderBy('id')->first();
+    }
+
     // Upload a file the staffer picked in the chat composer (group or DM).
     // Returns {url, path}; the composer sends the url as attachment_url with
     // the next message. Staff twin of StudentChatController::uploadAttachment.
@@ -24,9 +51,11 @@ class StaffChatController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff chat too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
@@ -37,20 +66,30 @@ class StaffChatController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff chat too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $teacher = LmsTeacher::query()->findOrFail($session->user_id);
+        // ONE cohort, resolved by the same helper the send path uses, so what the
+        // actor reads is exactly what they write to. Reading every cohort at once
+        // (the earlier behaviour) interleaved several cohorts' conversations into
+        // one stream with no cohort label, while a reply still landed in only one
+        // of them — an academy owner with many cohorts could not tell who they
+        // were talking to. The caller picks the cohort with `track_id`; with no
+        // pick (a single-cohort staffer, the common case) it is their first, which
+        // is what they always got.
+        $track = $this->groupChatTrack($request, $actor);
 
-        $trackIds = \App\Models\LmsTrack::query()
-            ->where('instructor_id', $teacher->id)
-            ->pluck('id');
+        if (! $track) {
+            return response()->json([]);
+        }
 
         $groupChatIds = LmsGroupChat::query()
-            ->whereIn('track_id', $trackIds)
+            ->where('track_id', $track->id)
             ->pluck('id');
 
         $messages = LmsMessage::query()
@@ -70,7 +109,7 @@ class StaffChatController extends BaseLmsController
                 'attachment_url' => $m->attachment_url,
                 'reply_to_id' => $m->reply_to_id,
                 'reply_to' => $this->replyToPayload($m),
-                'reactions' => $this->reactionsPayload($m, 'teacher', (int) $teacher->id),
+                'reactions' => $this->reactionsPayload($m, 'teacher', (int) $actor->id),
                 'edited_at' => $m->edited_at?->toIso8601String(),
                 'created_at' => $m->created_at->toIso8601String(),
             ]);
@@ -82,15 +121,15 @@ class StaffChatController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff chat too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $teacher = LmsTeacher::query()->findOrFail($session->user_id);
-
-        $track = LmsTrack::query()->where('instructor_id', $teacher->id)->first();
+        $track = $this->groupChatTrack($request, $actor);
 
         if (! $track) {
             return response()->json([]);
@@ -122,15 +161,15 @@ class StaffChatController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff chat too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $teacher = LmsTeacher::query()->findOrFail($session->user_id);
-
-        $track = \App\Models\LmsTrack::query()->where('instructor_id', $teacher->id)->first();
+        $track = $this->groupChatTrack($request, $actor);
 
         if (! $track) {
             return response()->json(['message' => 'No assigned track.'], 400);
@@ -185,7 +224,7 @@ class StaffChatController extends BaseLmsController
                             'student_id' => $student->id,
                             'type' => 'mention',
                             'title' => 'You were mentioned',
-                            'body' => $teacher->name . ' mentioned you: ' . $content,
+                            'body' => $actor->name . ' mentioned you: ' . $content,
                             'reference_type' => 'group_chat',
                             'reference_id' => $groupChat->id,
                         ]);
@@ -200,7 +239,7 @@ class StaffChatController extends BaseLmsController
             'chat_type' => 'group',
             'chat_id' => $groupChat->id,
             'sender_role' => 'teacher',
-            'sender_id' => $session->user_id,
+            'sender_id' => $actor->id,
             'content' => $content,
             'attachment_url' => $validated['attachment_url'] ?? null,
             'reply_to_id' => $this->resolveReplyToId($validated['reply_to_id'] ?? null, 'group', $groupChat->id),
@@ -215,7 +254,7 @@ class StaffChatController extends BaseLmsController
                 'content' => $message->content,
                 'sender_role' => $message->sender_role,
                 'sender_id' => $message->sender_id,
-                'sender_name' => $teacher->name,
+                'sender_name' => $actor->name,
                 'attachment_url' => $message->attachment_url,
                 'reply_to_id' => $message->reply_to_id,
                 'reply_to' => $this->replyToPayload($message),
@@ -230,7 +269,7 @@ class StaffChatController extends BaseLmsController
             'content' => $message->content,
             'sender_role' => $message->sender_role,
             'sender_id' => $message->sender_id,
-            'sender_name' => $teacher->name,
+            'sender_name' => $actor->name,
             'attachment_url' => $message->attachment_url,
             'reply_to_id' => $message->reply_to_id,
             'reply_to' => $this->replyToPayload($message),
@@ -243,15 +282,17 @@ class StaffChatController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff chat too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         $message = LmsMessage::query()->findOrFail($id);
 
-        if ($message->sender_role !== 'teacher' || (int) $message->sender_id !== $session->user_id) {
+        if ($message->sender_role !== 'teacher' || (int) $message->sender_id !== $actor->id) {
             return response()->json(['message' => 'You can only delete your own messages.'], 403);
         }
 
@@ -264,15 +305,17 @@ class StaffChatController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff chat too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         $message = LmsMessage::query()->findOrFail($id);
 
-        if ($message->sender_role !== 'teacher' || (int) $message->sender_id !== $session->user_id) {
+        if ($message->sender_role !== 'teacher' || (int) $message->sender_id !== $actor->id) {
             return response()->json(['message' => 'You can only edit your own messages.'], 403);
         }
 
@@ -299,22 +342,23 @@ class StaffChatController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff chat too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $teacherId = $session->user_id;
+        $teacherId = $actor->id;
 
         // Roster of everyone the teacher can DM = students enrolled in any of the
-        // teacher's tracks. Previously the DM tab listed only threads that already
-        // had a message, so staff had no way to *start* a conversation and saw an
-        // empty "No DM threads yet" panel. Ensure a thread exists for each enrolled
-        // student so the whole cohort shows up and is immediately messageable.
-        $trackIds = LmsTrack::query()
-            ->where('instructor_id', $teacherId)
-            ->pluck('id');
+        // teacher's tracks (every cohort in the academy for the owner's mirror).
+        // Previously the DM tab listed only threads that already had a message, so
+        // staff had no way to *start* a conversation and saw an empty "No DM
+        // threads yet" panel. Ensure a thread exists for each enrolled student so
+        // the whole roster shows up and is immediately messageable.
+        $trackIds = $this->actorTrackIds($actor);
 
         $trackByStudent = [];
         foreach (LmsEnrollment::query()->whereIn('track_id', $trackIds)->get(['student_id', 'track_id']) as $enrollment) {
@@ -377,28 +421,35 @@ class StaffChatController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff chat too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         $validated = $request->validate([
-            'dm_thread_id' => ['required', 'integer', 'exists:lms_dm_threads,id'],
+            'dm_thread_id' => ['required', 'integer'],
             'content' => ['nullable', 'string', 'max:5000'],
             'attachment_url' => ['nullable', 'string', 'max:2048'],
             'reply_to_id' => ['nullable', 'integer'],
         ]);
 
-        $teacher = \App\Models\LmsTeacher::query()->findOrFail($session->user_id);
-
-        $dmThread = LmsDmThread::query()->find($validated['dm_thread_id']);
+        // The thread must be one THIS actor is the instructor of. A bare
+        // `exists:lms_dm_threads,id` is a raw query-builder rule (global scopes do
+        // not apply) and the lookup below was unscoped, so any signed-in staffer
+        // could post into — and thereby notify the student of — another teacher's
+        // conversation.
+        $dmThread = LmsDmThread::query()
+            ->where('instructor_id', $actor->id)
+            ->findOrFail($validated['dm_thread_id']);
 
         $message = LmsMessage::query()->create([
             'chat_type' => 'dm',
             'chat_id' => $validated['dm_thread_id'],
             'sender_role' => 'teacher',
-            'sender_id' => $session->user_id,
+            'sender_id' => $actor->id,
             'content' => $validated['content'] ?? '',
             'attachment_url' => $validated['attachment_url'] ?? null,
             'reply_to_id' => $this->resolveReplyToId($validated['reply_to_id'] ?? null, 'dm', (int) $validated['dm_thread_id']),
@@ -412,7 +463,7 @@ class StaffChatController extends BaseLmsController
                 'content' => $message->content,
                 'sender_role' => 'teacher',
                 'sender_id' => $message->sender_id,
-                'sender_name' => $teacher->name,
+                'sender_name' => $actor->name,
                 'attachment_url' => $message->attachment_url,
                 'reply_to_id' => $message->reply_to_id,
                 'reply_to' => $this->replyToPayload($message),
@@ -443,7 +494,7 @@ class StaffChatController extends BaseLmsController
                     LmsNotification::query()->create([
                         'student_id' => (int) $dmThread->student_id,
                         'type' => 'message',
-                        'title' => 'New message from ' . $teacher->name,
+                        'title' => 'New message from ' . $actor->name,
                         'body' => $preview,
                         'reference_type' => 'dm_thread',
                         'reference_id' => $dmThread->id,
@@ -470,15 +521,17 @@ class StaffChatController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff chat too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         $message = LmsMessage::query()->findOrFail($id);
 
-        if ($message->sender_role !== 'teacher' || (int) $message->sender_id !== $session->user_id) {
+        if ($message->sender_role !== 'teacher' || (int) $message->sender_id !== $actor->id) {
             return response()->json(['message' => 'You can only delete your own messages.'], 403);
         }
 
@@ -491,15 +544,17 @@ class StaffChatController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff chat too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         $message = LmsMessage::query()->findOrFail($id);
 
-        if ($message->sender_role !== 'teacher' || (int) $message->sender_id !== $session->user_id) {
+        if ($message->sender_role !== 'teacher' || (int) $message->sender_id !== $actor->id) {
             return response()->json(['message' => 'You can only edit your own messages.'], 403);
         }
 
@@ -526,13 +581,15 @@ class StaffChatController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff chat too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        LmsTeacher::query()->where('id', $session->user_id)->update(['group_chat_read_at' => now()]);
+        LmsTeacher::query()->where('id', $actor->id)->update(['group_chat_read_at' => now()]);
 
         return response()->json(['ok' => true]);
     }
@@ -541,19 +598,21 @@ class StaffChatController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff chat too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        LmsTeacher::query()->where('id', $session->user_id)->update(['dm_chat_read_at' => now()]);
+        LmsTeacher::query()->where('id', $actor->id)->update(['dm_chat_read_at' => now()]);
 
         // Opening the DM tab clears its "new message" notifications too, so the
         // navbar bell (which counts unread notifications) does not keep flagging
         // direct messages the teacher has already read.
         \App\Models\LmsTeacherNotification::query()
-            ->where('teacher_id', $session->user_id)
+            ->where('teacher_id', $actor->id)
             ->where('type', 'message')
             ->where('reference_type', 'dm_thread')
             ->where('is_read', false)
@@ -566,46 +625,50 @@ class StaffChatController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff chat too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $teacher = LmsTeacher::query()->find($session->user_id);
+        // Actor-aware: a staffer's badge counts their own cohorts, the owner's
+        // mirror counts every cohort in the academy.
+        $trackIds = $this->actorTrackIds($actor);
 
-        if (! $teacher) {
+        if (! $trackIds) {
             return response()->json(['unread_group' => 0, 'unread_dm' => 0]);
         }
 
-        $track = LmsTrack::query()->where('instructor_id', $teacher->id)->first();
-
-        if (! $track) {
-            return response()->json(['unread_group' => 0, 'unread_dm' => 0]);
-        }
-
-        $groupChat = LmsGroupChat::query()->firstOrCreate(['track_id' => $track->id]);
+        $groupChatIds = LmsGroupChat::query()
+            ->whereIn('track_id', $trackIds)
+            ->pluck('id');
 
         $unreadGroup = LmsMessage::query()
             ->where('chat_type', 'group')
-            ->where('chat_id', $groupChat->id)
+            ->whereIn('chat_id', $groupChatIds)
             ->whereNull('deleted_at')
-            ->when($teacher->group_chat_read_at, fn ($q) => $q->where('created_at', '>', $teacher->group_chat_read_at))
+            ->when($actor->group_chat_read_at, fn ($q) => $q->where('created_at', '>', $actor->group_chat_read_at))
             ->count();
 
-        $studentIds = LmsEnrollment::query()
-            ->where('track_id', $track->id)
-            ->pluck('student_id');
+        // Scoped to the actor's OWN threads: it used to count any message from a
+        // student of theirs, which included messages those students sent to a
+        // different instructor.
+        $dmThreadIds = LmsDmThread::query()
+            ->where('instructor_id', $actor->id)
+            ->pluck('id');
 
         $unreadDm = LmsMessage::query()
             ->where('chat_type', 'dm')
             ->where('sender_role', 'student')
-            ->whereIn('sender_id', $studentIds)
-            ->when($teacher->dm_chat_read_at, fn ($q) => $q->where('created_at', '>', $teacher->dm_chat_read_at))
+            ->whereIn('chat_id', $dmThreadIds)
+            ->whereNull('deleted_at')
+            ->when($actor->dm_chat_read_at, fn ($q) => $q->where('created_at', '>', $actor->dm_chat_read_at))
             ->count();
 
         $unreadNotifs = \App\Models\LmsTeacherNotification::query()
-            ->where('teacher_id', $session->user_id)
+            ->where('teacher_id', $actor->id)
             ->where('is_read', false)
             ->count();
 
@@ -625,9 +688,11 @@ class StaffChatController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        // A staff session's own row, or the academy owner's academy-wide mirror
+        // (full parity: the owner portal mounts the staff chat too).
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
@@ -635,20 +700,19 @@ class StaffChatController extends BaseLmsController
             'emoji' => ['required', 'string', Rule::in($this->allowedReactionEmojis())],
         ]);
 
-        $teacher = LmsTeacher::query()->findOrFail($session->user_id);
-
         $message = LmsMessage::query()->whereNull('deleted_at')->findOrFail($id);
 
         if ($message->chat_type === 'group') {
-            $trackIds = LmsTrack::query()->where('instructor_id', $teacher->id)->pluck('id');
+            // Actor-aware: the cohorts this actor may react in, the owner's mirror
+            // covering the whole academy.
             $reachable = LmsGroupChat::query()
-                ->whereIn('track_id', $trackIds)
+                ->whereIn('track_id', $this->actorTrackIds($actor))
                 ->where('id', $message->chat_id)
                 ->exists();
         } elseif ($message->chat_type === 'dm') {
             $reachable = LmsDmThread::query()
                 ->where('id', $message->chat_id)
-                ->where('instructor_id', $teacher->id)
+                ->where('instructor_id', $actor->id)
                 ->exists();
         } else {
             $reachable = false;
@@ -658,7 +722,7 @@ class StaffChatController extends BaseLmsController
             return response()->json(['message' => 'Not allowed.'], 403);
         }
 
-        $reactions = $this->toggleMessageReaction($message, 'teacher', (int) $teacher->id, $validated['emoji']);
+        $reactions = $this->toggleMessageReaction($message, 'teacher', (int) $actor->id, $validated['emoji']);
 
         return response()->json([
             'message_id' => $message->id,

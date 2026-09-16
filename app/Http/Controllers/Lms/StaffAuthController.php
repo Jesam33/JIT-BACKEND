@@ -93,18 +93,27 @@ class StaffAuthController extends BaseLmsController
 
         $session = $this->sessionFromRequest($request, 'staff');
 
-        if (! $session) {
+        // The academy owner's mirror is a valid staff actor too (full parity), so
+        // `me` answers for it as well: the owner shell mounts the staff pages and
+        // they bootstrap from here.
+        $actor = $this->staffActor($request);
+
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $teacher = LmsTeacher::query()->findOrFail($session->user_id);
+        // Never surface the mirror's synthetic address: an owner signs in with the
+        // account email below.
+        $owner = $actor->isAcademyOwner() ? $this->ownerFromRequest($request) : null;
 
         return response()->json([
-            'id' => $teacher->id,
-            'name' => $teacher->name,
-            'role' => $teacher->role ?? 'Instructor',
-            'email' => $teacher->email,
-            'profile_photo_url' => $teacher->profile_photo_url,
+            'id' => $actor->id,
+            'name' => $actor->name,
+            'role' => $actor->role ?? 'Instructor',
+            'email' => $owner?->email ?? $actor->email,
+            'profile_photo_url' => $actor->profile_photo_url,
+            // Tells the staff shell it is really the owner acting academy-wide.
+            'academy_owner' => $actor->isAcademyOwner(),
             'plan' => $this->planForSession($session),
             // Per-feature gates for the staff shell (the sidebar shows
             // "Create with AI" only when the academy's plan includes it).
@@ -120,18 +129,18 @@ class StaffAuthController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $teacher = LmsTeacher::query()->findOrFail($session->user_id);
-
-        $tracks = \App\Models\LmsTrack::query()->where('instructor_id', $teacher->id)->get();
+        // Actor-aware scope: a staffer sees their own cohorts/classes, the owner's
+        // mirror sees the whole academy (BaseLmsController::actorTrackIds et al).
+        $tracks = \App\Models\LmsTrack::query()->whereIn('id', $this->actorTrackIds($actor))->get();
         $trackIds = $tracks->pluck('id');
 
-        $courseIds = $tracks->pluck('course_id')->filter();
+        $courseIds = $this->actorCourseIds($actor);
 
         $students = \App\Models\LmsEnrollment::query()
             ->whereIn('track_id', $trackIds)
@@ -139,14 +148,16 @@ class StaffAuthController extends BaseLmsController
             ->get()
             ->pluck('student');
 
+        $classroomIds = $this->actorClassroomIds($actor);
+
         $upcomingClasses = \App\Models\LmsClassroom::query()
-            ->where('teacher_id', $teacher->id)
+            ->whereIn('id', $classroomIds)
             ->where('starts_at', '>', now())
             ->orderBy('starts_at')
             ->get();
 
         $classrooms = \App\Models\LmsClassroom::query()
-            ->where('teacher_id', $teacher->id)
+            ->whereIn('id', $classroomIds)
             ->with('course:id,title')
             ->orderBy('starts_at', 'desc')
             ->get();
@@ -172,12 +183,14 @@ class StaffAuthController extends BaseLmsController
             ->whereHas('course', fn($q) => $q->whereIn('id', $courseIds))
             ->get();
 
+        $scheduledClassIds = $this->actorScheduledClassIds($actor);
+
         $scheduledClasses = \App\Models\LmsScheduledClass::query()
-            ->where('teacher_id', $teacher->id)
+            ->whereIn('id', $scheduledClassIds)
             ->get();
 
         $upcomingScheduled = \App\Models\LmsScheduledClass::query()
-            ->where('teacher_id', $teacher->id)
+            ->whereIn('id', $scheduledClassIds)
             ->where('status', 'scheduled')
             ->where('starts_at', '>', now())
             ->orderBy('starts_at')
@@ -200,7 +213,12 @@ class StaffAuthController extends BaseLmsController
             ->count();
 
         return response()->json([
-            'teacher' => ['name' => $teacher->name, 'email' => $teacher->email],
+            'teacher' => [
+                'name' => $actor->name,
+                // Real account email when the owner is acting; never the mirror's
+                // synthetic internal address.
+                'email' => ($actor->isAcademyOwner() ? $this->ownerFromRequest($request)?->email : null) ?? $actor->email,
+            ],
             'tracks' => $tracks->count(),
             'students' => $students->count(),
             'modules' => $modules->count(),

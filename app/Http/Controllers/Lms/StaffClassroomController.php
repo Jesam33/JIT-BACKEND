@@ -6,7 +6,6 @@ use App\Models\LmsAttendance;
 use App\Models\LmsAttendanceEvent;
 use App\Models\LmsAttendanceRecord;
 use App\Models\LmsClassroom;
-use App\Models\LmsEnrollment;
 use App\Models\LmsNotification;
 use App\Models\LmsScheduledClass;
 use App\Models\LmsTeacher;
@@ -14,6 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\Rule;
 
 class StaffClassroomController extends BaseLmsController
 {
@@ -21,14 +21,16 @@ class StaffClassroomController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         $classrooms = LmsClassroom::query()
-            ->where('teacher_id', $session->user_id)
+            // Actor-aware: a staffer sees the classrooms they host, the owner's
+            // academy-wide mirror sees every classroom in the academy.
+            ->whereIn('id', $this->actorClassroomIds($actor))
             ->with(['course:id,title', 'teacher:id,name'])
             ->orderBy('starts_at', 'desc')
             ->get();
@@ -40,14 +42,14 @@ class StaffClassroomController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         $classroom = LmsClassroom::query()
-            ->where('teacher_id', $session->user_id)
+            ->whereIn('id', $this->actorClassroomIds($actor))
             ->with(['course:id,title', 'teacher:id,name'])
             ->findOrFail($id);
 
@@ -58,14 +60,17 @@ class StaffClassroomController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         $validated = $request->validate([
-            'course_id' => ['required', 'integer', 'exists:lms_courses,id'],
+            // Bounded to the actor's own courses, not just `exists`: that rule runs
+            // on the raw query builder, so global scopes don't apply and it would
+            // accept another academy's course id.
+            'course_id' => ['required', 'integer', Rule::in($this->actorCourseIds($actor))],
             'teacher_id' => ['nullable', 'integer', 'exists:lms_teachers,id'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -80,22 +85,22 @@ class StaffClassroomController extends BaseLmsController
             'session_thumbnail_url' => ['nullable', 'string', 'max:2048'],
         ]);
 
-        $validated['teacher_id'] = $session->user_id;
+        $validated['teacher_id'] = $actor->id;
         $this->maybeFillPasscode($validated);
 
         $classroom = LmsClassroom::query()->create($validated);
 
-        // Notify every student enrolled in the course: a live class with no
-        // attendees is the whole feature silently failing. Mirrors the fan-out
-        // in StaffModuleController::scheduleClass (module scheduled classes);
-        // the email sweep (lms:send-notification-emails) picks these up like
-        // any other notification. The meeting password is deliberately NOT
-        // included — students join in-portal via a minted JWT, they never
-        // type the passcode.
-        $studentIds = LmsEnrollment::query()
-            ->whereHas('track', fn ($q) => $q->where('course_id', $classroom->course_id))
-            ->pluck('student_id')
-            ->unique();
+        // Notify every student in the course: a live class with no attendees is
+        // the whole feature silently failing. Mirrors the fan-out in
+        // StaffModuleController::scheduleClass (module scheduled classes); the
+        // email sweep (lms:send-notification-emails) picks these up like any other
+        // notification. The audience is the COURSE, not the enrollment rows: a
+        // student who chose this course but has no cohort placement on record yet
+        // receives nothing from an enrollment-only fan-out (see
+        // BaseLmsController::studentIdsInCourses). The meeting password is
+        // deliberately NOT included — students join in-portal via a minted JWT,
+        // they never type the passcode.
+        $studentIds = $this->studentIdsInCourses(array_filter([$classroom->course_id]));
 
         foreach ($studentIds as $studentId) {
             LmsNotification::create([
@@ -115,18 +120,18 @@ class StaffClassroomController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         $classroom = LmsClassroom::query()
-            ->where('teacher_id', $session->user_id)
+            ->whereIn('id', $this->actorClassroomIds($actor))
             ->findOrFail($id);
 
         $validated = $request->validate([
-            'course_id' => ['nullable', 'integer', 'exists:lms_courses,id'],
+            'course_id' => ['nullable', 'integer', Rule::in($this->actorCourseIds($actor))],
             'teacher_id' => ['nullable', 'integer', 'exists:lms_teachers,id'],
             'title' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -149,14 +154,14 @@ class StaffClassroomController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         $classroom = LmsClassroom::query()
-            ->where('teacher_id', $session->user_id)
+            ->whereIn('id', $this->actorClassroomIds($actor))
             ->findOrFail($id);
 
         $classroom->delete();
@@ -174,9 +179,9 @@ class StaffClassroomController extends BaseLmsController
     {
         $this->ensureLmsEnabled();
 
-        $session = $this->sessionFromRequest($request, 'staff');
+        $actor = $this->staffActor($request);
 
-        if (! $session) {
+        if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
@@ -204,23 +209,22 @@ class StaffClassroomController extends BaseLmsController
 
         if ($classType === 'scheduled') {
             $model = LmsScheduledClass::query()
-                ->where('teacher_id', $session->user_id)
+                ->whereIn('id', $this->actorScheduledClassIds($actor))
                 ->findOrFail($id);
             $room = $this->ensureRoom($model, 'scheduled');
         } else {
             $model = LmsClassroom::query()
-                ->where('teacher_id', $session->user_id)
+                ->whereIn('id', $this->actorClassroomIds($actor))
                 ->findOrFail($id);
             $room = $this->ensureRoom($model, 'classroom');
         }
 
-        $teacher = LmsTeacher::query()->find($session->user_id);
-        $userName = $teacher?->name ?: 'Instructor';
+        $userName = $actor->name ?: 'Instructor';
 
         $jwt = $this->mintJaasToken($cfg, $room, [
-            'id' => 'teacher-' . $session->user_id,
+            'id' => 'teacher-' . $actor->id,
             'name' => $userName,
-            'email' => $teacher?->email ?? '',
+            'email' => $actor->email ?? '',
         ], true);
 
         return response()->json([

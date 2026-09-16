@@ -140,9 +140,10 @@ return [
     'subscription_enforce_freeze' => filter_var(env('SUBSCRIPTION_ENFORCE_FREEZE', false), FILTER_VALIDATE_BOOLEAN),
 
     // Days after a paid period ends before the owner portal freezes (grace window).
-    // During grace the portal still works and the billing page nudges the owner to
-    // renew; past it, the portal freezes. Default 2 days.
-    'subscription_grace_days' => (int) env('SUBSCRIPTION_GRACE_DAYS', 2),
+    // During grace the portal still works and the owner gets a reinstatement email
+    // EVERY day of the window (`lms:send-subscription-reminders`); past it, the
+    // portal freezes. Default 7 days.
+    'subscription_grace_days' => (int) env('SUBSCRIPTION_GRACE_DAYS', 7),
 
     // Where a frozen owner is told to reach the platform ("contact management
     // services"). Optional: when set, the freeze screen shows it as a mailto.

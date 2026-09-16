@@ -94,8 +94,10 @@ class AgentController extends BaseLmsController
             'home_address' => 'required|string',
             'qualification' => 'required|string|max:255',
             'custom_answers' => 'required|array',
-            'custom_answers.target_students' => 'required|string',
-            'custom_answers.experience' => 'required|string',
+            // Only the course selection is collected now; the old free-text
+            // "where will you find students" / "your experience" answers are no
+            // longer asked for. Any keys a stale cached bundle still posts are
+            // simply carried through, so a mid-deploy client can't 422.
             'custom_answers.courses_to_promote' => 'required|string',
         ]);
 

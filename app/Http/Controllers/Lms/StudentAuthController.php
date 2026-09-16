@@ -116,7 +116,10 @@ class StudentAuthController extends BaseLmsController
         ]);
 
         if (! empty($resolvedCourseId)) {
-            $track = $this->findActiveTrackForCourse($resolvedCourseId);
+            // Placement, not signup: this student is already committed to the course
+            // (see findTrackForCoursePlacement), so a closed registration window must
+            // not leave them in no cohort at all.
+            $track = $this->findTrackForCoursePlacement($resolvedCourseId);
             if ($track) {
                 LmsEnrollment::query()->updateOrCreate(
                     ['student_id' => $student->id],
@@ -182,7 +185,9 @@ class StudentAuthController extends BaseLmsController
         ]);
 
         if (! empty($registration->course_id)) {
-            $track = $this->findActiveTrackForCourse($registration->course_id);
+            // Placement, not signup: they registered (usually paid) while the window
+            // was open and are only being set up now (findTrackForCoursePlacement).
+            $track = $this->findTrackForCoursePlacement($registration->course_id);
             if ($track) {
                 LmsEnrollment::query()->updateOrCreate(
                     ['student_id' => $student->id],

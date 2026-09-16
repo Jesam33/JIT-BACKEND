@@ -256,7 +256,7 @@ class TenantSignupController extends Controller
 
             return response()->json([
                 'status' => 'pending',
-                'message' => 'We are finalizing your institute. This can take a moment; please try again.',
+                'message' => 'We are finalizing your Online Academy. This can take a moment; please try again.',
             ], 503);
         }
 
@@ -266,7 +266,7 @@ class TenantSignupController extends Controller
             'status' => 'success',
             'free' => true,
             'resumed' => $resumed,
-            'message' => 'Your institute is ready, check your email for your setup link.',
+            'message' => 'Your Online Academy is ready, check your email for your setup link.',
             'front_door' => $this->frontDoor($tenant),
             'tenant' => $tenant->only(['id', 'name', 'slug']),
         ], 201);
@@ -297,7 +297,7 @@ class TenantSignupController extends Controller
         if ($tenant->status === 'active') {
             return response()->json([
                 'status' => 'success',
-                'message' => 'Your institute is ready. Check your email for your setup link.',
+                'message' => 'Your Online Academy is ready. Check your email for your setup link.',
                 'front_door' => $this->frontDoor($tenant),
                 'tenant' => $tenant->only(['id', 'name', 'slug']),
             ]);
@@ -342,14 +342,14 @@ class TenantSignupController extends Controller
 
             return response()->json([
                 'status' => 'pending',
-                'message' => 'Payment received, we are finalizing your institute. This can take a moment; please click Check again.',
+                'message' => 'Payment received, we are finalizing your Online Academy. This can take a moment; please click Check again.',
             ], 503);
         }
         $tenant->refresh();
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Payment confirmed. Your institute is ready, check your email for your setup link.',
+            'message' => 'Payment confirmed. Your Online Academy is ready, check your email for your setup link.',
             'front_door' => $this->frontDoor($tenant),
             'tenant' => $tenant->only(['id', 'name', 'slug']),
         ]);
@@ -413,8 +413,13 @@ class TenantSignupController extends Controller
     {
         $appDomain = env('APP_DOMAIN');
 
+        // The academy's public address: its subdomain when custom domains are
+        // live, else its public storefront /i/{slug} (the same URL
+        // tenantStorefrontUrl builds on the frontend). NOT the bare frontend
+        // homepage + ?tenant=, which is the marketing site with a pinned
+        // cookie, not a shareable address for the academy.
         return $appDomain
             ? 'https://' . $tenant->slug . '.' . $appDomain
-            : config('saas.frontend_url') . '/?tenant=' . $tenant->slug;
+            : rtrim(config('saas.frontend_url'), '/') . '/i/' . $tenant->slug;
     }
 }

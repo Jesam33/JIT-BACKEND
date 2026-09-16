@@ -64,7 +64,10 @@ class PlanGate
             return;
         }
 
-        if (LmsTeacher::query()->withTenant($tenant->id)->count() >= $limit) {
+        // staffOnly() excludes the owner's academy-wide mirror row (an actor, not a
+        // hire): without it every academy would silently lose one seat to a row it
+        // never added, and a Free academy with a 1-staff cap could never hire.
+        if (LmsTeacher::query()->withTenant($tenant->id)->staffOnly()->count() >= $limit) {
             throw PlanLimitException::forResource('staff', $limit, $tenant);
         }
     }

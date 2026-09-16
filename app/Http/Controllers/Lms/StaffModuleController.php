@@ -15,11 +15,14 @@ use Illuminate\Support\Facades\Storage;
 
 class StaffModuleController extends BaseLmsController
 {
+    /**
+     * The acting teacher: a staff session's own row, or the academy owner's
+     * academy-wide mirror (see BaseLmsController::staffActor), so an owner can
+     * author modules for any course in the academy.
+     */
     private function teacher(Request $request): ?LmsTeacher
     {
-        $session = $this->sessionFromRequest($request, 'staff');
-        if (! $session) return null;
-        return LmsTeacher::find($session->user_id);
+        return $this->staffActor($request);
     }
 
     private function teacherOrFail(Request $request): LmsTeacher
@@ -31,7 +34,7 @@ class StaffModuleController extends BaseLmsController
 
     private function assignedCourseIds(LmsTeacher $teacher): array
     {
-        return LmsTrack::where('instructor_id', $teacher->id)->pluck('course_id')->toArray();
+        return $this->actorCourseIds($teacher);
     }
 
     public function index(Request $request): JsonResponse
@@ -98,16 +101,16 @@ class StaffModuleController extends BaseLmsController
     }
 
     /**
-     * Notify every student enrolled in this module's course that new curriculum
-     * is available. Mirrors the scheduleClass() fan-out; TenantAware stamps the
+     * Notify every student in this module's course that new curriculum is
+     * available. Mirrors the scheduleClass() fan-out; TenantAware stamps the
      * tenant_id on each notification.
      */
     private function notifyStudentsOfModule(LmsModule $module): void
     {
-        $studentIds = \App\Models\LmsEnrollment::query()
-            ->whereHas('track', fn ($q) => $q->where('course_id', $module->course_id))
-            ->pluck('student_id')
-            ->unique();
+        // Course audience, not enrollment audience: a student who picked this
+        // course but has no cohort placement yet still has to hear about it (see
+        // BaseLmsController::studentIdsInCourses).
+        $studentIds = $this->studentIdsInCourses(array_filter([$module->course_id]));
 
         foreach ($studentIds as $studentId) {
             \App\Models\LmsNotification::create([
@@ -394,9 +397,10 @@ class StaffModuleController extends BaseLmsController
 
         $class = LmsScheduledClass::create($validated);
 
-        $students = \App\Models\LmsEnrollment::query()
-            ->whereHas('track', fn($q) => $q->whereIn('course_id', $courseIds))
-            ->pluck('student_id');
+        // Everyone in the course hears about a new class, not just those with a
+        // cohort placement on record (see studentIdsInCourses): the students this
+        // is FOR are exactly the ones an enrollment-only fan-out misses.
+        $students = $this->studentIdsInCourses($courseIds);
 
         foreach ($students as $studentId) {
             $meetingPwd = $validated['meeting_password'] ?? null;
@@ -419,7 +423,9 @@ class StaffModuleController extends BaseLmsController
         $teacher = $this->teacherOrFail($request);
 
         $query = LmsScheduledClass::with(['module.course'])
-            ->where('teacher_id', $teacher->id)
+            // Actor-aware: a staffer sees their own classes, the owner's mirror
+            // sees every class in the academy.
+            ->whereIn('id', $this->actorScheduledClassIds($teacher))
             ->orderBy('starts_at');
 
         if ($request->has('module_id')) {
@@ -438,7 +444,7 @@ class StaffModuleController extends BaseLmsController
         $this->ensureLmsEnabled();
         $teacher = $this->teacherOrFail($request);
 
-        $class = LmsScheduledClass::where('teacher_id', $teacher->id)->findOrFail($classId);
+        $class = LmsScheduledClass::whereIn('id', $this->actorScheduledClassIds($teacher))->findOrFail($classId);
 
         $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
@@ -463,7 +469,7 @@ class StaffModuleController extends BaseLmsController
         $this->ensureLmsEnabled();
         $teacher = $this->teacherOrFail($request);
 
-        LmsScheduledClass::where('teacher_id', $teacher->id)->findOrFail($classId)->delete();
+        LmsScheduledClass::whereIn('id', $this->actorScheduledClassIds($teacher))->findOrFail($classId)->delete();
         return response()->json(['message' => 'Class cancelled.']);
     }
 }

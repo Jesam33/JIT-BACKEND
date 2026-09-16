@@ -55,6 +55,14 @@ class BroadcastingAuthController extends Controller
 
         if ($session->role === 'staff') {
             $user = LmsTeacher::query()->find($session->user_id);
+        } elseif ($session->role === 'owner') {
+            // The academy owner acts through an academy-wide mirror teacher (full
+            // parity with the staff portal), so their chat subscriptions authorize
+            // as that actor. Without this branch an owner session fell through to
+            // the STUDENT lookup and resolved to a same-id student of the tenant,
+            // or to nothing at all.
+            $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
+            $user = LmsTeacher::ownerMirror($tenant);
         } else {
             $user = LmsStudent::query()->find($session->user_id);
         }
@@ -79,8 +87,11 @@ class BroadcastingAuthController extends Controller
         );
 
         if (str_starts_with($channel, 'presence-')) {
-            $role = $session->role === 'staff' ? 'teacher' : 'student';
-            $name = $role === 'teacher'
+            // Keyed on the resolved actor, not the session role: an owner session
+            // subscribes as the mirror TEACHER, and must be presented as one.
+            $isTeacher = $user instanceof LmsTeacher;
+            $role = $isTeacher ? 'teacher' : 'student';
+            $name = $isTeacher
                 ? $user->name
                 : trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
 
@@ -105,6 +116,14 @@ class BroadcastingAuthController extends Controller
             if (! $groupChat) return false;
 
             if ($user instanceof LmsTeacher) {
+                // An academy owner oversees every cohort in the academy, matching
+                // the academy-wide read scope of StaffChatController::groupMessages.
+                // TenantScope on the lookups above already confines this to their
+                // own institute, so this cannot reach another academy's chats.
+                if ($user->isAcademyOwner()) {
+                    return true;
+                }
+
                 $track = LmsTrack::query()->find($groupChat->track_id);
                 return $track && (int) $track->instructor_id === $user->id;
             }

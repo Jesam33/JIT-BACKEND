@@ -33,8 +33,8 @@ class StaffVideoController extends BaseLmsController
 
     private function teacherOrFail(Request $request): LmsTeacher
     {
-        $session = $this->sessionFromRequest($request, 'staff');
-        $teacher = $session ? LmsTeacher::find($session->user_id) : null;
+        // A staff session's own row, or the academy owner's mirror (full parity).
+        $teacher = $this->staffActor($request);
         if (! $teacher) {
             abort(401, 'Unauthorized');
         }

@@ -100,11 +100,40 @@ class SendNotificationEmails extends Command
             ->get()
             ->keyBy('id');
 
+        // An academy owner who teaches is a real LmsTeacher row (see
+        // LmsTeacher::ownerMirror) carrying a SYNTHETIC address,
+        // owner+{tenantId}@academy.internal, that nobody can read: mail sent there
+        // bounces and the owner never learns a student submitted a task or wrote to
+        // them. Deliver those to the owner's real login address instead. Only the
+        // tenants actually present in this batch are looked up, and only when the
+        // batch contains a mirror at all, so an academy with no owner activity
+        // costs nothing.
+        $mirrorTenantIds = $recipients
+            ->filter(fn ($t) => (bool) $t->is_academy_owner)
+            ->pluck('tenant_id')
+            ->filter()
+            ->unique()
+            ->all();
+
+        $ownerEmails = $mirrorTenantIds
+            ? DB::table('tenant_admins')
+                ->join('users', 'users.id', '=', 'tenant_admins.user_id')
+                ->whereIn('tenant_admins.tenant_id', $mirrorTenantIds)
+                ->orderByRaw("CASE WHEN tenant_admins.role = 'owner' THEN 0 ELSE 1 END")
+                ->get(['tenant_admins.tenant_id', 'users.email'])
+                ->unique('tenant_id')
+                ->pluck('email', 'tenant_id')
+            : collect();
+
         $sent = 0;
         foreach ($notifs as $n) {
             $r = $recipients->get($n->teacher_id);
             $name = $r ? (trim((string) $r->name) ?: ($r->username ?: 'there')) : 'there';
-            $sent += $this->deliver($n, 'staff', $r?->email, $name, $tenantNames, $slugs, $replyTos, $brandColors) ? 1 : 0;
+            // Null when a mirror's academy somehow has no owner row: the sweep
+            // then treats it as an unsendable address (retries, then gives up)
+            // rather than mailing the internal placeholder.
+            $email = $r && $r->is_academy_owner ? ($ownerEmails[$r->tenant_id] ?? null) : $r?->email;
+            $sent += $this->deliver($n, 'staff', $email, $name, $tenantNames, $slugs, $replyTos, $brandColors) ? 1 : 0;
         }
 
         return $sent;

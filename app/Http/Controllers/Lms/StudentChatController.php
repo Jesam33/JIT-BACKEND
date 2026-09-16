@@ -342,11 +342,42 @@ class StudentChatController extends BaseLmsController
         $content = $validated['content'] ?? '';
 
         if ($content) {
+            // The @mention roster offers the instructor as "@Tutor" (a teacher row
+            // has no username to advertise), so a student tagging their teacher
+            // arrives as the literal word "tutor" — which used to be skipped
+            // outright, notifying nobody. That is the student's main way of reaching
+            // a teacher in the group chat, and it matters most in an academy whose
+            // owner teaches their own cohorts. Route it to the cohort's instructor.
+            // A typed-out username match is honoured too.
+            $instructor = $track->instructor_id
+                ? LmsTeacher::query()->find($track->instructor_id)
+                : null;
+
             preg_match_all('/@(\w+)/u', $content, $matches);
+            $instructorNotified = false;
+
             foreach ($matches[1] as $mentionedUsername) {
-                if (strtolower($mentionedUsername) === 'tutor') {
+                $isInstructor = $instructor && (
+                    strcasecmp($mentionedUsername, 'tutor') === 0
+                    || ($instructor->username && strcasecmp($instructor->username, $mentionedUsername) === 0)
+                );
+
+                if ($isInstructor) {
+                    // Once per message: "@Tutor @Tutor" is one person, not two.
+                    if (! $instructorNotified) {
+                        LmsTeacherNotification::query()->create([
+                            'teacher_id' => $instructor->id,
+                            'type' => 'mention',
+                            'title' => 'You were mentioned',
+                            'body' => 'A student mentioned you in the group chat',
+                            'reference_type' => 'group_chat',
+                            'reference_id' => $groupChat->id,
+                        ]);
+                        $instructorNotified = true;
+                    }
                     continue;
                 }
+
                 $student = \App\Models\LmsStudent::query()
                     ->where('username', $mentionedUsername)
                     ->first();

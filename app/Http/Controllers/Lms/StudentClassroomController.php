@@ -8,6 +8,7 @@ use App\Models\LmsAttendanceRecord;
 use App\Models\LmsClassroom;
 use App\Models\LmsScheduledClass;
 use App\Models\LmsSession;
+use App\Support\AttendanceDuration;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -190,18 +191,12 @@ class StudentClassroomController extends BaseLmsController
 
             $durationMinutes = (int) round($totalSeconds / 60);
 
-            $classDurationMinutes = $scheduled->starts_at && $scheduled->ends_at
-                ? (int) round($scheduled->starts_at->diffInMinutes($scheduled->ends_at))
-                : 60;
-
-            // 70% of the class = present; any shorter stay (but over a minute)
-            // = partial. The same rule is stated to students in the portal's
-            // pre-join step, so what they're told matches what gets recorded.
-            $threshold = max(1, (int) round($classDurationMinutes * 0.70));
-
-            $status = $durationMinutes >= $threshold
-                ? 'present'
-                : ($durationMinutes > 0 ? 'partial' : 'absent');
+            // Class length + the 70% present threshold come from the shared
+            // App\Support\AttendanceDuration, the same helper the attendance
+            // read endpoints use, so the status stored here and the
+            // "stayed / lasted" the portals show can never disagree.
+            $classDurationMinutes = AttendanceDuration::minutesFor($scheduled);
+            $status = AttendanceDuration::statusFor($durationMinutes, $classDurationMinutes);
 
             $attendance->update([
                 'first_joined_at' => $firstJoined,
@@ -253,18 +248,9 @@ class StudentClassroomController extends BaseLmsController
 
         $durationMinutes = (int) round($totalSeconds / 60);
 
-        $classDurationMinutes = $classroom->starts_at && $classroom->ends_at
-            ? (int) round($classroom->starts_at->diffInMinutes($classroom->ends_at))
-            : 60;
-
-        // 70% of the class = present; any shorter stay (but over a minute)
-        // = partial. The same rule is stated to students in the portal's
-        // pre-join step, so what they're told matches what gets recorded.
-        $threshold = max(1, (int) round($classDurationMinutes * 0.70));
-
-        $status = $durationMinutes >= $threshold
-            ? 'present'
-            : ($durationMinutes > 0 ? 'partial' : 'absent');
+        // Shared class-length + threshold rule, see the scheduled-class branch above.
+        $classDurationMinutes = AttendanceDuration::minutesFor($classroom);
+        $status = AttendanceDuration::statusFor($durationMinutes, $classDurationMinutes);
 
         $attendance->update([
             'first_joined_at' => $firstJoined,

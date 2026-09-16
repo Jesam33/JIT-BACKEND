@@ -137,6 +137,10 @@ class TenantBillingController extends BaseLmsController
             'plan' => $tenant->plan ?? 'free',
             'subscription_status' => $tenant->subscription_status ?? 'active',
             'current_period_end' => $tenant->current_period_end,
+            // A paid plan is committed for the period the owner bought: the Free
+            // card stays locked until current_period_end passes. Null once there
+            // is no running paid period (already Free, or the period is over).
+            'downgrade_lock' => $tenant->downgradeLock(),
             // Live subscription lifecycle (active | grace | frozen) plus the grace
             // window + whether enforcement is switched on, so the billing page can
             // show a renew banner before the freeze and the owner shell knows when
@@ -186,6 +190,23 @@ class TenantBillingController extends BaseLmsController
             return response()->json([
                 'message' => 'The Enterprise plan is arranged with our team. Please contact sales to get started.',
                 'contact_sales' => true,
+            ], 422);
+        }
+
+        // A paid plan is locked in for the period the owner already paid for, so
+        // there is no mid-period hop back down to Free. They can move to Free once
+        // that period ends (after which paidPeriodRunning() is false and this
+        // passes). Refused here, the one place a plan change is requested, so the
+        // rule cannot be bypassed by calling checkout directly.
+        if ($tenant->planIsLocked($plan)) {
+            $until = $tenant->current_period_end;
+
+            return response()->json([
+                'message' => 'Your ' . ($tenant->planConfig()['name'] ?? ucfirst($tenant->planSlug()))
+                    . ' plan is active until ' . ($until ? $until->toFormattedDateString() : 'the end of the period')
+                    . '. You can move to the Free plan once it ends.',
+                'downgrade_locked' => true,
+                'locked_until' => $until,
             ], 422);
         }
 

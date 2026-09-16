@@ -12,6 +12,7 @@ use App\Models\LmsCourse;
 use App\Models\LmsEnrollment;
 use App\Models\LmsMaterial;
 use App\Models\LmsModule;
+use App\Models\LmsNotification;
 use App\Models\LmsScheduledClass;
 use App\Models\LmsStudent;
 use App\Models\LmsTask;
@@ -25,28 +26,25 @@ use Illuminate\Validation\Rule;
 
 class StaffPortalController extends BaseLmsController
 {
+    /**
+     * The acting teacher: a staff session's own row, or the academy owner's
+     * academy-wide mirror (see BaseLmsController::staffActor). Everything below
+     * takes its scope from the actor helpers on the base class, so an owner sees
+     * the whole academy and a staffer sees only their assigned cohorts.
+     */
     private function getTeacher(Request $request): ?LmsTeacher
     {
-        $session = $this->sessionFromRequest($request, 'staff');
-        if (! $session) return null;
-        return LmsTeacher::query()->find($session->user_id);
+        return $this->staffActor($request);
     }
 
     private function getTrackIds(LmsTeacher $teacher): array
     {
-        return LmsTrack::query()
-            ->where('instructor_id', $teacher->id)
-            ->pluck('id')
-            ->toArray();
+        return $this->actorTrackIds($teacher);
     }
 
     private function getCourseIds(LmsTeacher $teacher): array
     {
-        return LmsTrack::query()
-            ->where('instructor_id', $teacher->id)
-            ->pluck('course_id')
-            ->filter()
-            ->toArray();
+        return $this->actorCourseIds($teacher);
     }
 
     /**
@@ -126,7 +124,11 @@ class StaffPortalController extends BaseLmsController
 
         $tracks = LmsTrack::query()
             ->whereIn('id', $trackIds)
-            ->with('batch')
+            // `course` as well as `batch`: an academy owner holds every cohort in
+            // the academy, and cohort names alone ("Batch A", "Evening") do not
+            // say which course they belong to when picking one from a list.
+            ->with(['batch', 'course'])
+            ->orderBy('id')
             ->get();
 
         return response()->json($tracks);
@@ -291,13 +293,10 @@ class StaffPortalController extends BaseLmsController
 
         // Both delivery types: legacy course classrooms (teacher_id on the
         // classroom) and module scheduled classes (teacher_id on the class).
-        $classroomIds = LmsClassroom::query()
-            ->where('teacher_id', $teacher->id)
-            ->pluck('id');
+        // Actor-aware: the owner's mirror covers the whole academy.
+        $classroomIds = $this->actorClassroomIds($teacher);
 
-        $scheduledIds = LmsScheduledClass::query()
-            ->where('teacher_id', $teacher->id)
-            ->pluck('id');
+        $scheduledIds = $this->actorScheduledClassIds($teacher);
 
         $records = LmsAttendanceRecord::query()
             ->where(function ($q) use ($classroomIds, $scheduledIds) {
@@ -310,6 +309,18 @@ class StaffPortalController extends BaseLmsController
             ->with(['student', 'classroom', 'scheduledClass'])
             ->orderBy('created_at', 'desc')
             ->get();
+
+        // "Stayed / lasted" per record: minutes the student was in the room against
+        // the minutes the class was scheduled to run, from the same shared rule the
+        // status was computed with (App\Support\AttendanceDuration). Set as plain
+        // attributes (never saved) so the whole existing row shape is preserved.
+        $records->each(function ($r) {
+            $r->setAttribute('attended_minutes', (int) round(($r->total_seconds ?? 0) / 60));
+            $r->setAttribute(
+                'duration_minutes',
+                \App\Support\AttendanceDuration::minutesFor($r->classroom ?? $r->scheduledClass)
+            );
+        });
 
         return response()->json($records);
     }
@@ -377,10 +388,10 @@ class StaffPortalController extends BaseLmsController
             $modulesDone[$p->student_id][$taskModules[$p->task_id]] = true;
         }
 
-        // Attendance across this teacher's sessions (both delivery types):
-        // present = 1, partial = 0.5, absent = 0.
-        $classroomIds = LmsClassroom::query()->where('teacher_id', $teacher->id)->pluck('id');
-        $scheduledIds = LmsScheduledClass::query()->where('teacher_id', $teacher->id)->pluck('id');
+        // Attendance across this actor's sessions (both delivery types):
+        // present = 1, partial = 0.5, absent = 0. Academy-wide for the owner.
+        $classroomIds = $this->actorClassroomIds($teacher);
+        $scheduledIds = $this->actorScheduledClassIds($teacher);
         $attendance = LmsAttendanceRecord::query()
             ->where(function ($q) use ($classroomIds, $scheduledIds) {
                 $q->where(function ($w) use ($classroomIds) {
@@ -521,7 +532,68 @@ class StaffPortalController extends BaseLmsController
             'is_published' => true,
         ]);
 
-        return response()->json($announcement, 201);
+        $notified = $this->notifyAnnouncement($announcement);
+
+        // `notified` rides along on the announcement object the frontend already
+        // reads, so the page can say how many students it actually reached. A
+        // count of 0 is a real answer, not an error: the cohort has no students
+        // yet, and saying so beats a silent success.
+        return response()->json(array_merge($announcement->toArray(), ['notified' => $notified]), 201);
+    }
+
+    /**
+     * Turn a posted announcement into student-visible notifications.
+     *
+     * Without this, posting was silent end to end: the announcement panel on the
+     * student dashboard and the student notifications page both read
+     * lms_notifications, and nothing anywhere converted a BatchAnnouncement into
+     * one. The owner posted, the row appeared under "Posted Announcements", and no
+     * student was ever told — the announcement existed but had no audience.
+     *
+     * The batch decides the audience: its cohorts' courses, then every student in
+     * them (see studentIdsInCourses). Honours the student's own
+     * notify_announcements switch, the one the profile page exposes; a NULL flag
+     * predates that switch and counts as opted in, so nobody is silently dropped
+     * for having an older row.
+     *
+     * Returns how many notifications were created.
+     */
+    private function notifyAnnouncement(BatchAnnouncement $announcement): int
+    {
+        $courseIds = LmsTrack::query()
+            ->where('batch_id', $announcement->batch_id)
+            ->pluck('course_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $studentIds = $this->studentIdsInCourses($courseIds);
+
+        if ($studentIds === []) {
+            return 0;
+        }
+
+        $recipients = LmsStudent::query()
+            ->whereIn('id', $studentIds)
+            ->where(fn ($q) => $q->where('notify_announcements', true)->orWhereNull('notify_announcements'))
+            ->pluck('id');
+
+        foreach ($recipients as $studentId) {
+            LmsNotification::query()->create([
+                'student_id' => $studentId,
+                // Its own type, so the frontend can style/route an announcement
+                // differently from a task alert, and so the email sweep (which
+                // skips only `mention`) delivers it by mail like everything else.
+                'type' => 'announcement',
+                'title' => $announcement->title,
+                'body' => $announcement->body,
+                'reference_type' => 'batch_announcement',
+                'reference_id' => $announcement->id,
+            ]);
+        }
+
+        return $recipients->count();
     }
 
     public function deleteAnnouncement(Request $request, int $id): JsonResponse
@@ -559,9 +631,8 @@ class StaffPortalController extends BaseLmsController
 
         $trackIds = $this->getTrackIds($teacher);
         $courseIds = $this->getCourseIds($teacher);
-        $classroomIds = LmsClassroom::query()
-            ->where('teacher_id', $teacher->id)
-            ->pluck('id');
+        // Academy-wide for the owner's mirror; own classrooms for a staffer.
+        $classroomIds = $this->actorClassroomIds($teacher);
 
         $totalStudents = LmsEnrollment::query()->whereIn('track_id', $trackIds)->count();
         $totalClasses = count($classroomIds);
@@ -575,7 +646,7 @@ class StaffPortalController extends BaseLmsController
             ->count();
 
         $recentClassrooms = LmsClassroom::query()
-            ->where('teacher_id', $teacher->id)
+            ->whereIn('id', $classroomIds)
             ->orderBy('starts_at', 'desc')
             ->limit(5)
             ->get();

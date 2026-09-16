@@ -34,13 +34,25 @@ class Tenant extends Model
      * synchronous billing verify path and the Paystack webhook, so re-running it
      * with the same plan simply refreshes the period. Kept on the model so both
      * call sites write identical subscription state.
+     *
+     * NOTE: this does NOT police downgrades. A move to 'free' while a paid period
+     * is still running is refused earlier, at the checkout endpoint, by
+     * {@see downgradeLock()} — so reaching here with 'free' means the paid period
+     * really is over (the grace/frozen tail), which is exactly when the owner is
+     * allowed to drop to Free.
      */
     public function activatePlan(string $plan): void
     {
+        $settings = (array) ($this->settings ?? []);
+        // A fresh period restarts the grace reminders: drop the stamp so a later
+        // lapse notifies on its own first day instead of looking already-sent.
+        unset($settings['subscription_reminder_on']);
+
         $this->update([
             'plan' => $plan,
             'subscription_status' => 'active',
-            'current_period_end' => now()->addMonthNoOverflow(),
+            'current_period_end' => $plan === 'free' ? null : now()->addMonthNoOverflow(),
+            'settings' => $settings,
         ]);
 
         // Keep the Paystack payout split in step with the new plan's commission so
@@ -50,6 +62,46 @@ class Tenant extends Model
         // lets a gateway hiccup break plan activation. (No-op at signup, the bank
         // is linked later, and for the primary, which has no subaccount.)
         $this->syncPayoutCommission();
+    }
+
+    /**
+     * Whether a PAID period this tenant bought is still running, i.e. they are on
+     * a positive-price plan whose current_period_end is in the future. The single
+     * predicate behind the downgrade lock below.
+     */
+    public function paidPeriodRunning(): bool
+    {
+        if (! $this->isFreezeEligible()) {
+            return false;
+        }
+
+        return (bool) ($this->current_period_end && $this->current_period_end->isFuture());
+    }
+
+    /**
+     * The mid-period downgrade lock: a paid plan is committed for the period the
+     * owner already paid for, so they cannot drop to Free until it ends.
+     * ['plan' => slug, 'until' => Carbon] while a paid period is running, else
+     * null (on Free already, or the paid period is over and Free is theirs to
+     * take). Read by the billing endpoint to disable the Free card and show the
+     * date it unlocks, and by checkout to refuse the switch outright.
+     */
+    public function downgradeLock(): ?array
+    {
+        if (! $this->paidPeriodRunning()) {
+            return null;
+        }
+
+        return [
+            'plan' => $this->planSlug(),
+            'until' => $this->current_period_end,
+        ];
+    }
+
+    /** Whether THIS plan slug cannot be selected right now because of the lock above. */
+    public function planIsLocked(string $plan): bool
+    {
+        return $plan === 'free' && $this->paidPeriodRunning();
     }
 
     /**
@@ -73,6 +125,47 @@ class Tenant extends Model
         return array_key_exists('managed', $paystack)
             ? (bool) $paystack['managed']
             : ! empty($paystack['bank_code']);
+    }
+
+    /**
+     * Whether this academy has finished payout onboarding, i.e. course fees have
+     * somewhere to settle. A linked subaccount (either path: one we created from
+     * bank details, or a code the owner pasted) is the whole requirement, so this
+     * mirrors the `configured` flag the payments page shows.
+     *
+     * Used to gate the owner portal after signup (see OwnerLayoutClient): with no
+     * settlement bank an academy can take enrolments it cannot get paid for, so
+     * the gate is real rather than a nag. Callers MUST also check the platform
+     * gateway is live before enforcing, otherwise an owner on a deployment with no
+     * Paystack keys would be locked out with no way to comply.
+     */
+    public function payoutConfigured(): bool
+    {
+        $paystack = (array) (data_get($this->settings, 'paystack') ?? []);
+
+        return ! empty($paystack['subaccount_code']);
+    }
+
+    /**
+     * Whether this academy still OWES the payout step, i.e. the owner portal must
+     * not be usable yet. One place decides, so the post-signup screen and the
+     * every-visit gate can never disagree. Three exemptions, each deliberate:
+     *
+     *  - the primary institute settles to the platform's own account by design
+     *    (it has no subaccount and should not be asked for one);
+     *  - an academy that already linked a bank is done;
+     *  - and while the platform's Paystack keys are not live nobody can link a
+     *    bank at all, so enforcing would lock an owner out of their own academy
+     *    with no way to comply. The gate switches itself on the moment the
+     *    gateway goes live.
+     */
+    public function requiresPayoutSetup(): bool
+    {
+        if ($this->isPrimary() || $this->payoutConfigured()) {
+            return false;
+        }
+
+        return app(\App\Services\PaystackService::class)->isConfigured();
     }
 
     /**
@@ -283,7 +376,7 @@ class Tenant extends Model
             return 'active';
         }
 
-        $graceDays = max(0, (int) config('saas.subscription_grace_days', 2));
+        $graceDays = max(0, (int) config('saas.subscription_grace_days', 7));
         $graceEnds = $end->copy()->addDays($graceDays);
 
         return $now->lessThanOrEqualTo($graceEnds) ? 'grace' : 'frozen';
@@ -313,7 +406,7 @@ class Tenant extends Model
     public function subscriptionInfo(): array
     {
         $end = $this->current_period_end;
-        $graceDays = max(0, (int) config('saas.subscription_grace_days', 2));
+        $graceDays = max(0, (int) config('saas.subscription_grace_days', 7));
         $eligible = $this->isFreezeEligible();
 
         return [
@@ -369,7 +462,9 @@ class Tenant extends Model
             $summary['usage'] = [
                 'courses' => \App\Models\LmsCourse::query()->withTenant($this->id)->count(),
                 'students' => \App\Models\LmsStudent::query()->withTenant($this->id)->count(),
-                'staff' => \App\Models\LmsTeacher::query()->withTenant($this->id)->count(),
+                // staffOnly() hides the owner's academy-wide mirror row, so the
+                // used/limit display on the dashboard matches what PlanGate counts.
+                'staff' => \App\Models\LmsTeacher::query()->withTenant($this->id)->staffOnly()->count(),
             ];
         }
 

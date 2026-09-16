@@ -48,3 +48,12 @@ Schedule::command('lms:send-ceo-forum-emails')
 Schedule::command('lms:notify-ended-cohorts')
     ->hourly()
     ->withoutOverlapping();
+
+// Subscription reinstatement: every day of a lapsed owner's grace window
+// (config('saas.subscription_grace_days'), default 7) email them to reinstate,
+// from the day the paid period ends until the portal freezes. Daily, not
+// per-minute — it is one reminder per tenant per calendar day, and the tenant's
+// `subscription_reminder_on` stamp keeps a re-run from double-sending.
+Schedule::command('lms:send-subscription-reminders')
+    ->dailyAt('08:00')
+    ->withoutOverlapping();
