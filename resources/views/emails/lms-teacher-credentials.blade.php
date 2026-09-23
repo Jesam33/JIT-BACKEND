@@ -1,25 +1,44 @@
-@extends('emails.layout', ['preheader' => 'Your staff account is ready — sign in and set a new password.'])
+@extends('emails.layout', [
+    'brandName' => 'Jorsas Tech',
+    'brandColor' => '#ed180d',
+    'preheader' => 'Your staff account is ready. Sign in and set a new password.',
+    // An academy admin creates the staff account, so this is not platform mail
+    // and carries no Jorsas support block.
+    'platformMail' => false,
+])
 
 @section('content')
-  <p style="margin:0 0 18px;font-size:15px;color:#555;">Hello {{ $teacher->name }},</p>
-  <h1 style="margin:0 0 12px;font-size:21px;line-height:1.3;color:#1a1a1a;font-weight:700;">Your staff account is ready</h1>
-  <p style="margin:0 0 22px;font-size:15px;line-height:1.6;color:#444;">
-    An account has been created for you. Use the details below to sign in, then change your password from your profile straight away.
+  @include('emails.partials.heading', [
+    'title' => 'Your staff account is ready',
+    'subtitle' => 'Sign in with the details below, then set a new password',
+  ])
+
+  <p style="margin:28px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111827;">Hello {{ $teacher->name }},</p>
+
+  <p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#374151;">
+    An account has been created for you. Use the details below to sign in, then change your password
+    from your profile straight away.
   </p>
 
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px;background:#f7f7f8;border:1px solid #ececec;border-radius:12px;">
+  <div style="height:24px;font-size:0;line-height:0;">&nbsp;</div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0;background:#f7f7f8;border-radius:8px;">
     <tr>
-      <td style="padding:18px 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#1a1a1a;">
-        <span style="color:#888;">Email</span><br>
-        <strong style="font-size:15px;">{{ $teacher->email }}</strong>
+      <td style="padding:20px 22px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#111827;">
+        <span style="color:#6b7280;">Email</span><br>
+        <strong style="font-size:15px;color:#111827;">{{ $teacher->email }}</strong>
         <div style="height:12px;line-height:12px;">&nbsp;</div>
-        <span style="color:#888;">Temporary password</span><br>
-        <strong style="font-size:16px;letter-spacing:1px;">{{ $plainPassword }}</strong>
+        <span style="color:#6b7280;">Temporary password</span><br>
+        <strong style="font-size:16px;letter-spacing:1px;color:#111827;">{{ $plainPassword }}</strong>
       </td>
     </tr>
   </table>
 
-  <p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#888;">
-    For your security, please change this password the first time you sign in.
-  </p>
+  <div style="height:26px;font-size:0;line-height:0;">&nbsp;</div>
+
+  @include('emails.partials.notice', [
+    'icon' => 'shield',
+    'title' => 'Change this password',
+    'body' => 'For your security, please change this password the first time you sign in.',
+  ])
 @endsection

@@ -1,5 +1,13 @@
 <?php
 
+// The public site that serves the frontend's /public assets and hosts every link
+// we email. Resolved ONCE here — via config, never env() at a call site — so the
+// value survives `php artisan config:cache` in production. In production set
+// LMS_BASE_URL (or FRONTEND_URL) to your public site, e.g. https://jorsastech.com;
+// otherwise every emailed link and image points at localhost and is dead on
+// arrival for the recipient.
+$frontendUrl = rtrim((string) env('LMS_BASE_URL', env('FRONTEND_URL', 'http://127.0.0.1:3000')), '/');
+
 return [
     // ─── Tenancy (Phase 1 stabilization) ──────────────────────────────
     // The primary organisation (Jorsas Institute of Technology) is seeded as
@@ -78,11 +86,58 @@ return [
     // Public URL of the Next.js frontend, used to build links in outgoing emails
     // (staff/student invites, password resets, payment callbacks, owner setup).
     // Resolved here — via config, NOT env() at the call sites — so the value
-    // survives `php artisan config:cache` in production. In production set
-    // LMS_BASE_URL (or FRONTEND_URL) to your public site, e.g.
-    // https://jorsastech.com; otherwise every emailed link points at localhost
-    // and is dead on arrival for the recipient.
-    'frontend_url' => rtrim((string) env('LMS_BASE_URL', env('FRONTEND_URL', 'http://127.0.0.1:3000')), '/'),
+    // survives `php artisan config:cache` in production.
+    'frontend_url' => $frontendUrl,
+
+    // Social accounts shown in the footer of every transactional email (see
+    // resources/views/emails/partials/social.blade.php). Kept here rather than
+    // hardcoded in the view so the accounts can be corrected without touching a
+    // template, and an empty value simply drops that icon from the row. These
+    // are the PLATFORM's own accounts: the footer credits Jorsas Tech on
+    // academy-branded mail too, because the platform is the sender of record.
+    'social_links' => [
+        'facebook' => 'https://facebook.com/share/18FXNqoxra',
+        'instagram' => 'https://instagram.com/jorsastech',
+        'linkedin' => 'https://linkedin.com/company/jorsastech',
+        'whatsapp' => 'https://wa.me/2348034585459',
+    ],
+
+    // The logo that heads mail sent BY THE PLATFORM (the primary institute, and
+    // every email with no academy behind it). Served from the Next.js frontend's
+    // public dir rather than the Laravel asset() helper, which in a cron context
+    // falls back to APP_URL, so a server whose APP_URL is localhost would email
+    // a broken image to every recipient. Null disables it and the layout falls
+    // back to the wordmark.
+    'platform_mail_logo' => $frontendUrl . '/images/jorsas-logo-light-mode.png',
+
+    // ─── Email footer chrome ───────────────────────────────────────────
+    // The "Need Help?" block and the legal row that sit under every
+    // transactional email, plus the icon set they draw on.
+    'email_footer' => [
+        // Where the small icons live: the social marks, and the shield / mail /
+        // phone / clock used in the help block. These are PNGs, NOT SVG, and
+        // that is deliberate: Gmail strips <svg> entirely and Outlook's Word
+        // engine ignores it, so an SVG icon would simply not appear for most
+        // recipients. Source of truth for the files is
+        // jorsas-tech-v2/public/images/email (rendered from SVG by
+        // storage/app/_icongen.mjs).
+        'icons_base' => $frontendUrl . '/images/email',
+
+        // The support details in the "Need Help?" block. Academy-branded mail
+        // swaps the email for the academy's own contact address where it has
+        // one, so a student writes to the right people.
+        'support_email' => 'contact@jorsastech.com',
+        'support_phone' => '+234 803 458 5459',
+        'support_hours' => 'Mon - Sat: 8 am - 5 pm',
+
+        // The legal row. Kept as label/url pairs so an entry can be dropped by
+        // removing it, and the separators between them stay correct.
+        'legal_links' => [
+            ['label' => 'Privacy Policy', 'url' => $frontendUrl . '/policies?policy=privacy-policy'],
+            ['label' => 'Terms & Conditions', 'url' => $frontendUrl . '/policies?policy=terms-and-conditions'],
+            ['label' => 'Trademarks', 'url' => $frontendUrl . '/policies?policy=intellectual-property'],
+        ],
+    ],
 
     // ─── Notification emails ───────────────────────────────────────────
     // Every in-app notification (and every platform announcement) is also

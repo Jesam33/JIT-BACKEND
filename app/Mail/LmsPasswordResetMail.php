@@ -33,6 +33,11 @@ class LmsPasswordResetMail extends Mailable
         public ?string $brandName = null,
         public ?string $brandColor = null,
         public ?string $brandReplyTo = null,
+        // True when the PLATFORM is the sender (no academy behind the message),
+        // which shows the platform-only "Need Help?" block. Comes from
+        // Tenant::brandMailArray()['is_platform'], so it is false for every
+        // academy-branded reset and true only for a platform-level one.
+        public bool $isPlatformMail = false,
     ) {
     }
 

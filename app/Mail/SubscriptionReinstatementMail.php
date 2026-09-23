@@ -51,7 +51,7 @@ class SubscriptionReinstatementMail extends Mailable
             from: $fromAddress !== '' ? new Address($fromAddress, $fromName) : null,
             subject: $urgent
                 ? 'Last day: your academy pauses tomorrow'
-                : 'Your ' . $this->planName . ' plan has ended — reinstate to keep your academy running',
+                : 'Your ' . $this->planName . ' plan has ended. Reinstate to keep your academy running',
         );
     }
 

@@ -339,7 +339,7 @@ class StudentAuthController extends BaseLmsController
         $link = $this->buildResetLink('student', $student->email, $token);
 
         $brand = $this->mailBranding();
-        Mail::to($student->email)->send(new LmsPasswordResetMail($student->first_name, 'Student Portal', $link, $brand['name'], $brand['color'], $brand['reply_to']));
+        Mail::to($student->email)->send(new LmsPasswordResetMail($student->first_name, 'Student Portal', $link, $brand['name'], $brand['color'], $brand['reply_to'], (bool) ($brand['is_platform'] ?? false)));
 
         return response()->json(['message' => 'If that email exists, a reset link has been sent.']);
     }

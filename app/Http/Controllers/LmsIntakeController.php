@@ -585,8 +585,8 @@ class LmsIntakeController extends BaseLmsController
         }
 
         // Reconciliation: before approving, confirm the gateway actually collected
-        // the amount + currency we expected (Paystack returns amount in minor units
-        //, kobo/cents). A mismatch (tampering, a partial charge, FX drift) is held
+        // the amount + currency we expected (Paystack returns amount in minor
+        // units, kobo/cents). A mismatch (tampering, a partial charge, FX drift) is held
         // for manual review instead of silently granting access. Only runs when the
         // caller supplied the gateway payload (verify + webhook); a missing payload
         // preserves the previous behavior.

@@ -1,12 +1,24 @@
-@extends('emails.layout', ['brandName' => $brand['name'], 'brandColor' => $brand['color'], 'preheader' => 'Payment confirmed — set up your account to start learning.'])
+@extends('emails.layout', [
+    'brandName' => $brand['name'],
+    'brandColor' => $brand['color'],
+    'preheader' => 'Payment confirmed. Set up your account to start learning.',
+    'platformMail' => (bool) ($brand['is_platform'] ?? false),
+])
 
 @section('content')
-  <p style="margin:0 0 18px;font-size:15px;color:#555;">Hi {{ $registration->first_name }},</p>
-  <h1 style="margin:0 0 12px;font-size:21px;line-height:1.3;color:#1a1a1a;font-weight:700;">You're in — welcome aboard</h1>
-  <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#444;">
+  @include('emails.partials.heading', [
+    'title' => "You're in. Welcome aboard",
+    'subtitle' => 'Your payment is confirmed and your place is secured',
+  ])
+
+  <p style="margin:28px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111827;">Hello {{ $registration->first_name }},</p>
+
+  <p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#374151;">
     Your payment has been confirmed and you've been accepted into
-    <strong>{{ $registration->course_name }}</strong>. Set up your account below to access your student portal.
+    <strong style="color:#111827;">{{ $registration->course_name }}</strong>. Set up your account
+    below to access your student portal.
   </p>
+
   @include('emails.partials.button', ['url' => $setupLink, 'label' => 'Set up my account', 'color' => $brand['color']])
   @include('emails.partials.fallback-link', ['url' => $setupLink, 'color' => $brand['color']])
 @endsection

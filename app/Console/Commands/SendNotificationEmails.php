@@ -276,6 +276,10 @@ class SendNotificationEmails extends Command
                 instituteName: $institute,
                 instituteReplyTo: $replyTo,
                 instituteColor: $color,
+                // A notification with no tenant, or one under the platform's own
+                // (primary) tenant, is platform mail and carries our support
+                // block. An academy's notification never shows our details.
+                isPlatformMail: ! $tid || in_array((int) $tid, Tenant::platformTenantIds(), true),
             ));
 
             $n->forceFill(['emailed_at' => now()])->saveQuietly();

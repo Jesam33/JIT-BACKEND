@@ -1,28 +1,49 @@
-@extends('emails.layout', ['brandName' => $brand['name'], 'brandColor' => $brand['color'], 'preheader' => 'We received your Admission Marketer application. Here is what happens next.'])
+@extends('emails.layout', [
+    'brandName' => $brand['name'],
+    'brandColor' => $brand['color'],
+    'preheader' => 'We received your Admission Marketer application. Here is what happens next.',
+    'platformMail' => (bool) ($brand['is_platform'] ?? false),
+])
 
 @section('content')
-  <p style="margin:0 0 18px;font-size:15px;color:#555;">Hello {{ $agent->name }},</p>
-  <h1 style="margin:0 0 12px;font-size:21px;line-height:1.3;color:#1a1a1a;font-weight:700;">Your application is in</h1>
-  <p style="margin:0 0 22px;font-size:15px;line-height:1.6;color:#444;">
-    Thank you for applying to become an Admission Marketer with {{ $brand['name'] }}. We have received your details and our team will review them shortly.
+  @include('emails.partials.heading', [
+    'title' => 'Your application is in',
+    'subtitle' => 'We have received your details and will review them shortly',
+  ])
+
+  <p style="margin:28px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111827;">Hello {{ $agent->name }},</p>
+
+  <p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#374151;">
+    Thank you for applying to become an Admission Marketer with {{ $brand['name'] }}. Our team will
+    review your details shortly.
   </p>
 
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;background:#f7f7f8;border:1px solid #ececec;border-radius:12px;">
+  <div style="height:24px;font-size:0;line-height:0;">&nbsp;</div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0;background:#f7f7f8;border-radius:8px;">
     <tr>
-      <td style="padding:18px 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.9;color:#1a1a1a;">
-        <span style="color:#888;">Name</span> &nbsp;<strong>{{ $agent->name }}</strong><br>
-        <span style="color:#888;">Email</span> &nbsp;<strong>{{ $agent->email }}</strong><br>
-        <span style="color:#888;">Phone</span> &nbsp;<strong>{{ $agent->phone }}</strong>
+      <td style="padding:18px 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.9;color:#111827;">
+        <span style="color:#6b7280;">Name</span> &nbsp;<strong>{{ $agent->name }}</strong><br>
+        <span style="color:#6b7280;">Email</span> &nbsp;<strong>{{ $agent->email }}</strong><br>
+        <span style="color:#6b7280;">Phone</span> &nbsp;<strong>{{ $agent->phone }}</strong>
       </td>
     </tr>
   </table>
 
-  <h2 style="margin:0 0 10px;font-size:16px;line-height:1.3;color:#1a1a1a;font-weight:700;">What happens next</h2>
-  <p style="margin:0 0 22px;font-size:15px;line-height:1.6;color:#444;">
-    Once your application is approved, we will email you again with your referral code and a link to set up your Admission Marketer portal. From there you can start referring students and earning commission on every enrolment.
-  </p>
+  <div style="height:26px;font-size:0;line-height:0;">&nbsp;</div>
 
-  <p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#888;">
-    You do not need to do anything for now. If any of the details above look wrong, just reply to this email and let us know.
+  @include('emails.partials.notice', [
+    'icon' => 'info',
+    'title' => 'What happens next',
+    'body' => 'Once your application is approved, we will email you again with your referral code and a link to set up your Admission Marketer portal. From there you can start referring students and earning commission on every enrolment.',
+  ])
+
+  <p style="margin:20px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#6b7280;">
+    You do not need to do anything for now. If any of the details above look wrong, just reply to
+    this email and let us know.
   </p>
+@endsection
+
+@section('footer')
+  <p style="margin:0;">{{ $brand['name'] }}</p>
 @endsection

@@ -1,15 +1,24 @@
-{{-- Notification / announcement email. Rendered by the lms:send-notification-emails
-     sweep. {{ }} escaping is intentional — titles/bodies are user-entered. --}}
-@extends('emails.layout', ['brandName' => $instituteName, 'brandColor' => $instituteColor ?? null, 'preheader' => $notifTitle])
+@php
+    $accent = trim((string) ($instituteColor ?? '')) !== '' ? $instituteColor : '#ed180d';
+@endphp
+@extends('emails.layout', [
+    'brandName' => $instituteName,
+    'brandColor' => $accent,
+    'preheader' => $notifTitle,
+    'platformMail' => $isPlatformMail ?? false,
+])
 
 @section('content')
-  <p style="margin:0 0 18px;font-size:15px;color:#555;">Hi {{ $greetingName }},</p>
-  <h1 style="margin:0 0 12px;font-size:21px;line-height:1.3;color:#1a1a1a;font-weight:700;">{{ $notifTitle }}</h1>
+  @include('emails.partials.heading', ['title' => $notifTitle])
+
+  <p style="margin:28px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111827;">Hello {{ $greetingName }},</p>
+
   @if(trim($notifBody) !== '')
-    <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#444;">{{ $notifBody }}</p>
+    <p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#374151;">{{ $notifBody }}</p>
   @endif
-  @include('emails.partials.button', ['url' => $actionUrl, 'label' => $actionLabel, 'color' => $instituteColor ?? null])
-  @include('emails.partials.fallback-link', ['url' => $actionUrl, 'color' => $instituteColor ?? null])
+
+  @include('emails.partials.button', ['url' => $actionUrl, 'label' => $actionLabel, 'color' => $accent])
+  @include('emails.partials.fallback-link', ['url' => $actionUrl, 'color' => $accent])
 @endsection
 
 @section('footer')

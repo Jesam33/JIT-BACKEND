@@ -327,7 +327,7 @@ class OwnerAdminController extends BaseLmsController
             $token = $this->createPasswordResetToken('student', $student->email);
             $link = $this->buildResetLink('student', $student->email, $token);
             $brand = $this->mailBranding($tenant);
-            Mail::to($student->email)->send(new LmsPasswordResetMail($student->first_name ?: 'there', 'Student Portal', $link, $brand['name'], $brand['color'], $brand['reply_to']));
+            Mail::to($student->email)->send(new LmsPasswordResetMail($student->first_name ?: 'there', 'Student Portal', $link, $brand['name'], $brand['color'], $brand['reply_to'], (bool) ($brand['is_platform'] ?? false)));
             $sent = true;
         } catch (\Throwable $e) {
             Log::warning('Failed to resend student invite', ['student_id' => $student->id, 'err' => $e->getMessage()]);
@@ -707,7 +707,7 @@ class OwnerAdminController extends BaseLmsController
             $token = $this->createPasswordResetToken('staff', $teacher->email);
             $link = $this->buildSetupLink('staff', $teacher->email, $token);
             $brand = $this->mailBranding($tenant);
-            Mail::to($teacher->email)->send(new LmsPasswordResetMail($teacher->name ?: 'there', 'Staff Portal', $link, $brand['name'], $brand['color'], $brand['reply_to']));
+            Mail::to($teacher->email)->send(new LmsPasswordResetMail($teacher->name ?: 'there', 'Staff Portal', $link, $brand['name'], $brand['color'], $brand['reply_to'], (bool) ($brand['is_platform'] ?? false)));
             $sent = true;
         } catch (\Throwable $e) {
             Log::warning('Failed to resend staff invite', ['teacher_id' => $teacher->id, 'err' => $e->getMessage()]);

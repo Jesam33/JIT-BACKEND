@@ -16,13 +16,16 @@ use Illuminate\Mail\Mailables\Envelope;
  * DMARC pass and mail lands in inboxes) while only the display NAME + Reply-To
  * become the institute.
  *
- * The view receives the resolved brand as $brand ({name, color, reply_to}); the
- * template feeds brand.name/brand.color into emails.layout for the header + CTA.
- * A missing/unknown tenant falls back to the platform mail name + red.
+ * The view receives the resolved brand as $brand ({name, color, is_platform,
+ * reply_to}); the template feeds brand.name/brand.color/brand.is_platform into
+ * emails.layout for the sender name, CTA accent and whether the platform-only
+ * "Need Help?" block renders. The header mark is always the platform logo, so
+ * there is deliberately no per-academy logo here. A missing/unknown tenant falls
+ * back to the platform mail name + red + is_platform = true.
  */
 trait BrandedMailable
 {
-    /** @var array{name: string, color: string, reply_to: ?string} */
+    /** @var array{name: string, color: string, is_platform: bool, reply_to: ?string} */
     public array $brand = [];
 
     /**

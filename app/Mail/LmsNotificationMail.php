@@ -33,6 +33,11 @@ class LmsNotificationMail extends Mailable
         // announcement/notification matches its storefront (defaults to red in
         // the layout when null). View-only; the envelope doesn't use it.
         public ?string $instituteColor = null,
+        // True when the PLATFORM is the sender (a broadcast announcement with no
+        // academy behind it), which shows the platform-only "Need Help?" block.
+        // False for every academy notification, so an academy's mail never
+        // carries the platform's support details.
+        public bool $isPlatformMail = false,
         public string $actionLabel = 'Open in the LMS',
     ) {
     }
@@ -45,8 +50,8 @@ class LmsNotificationMail extends Mailable
 
         // Sender identity is per-institute WITHOUT spoofing the from-address:
         // the address stays on the platform's verified domain (SPF/DKIM/DMARC
-        // pass, so it lands in inboxes), only the display NAME is the institute
-        //, so a student sees "Brightstone Academy", not "Jorsas". Replies are
+        // pass, so it lands in inboxes), only the display NAME is the institute,
+        // so a student sees "Brightstone Academy", not "Jorsas". Replies are
         // routed to the institute via Reply-To (its public contact email, or
         // the owner's login email) when one is known.
         $fromAddress = (string) config('mail.from.address');

@@ -275,6 +275,30 @@ class Tenant extends Model
     }
 
     /**
+     * Ids of the tenant(s) that ARE the platform (normally just the primary
+     * institute). Mail sent under one of these is platform mail, so the layout's
+     * platform-only chrome renders on it. Answered from one cached query, because
+     * the notification sweep asks this per row and a per-row lookup is the exact
+     * N+1 the sweep's other maps exist to avoid.
+     *
+     * @return int[]
+     */
+    public static function platformTenantIds(): array
+    {
+        static $ids = null;
+
+        if ($ids === null) {
+            $ids = static::query()
+                ->where('slug', config('saas.primary_slug', 'jorsas'))
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
+
+        return $ids;
+    }
+
+    /**
      * The effective plan definition for this tenant, merged over the free-plan
      * shape so every key (limits, features, commission) is always present even
      * for a partially-configured plan. The primary institute always resolves to
@@ -663,7 +687,15 @@ class Tenant extends Model
      * the row's tenant_id, so a paying academy's payment/approval emails are
      * never stamped "Jorsas".
      *
-     * @return array{name: string, color: string, reply_to: ?string}
+     * `is_platform` tells the layout whether the PLATFORM is the sender, which
+     * decides whether platform-only chrome renders (the "Need Help?" block). It
+     * is true exactly when no academy is behind the message: either no tenant at
+     * all, or the primary tenant, which is Jorsas itself.
+     *
+     * Note there is deliberately no logo here: the header mark is always the
+     * platform's own, never an academy's upload.
+     *
+     * @return array{name: string, color: string, is_platform: bool, reply_to: ?string}
      */
     public static function brandMailArray(?self $tenant): array
     {
@@ -671,6 +703,7 @@ class Tenant extends Model
             return [
                 'name' => (string) config('mail.from.name') ?: 'Jorsas',
                 'color' => '#ed180d',
+                'is_platform' => true,
                 'reply_to' => null,
             ];
         }
@@ -678,6 +711,11 @@ class Tenant extends Model
         return [
             'name' => $tenant->brandMailName(),
             'color' => $tenant->brandMailColor(),
+            // A non-primary academy is the sender of its own mail, so no
+            // platform-only chrome renders. The PRIMARY tenant is the platform
+            // itself (jorsas), so its mail counts as platform mail and does carry
+            // our support block.
+            'is_platform' => $tenant->isPrimary(),
             'reply_to' => $tenant->brandMailReplyTo(),
         ];
     }
