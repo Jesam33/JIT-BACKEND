@@ -80,11 +80,11 @@ class Tenant extends Model
 
     /**
      * The mid-period downgrade lock: a paid plan is committed for the period the
-     * owner already paid for, so they cannot drop to Free until it ends.
-     * ['plan' => slug, 'until' => Carbon] while a paid period is running, else
-     * null (on Free already, or the paid period is over and Free is theirs to
-     * take). Read by the billing endpoint to disable the Free card and show the
-     * date it unlocks, and by checkout to refuse the switch outright.
+     * owner already paid for, so they cannot move DOWN to a cheaper plan until it
+     * ends. ['plan' => slug, 'until' => Carbon] while a paid period is running,
+     * else null (already on the cheapest plan, or the period is over and any plan
+     * is theirs to take). Read by the billing endpoint to disable those cards and
+     * show the date they unlock, and by checkout to refuse the switch outright.
      */
     public function downgradeLock(): ?array
     {
@@ -98,10 +98,53 @@ class Tenant extends Model
         ];
     }
 
-    /** Whether THIS plan slug cannot be selected right now because of the lock above. */
+    /**
+     * Whether THIS plan slug cannot be selected right now because of the lock
+     * above. Any target that costs less than the plan currently running is
+     * refused, not just Free: the owner bought the higher tier for the whole
+     * period, and letting them step down mid-period would both hand back value
+     * they already spent and (because activatePlan() starts a fresh period)
+     * trade the remaining days of the expensive plan for a full month of the
+     * cheap one. Upgrades and same-tier renewals are always allowed, and the
+     * whole lock lifts the moment the paid period ends.
+     */
     public function planIsLocked(string $plan): bool
     {
-        return $plan === 'free' && $this->paidPeriodRunning();
+        if (! $this->paidPeriodRunning()) {
+            return false;
+        }
+
+        $currentPrice = data_get($this->planConfig(), 'price');
+        $targetPrice = data_get(config('saas.plans', [])[$plan] ?? [], 'price');
+
+        // A plan with no numeric price (contact-sales Enterprise) is not part of
+        // this comparison; checkout refuses it separately, before this runs.
+        if (! is_numeric($currentPrice) || ! is_numeric($targetPrice)) {
+            return false;
+        }
+
+        return (float) $targetPrice < (float) $currentPrice;
+    }
+
+    /**
+     * Every plan slug {@see planIsLocked()} currently refuses, so the billing
+     * endpoint can hand the frontend the exact set to disable rather than have
+     * the page re-derive the price rule and drift from it. Empty when no paid
+     * period is running, which is what makes "you can drop to Free once your
+     * subscription is over" true without a second code path.
+     *
+     * @return list<string>
+     */
+    public function lockedPlanSlugs(): array
+    {
+        if (! $this->paidPeriodRunning()) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_keys((array) config('saas.plans', [])),
+            fn ($slug) => $this->planIsLocked((string) $slug)
+        ));
     }
 
     /**

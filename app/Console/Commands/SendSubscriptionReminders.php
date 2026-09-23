@@ -28,6 +28,9 @@ use Illuminate\Support\Facades\Mail;
  * set even when the send fails (same policy as the other sweeps): a bounced
  * reminder is not worth retrying all day, and tomorrow's run tries again.
  * {@see Tenant::activatePlan()} clears the stamp so the next lapse notifies.
+ *
+ * Runs only while config('saas.subscription_enforce_freeze') is on, i.e. while
+ * the grace window it describes is actually enforced. See handle().
  */
 class SendSubscriptionReminders extends Command
 {
@@ -37,6 +40,17 @@ class SendSubscriptionReminders extends Command
 
     public function handle(): int
     {
+        // The reminder and the freeze are one feature and must never disagree: the
+        // email's last line promises a pause ("your academy pauses tomorrow"), so
+        // while enforcement is switched off the portal does not pause and that
+        // promise is false. Gated on the same flag as Tenant::isSubscriptionFrozen()
+        // rather than on a second switch that could be flipped independently.
+        if (! config('saas.subscription_enforce_freeze', false)) {
+            $this->info('Subscription enforcement is off; no reinstatement reminders sent.');
+
+            return self::SUCCESS;
+        }
+
         $today = now()->toDateString();
         $graceDays = max(0, (int) config('saas.subscription_grace_days', 7));
 
@@ -57,6 +71,12 @@ class SendSubscriptionReminders extends Command
             ->get();
 
         if ($candidates->isEmpty()) {
+            // Say so rather than exiting silently: enforcement being ON with no
+            // lapsed academies is a normal, healthy state, and it should not be
+            // indistinguishable in the schedule log from a run that did nothing
+            // because enforcement was off.
+            $this->info('Subscription reminder sweep complete: no lapsed paid academies.');
+
             return self::SUCCESS;
         }
 

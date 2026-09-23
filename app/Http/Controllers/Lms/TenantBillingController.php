@@ -137,10 +137,14 @@ class TenantBillingController extends BaseLmsController
             'plan' => $tenant->plan ?? 'free',
             'subscription_status' => $tenant->subscription_status ?? 'active',
             'current_period_end' => $tenant->current_period_end,
-            // A paid plan is committed for the period the owner bought: the Free
-            // card stays locked until current_period_end passes. Null once there
-            // is no running paid period (already Free, or the period is over).
+            // A paid plan is committed for the period the owner bought: every
+            // cheaper card stays locked until current_period_end passes, so the
+            // only way down to Free is for the subscription to be over. Empty
+            // once there is no running paid period (already Free, or it ended).
             'downgrade_lock' => $tenant->downgradeLock(),
+            // The exact slugs to disable, decided server-side so the page never
+            // re-derives the price comparison and drifts from the checkout rule.
+            'locked_slugs' => $tenant->lockedPlanSlugs(),
             // Live subscription lifecycle (active | grace | frozen) plus the grace
             // window + whether enforcement is switched on, so the billing page can
             // show a renew banner before the freeze and the owner shell knows when
@@ -194,17 +198,18 @@ class TenantBillingController extends BaseLmsController
         }
 
         // A paid plan is locked in for the period the owner already paid for, so
-        // there is no mid-period hop back down to Free. They can move to Free once
-        // that period ends (after which paidPeriodRunning() is false and this
-        // passes). Refused here, the one place a plan change is requested, so the
-        // rule cannot be bypassed by calling checkout directly.
+        // there is no mid-period hop down to a cheaper plan (Free included). They
+        // can move down once that period ends, after which planIsLocked() is false
+        // and this passes. Refused here, the one place a plan change is requested,
+        // so the rule cannot be bypassed by calling checkout directly.
         if ($tenant->planIsLocked($plan)) {
             $until = $tenant->current_period_end;
+            $targetName = (string) (config('saas.plans', [])[$plan]['name'] ?? ucfirst($plan));
 
             return response()->json([
                 'message' => 'Your ' . ($tenant->planConfig()['name'] ?? ucfirst($tenant->planSlug()))
                     . ' plan is active until ' . ($until ? $until->toFormattedDateString() : 'the end of the period')
-                    . '. You can move to the Free plan once it ends.',
+                    . '. You can move to the ' . $targetName . ' plan once it ends.',
                 'downgrade_locked' => true,
                 'locked_until' => $until,
             ], 422);
