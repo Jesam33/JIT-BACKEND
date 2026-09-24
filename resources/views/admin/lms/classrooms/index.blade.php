@@ -131,10 +131,18 @@
                     @csrf
                     <div class="row">
                         <label for="course_id">Course</label>
+                        {{-- Grouped by academy: course titles repeat across academies, and
+                             the classroom's academy is taken from its course, so the
+                             academy is chosen here rather than in a second dropdown that
+                             could disagree with it. --}}
                         <select id="course_id" name="course_id" required>
                             <option value="">Select course</option>
-                            @foreach ($coursesList as $course)
-                                <option value="{{ $course->id }}">{{ $course->title }}</option>
+                            @foreach ($coursesList->groupBy('tenant_id') as $tenantId => $group)
+                                <optgroup label="{{ $academyNames[$tenantId] ?? 'Unknown academy' }}">
+                                    @foreach ($group as $course)
+                                        <option value="{{ $course->id }}">{{ $course->title }}</option>
+                                    @endforeach
+                                </optgroup>
                             @endforeach
                         </select>
                     </div>
@@ -184,6 +192,7 @@
                             <thead>
                                 <tr>
                                     <th>Title</th>
+                                    <th>Academy</th>
                                     <th>Course</th>
                                     <th>Instructor</th>
                                     <th>Schedule</th>
@@ -195,6 +204,7 @@
                                 @foreach ($classroomsList as $classroom)
                                     <tr>
                                         <td><strong>{{ $classroom['title'] }}</strong></td>
+                                        <td>{{ $classroom['academy'] ?? 'Unknown academy' }}</td>
                                         <td>{{ $classroom['course_title'] ?: 'None' }}</td>
                                         <td>{{ $classroom['teacher_name'] ?: 'None' }}</td>
                                         <td>

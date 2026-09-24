@@ -113,7 +113,19 @@ class StudentAuthController extends BaseLmsController
             'user_id' => $student->id,
             'token' => $token,
             'expires_at' => now()->addDays(7),
+            ...LmsSession::requestMeta($request),
         ]);
+
+        // Signing up is a first-ever login, so this records the device without
+        // emailing anybody — the point is that the NEXT sign-in from a different
+        // machine is recognised as a change and alerts. See LoginDeviceTracker.
+        \App\Support\LoginDeviceTracker::record(
+            'student',
+            $student->id,
+            $student->email,
+            trim($student->first_name . ' ' . $student->last_name) ?: $student->email,
+            $request,
+        );
 
         if (! empty($resolvedCourseId)) {
             // Placement, not signup: this student is already committed to the course
@@ -182,7 +194,16 @@ class StudentAuthController extends BaseLmsController
             'user_id' => $student->id,
             'token' => $token,
             'expires_at' => now()->addDays(7),
+            ...LmsSession::requestMeta($request),
         ]);
+
+        \App\Support\LoginDeviceTracker::record(
+            'student',
+            $student->id,
+            $student->email,
+            trim($student->first_name . ' ' . $student->last_name) ?: $student->email,
+            $request,
+        );
 
         if (! empty($registration->course_id)) {
             // Placement, not signup: they registered (usually paid) while the window
@@ -239,6 +260,32 @@ class StudentAuthController extends BaseLmsController
             ], 422);
         }
 
+        // A deactivated student keeps every record but cannot sign in, the
+        // reversible counterpart to deletion, toggled by the academy on the
+        // Students page or by the student themselves on their profile. A scheduled
+        // deletion is the same refusal with a different message. Checked AFTER the
+        // password so this can never tell a stranger that an account exists.
+        $state = $student->lifecycleState();
+
+        if ($state !== 'active') {
+            $payload = ['account_deactivated' => false, 'account_deletion_scheduled' => false];
+
+            $payload['message'] = match ($state) {
+                'purged' => 'This account has been deleted.',
+                'purge_scheduled' => 'This account is scheduled for deletion. Please contact your institute to cancel it.',
+                default => 'Your account has been deactivated. Please contact your institute to restore access.',
+            };
+
+            if ($state === 'purge_scheduled') {
+                $payload['account_deletion_scheduled'] = true;
+                $payload['purge_after'] = $student->purge_after;
+            } elseif ($state === 'deactivated') {
+                $payload['account_deactivated'] = true;
+            }
+
+            return response()->json($payload, 403);
+        }
+
         // Bind the student's own organisation BEFORE minting the session, so the
         // session row is stamped with the correct tenant_id (via TenantAware) and
         // every later portal request (me/dashboard) resolves the right tenant.
@@ -251,7 +298,17 @@ class StudentAuthController extends BaseLmsController
             'user_id' => $student->id,
             'token' => $token,
             'expires_at' => now()->addDays(7),
+            ...LmsSession::requestMeta($request),
         ]);
+
+        // The real login path: warn the student when the machine is new to them.
+        \App\Support\LoginDeviceTracker::record(
+            'student',
+            $student->id,
+            $student->email,
+            trim($student->first_name . ' ' . $student->last_name) ?: $student->email,
+            $request,
+        );
 
         return response()->json(['token' => $token, 'tenant' => $this->currentTenantPayload()]);
     }

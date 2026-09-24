@@ -65,6 +65,15 @@ class BrandingController extends BaseLmsController
             ? ! $tenant->planFeature('remove_branding')
             : true;
 
+        // Whether the academy is still open for new business. Rides along on the
+        // branding payload because every portal surface already fetches it, so
+        // the "new registrations are paused" banner costs no extra request.
+        // Only a plain deactivation matters here: an academy that is purge
+        // scheduled or closed is refused at the gate before any of this renders.
+        $branding['academy_accepting'] = $tenant instanceof Tenant
+            ? $tenant->acceptsNewStudents()
+            : true;
+
         return $branding;
     }
 

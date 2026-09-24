@@ -173,6 +173,19 @@ class LmsIntakeController extends BaseLmsController
             }
         }
 
+        // "Stop selling": a deactivated academy takes no new registrations. The
+        // storefront shows its offline page, but that is only the shopfront, so
+        // the rule is enforced here too and a form posted (or replayed) directly
+        // cannot slip a student past it. Checked before the course lookup so the
+        // refusal never depends on which course was named.
+        $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
+        if ($tenant && ! $tenant->acceptsNewStudents()) {
+            return response()->json([
+                'message' => 'This academy isn’t accepting new student registrations right now. Please check back soon.',
+                'institute_inactive' => true,
+            ], 422);
+        }
+
         $course = LmsCourse::query()->findOrFail($validated['course_id']);
 
         if ($course->isFull()) {

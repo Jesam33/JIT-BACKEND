@@ -32,13 +32,30 @@ class StaffAuthController extends BaseLmsController
             return response()->json(['message' => 'Invalid login credentials.'], 422);
         }
 
-        // A suspended staff member keeps their record (and any cohort they lead)
-        // but cannot sign in, the reversible counterpart to removal, toggled by
-        // the owner on the Staff Accounts page (OwnerAdminController::setStaffActive).
-        if (! $teacher->is_active) {
-            return response()->json([
-                'message' => 'Your staff account has been deactivated. Please contact your institute admin.',
-            ], 403);
+        // A deactivated staff member keeps their record (and any cohort they lead)
+        // but cannot sign in, the reversible counterpart to removal, toggled by the
+        // owner on the Staff Accounts page or by the staffer themselves on their
+        // profile. A scheduled deletion is the same refusal with a different
+        // message, so the sign-in form can say which one it is.
+        $state = $teacher->lifecycleState();
+
+        if ($state !== 'active') {
+            $payload = ['account_deactivated' => false, 'account_deletion_scheduled' => false];
+
+            $payload['message'] = match ($state) {
+                'purged' => 'This account has been deleted.',
+                'purge_scheduled' => 'This account is scheduled for deletion. Please contact your institute admin to cancel it.',
+                default => 'Your staff account has been deactivated. Please contact your institute admin.',
+            };
+
+            if ($state === 'purge_scheduled') {
+                $payload['account_deletion_scheduled'] = true;
+                $payload['purge_after'] = $teacher->purge_after;
+            } elseif ($state === 'deactivated') {
+                $payload['account_deactivated'] = true;
+            }
+
+            return response()->json($payload, 403);
         }
 
         // Bind the teacher's own organisation before minting the session, so the
@@ -52,7 +69,12 @@ class StaffAuthController extends BaseLmsController
             'user_id' => $teacher->id,
             'token' => $token,
             'expires_at' => now()->addDays(7),
+            ...LmsSession::requestMeta($request),
         ]);
+
+        // Warn the staffer if this machine is new to them. Never throws, and
+        // deliberately not awaited on success — see LoginDeviceTracker.
+        \App\Support\LoginDeviceTracker::record('staff', $teacher->id, $teacher->email, $teacher->name, $request);
 
         return response()->json(['token' => $token, 'tenant' => $this->currentTenantPayload()]);
     }
@@ -114,6 +136,13 @@ class StaffAuthController extends BaseLmsController
             'profile_photo_url' => $actor->profile_photo_url,
             // Tells the staff shell it is really the owner acting academy-wide.
             'academy_owner' => $actor->isAcademyOwner(),
+            // RBAC, read-only here: the role preset this staffer holds and the
+            // exact sections it grants. Sent as a list rather than as the role key
+            // so the sidebar filters on the same names the server enforces with —
+            // one source of truth (App\Support\StaffPermissions), no client-side
+            // copy of the role → section map to drift out of step.
+            'staff_role' => $actor->staffRole(),
+            'sections' => $actor->allowedSections(),
             'plan' => $this->planForSession($session),
             // Per-feature gates for the staff shell (the sidebar shows
             // "Create with AI" only when the academy's plan includes it).

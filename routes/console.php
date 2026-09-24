@@ -57,3 +57,14 @@ Schedule::command('lms:notify-ended-cohorts')
 Schedule::command('lms:send-subscription-reminders')
     ->dailyAt('08:00')
     ->withoutOverlapping();
+
+// Account lifecycle: the other end of the "delete" button. A deletion is
+// cancellable for saas.purge_window_days (30 by default), so the purge cannot
+// happen when the button is pressed — it happens here, once a day, for whatever
+// window has actually closed. Daily is deliberate: nothing is time-critical at
+// this granularity, and a slower cadence is a longer last chance to cancel.
+// withoutOverlapping() because a purge that refuses (a staffer still leading a
+// cohort) is retried by the next run and must never stack.
+Schedule::command('lms:purge-scheduled-accounts')
+    ->dailyAt('03:30')
+    ->withoutOverlapping();

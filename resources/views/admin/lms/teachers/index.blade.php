@@ -51,6 +51,15 @@
                     <form method="POST" action="{{ route('lms.teachers.store') }}">
                         @csrf
                         <div class="field">
+                            <label for="tenant_id">Academy</label>
+                            <select id="tenant_id" name="tenant_id" required>
+                                <option value="">Select academy</option>
+                                @foreach ($academies as $academy)
+                                    <option value="{{ $academy->id }}" @selected(old('tenant_id') == $academy->id)>{{ $academy->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="field">
                             <label for="name">Full name</label>
                             <input id="name" name="name" type="text" required>
                         </div>
@@ -79,6 +88,7 @@
                                 <tr>
                                     <th>Name</th>
                                     <th>Email</th>
+                                    <th>Academy</th>
                                     <th>Status</th>
                                     <th>Created</th>
                                 </tr>
@@ -93,6 +103,7 @@
                                             </div>
                                         </td>
                                         <td>{{ $teacher->email }}</td>
+                                        <td>{{ $academyNames[$teacher->tenant_id] ?? 'Unknown academy' }}</td>
                                         <td>
                                             <span class="course-state {{ $teacher->is_active ? 'active' : 'inactive' }}">{{ $teacher->is_active ? 'Active' : 'Inactive' }}</span>
                                         </td>

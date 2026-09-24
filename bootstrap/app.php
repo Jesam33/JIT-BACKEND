@@ -27,6 +27,10 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             \App\Http\Middleware\ResolveTenant::class,
             \App\Http\Middleware\ResolveTenantFromSession::class,
+            // Last, so it sees the tenant the two resolvers just agreed on. Refuses
+            // a deactivated/deleted account and a closed academy, and binds the
+            // session it resolved so controllers don't look it up again.
+            \App\Http\Middleware\EnsureAccountActive::class,
         ]);
 
         // Fail-closed gate applied to the tenant-scoped route subset only.
@@ -35,6 +39,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant.primary' => \App\Http\Middleware\BindPrimaryTenant::class,
             'plan.chat' => \App\Http\Middleware\EnsureChatEnabled::class,
             'subscription.gate' => \App\Http\Middleware\EnsureSubscriptionActive::class,
+            // RBAC for the staff portal: ->middleware('staff.can:students').
+            'staff.can' => \App\Http\Middleware\EnsureStaffPermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

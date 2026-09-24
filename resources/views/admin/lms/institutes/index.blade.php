@@ -23,11 +23,16 @@
         .btn-confirm-danger:disabled { opacity: 0.45; cursor: not-allowed; }
         .btn-confirm-cancel { background: #fff; border: 1px solid var(--line); color: var(--ink); border-radius: 10px; padding: 7px 12px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: border-color 0.15s ease; }
         .btn-confirm-cancel:hover { border-color: #cfd8e2; }
+        .lifecycle-badge { display: inline-block; margin-top: 4px; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+        .lifecycle-badge.off { background: var(--warning-soft, #fdf3d7); color: #8a5a00; }
+        .lifecycle-badge.doomed { background: var(--danger-soft); color: var(--danger); }
+        .lifecycle-badge.gone { background: #eceff3; color: #5a6472; }
+        .lifecycle-note { margin-top: 4px; font-size: 11.5px; line-height: 1.45; color: #6b7280; }
     </style>
 @endsection
 
 @section('toolbar_title', 'Registered Institutes')
-@section('toolbar_text', 'Every tenant institute registered on the platform, with onboarding resend and removal controls.')
+@section('toolbar_text', 'Every tenant institute registered on the platform, with onboarding resend, availability and closure controls.')
 
 @section('toolbar_actions')
     <div class="chip">Institutes <strong>{{ count($tenantsList ?? []) }}</strong></div>
@@ -63,36 +68,72 @@
                         </thead>
                         <tbody>
                             @foreach($tenantsList as $t)
+                                @php
+                                    $lifecycle = $t['lifecycle'] ?? 'active';
+                                    $isGone = $lifecycle === 'purged';
+                                    $isDoomed = $lifecycle === 'purge_scheduled';
+                                    $isOff = $lifecycle === 'deactivated';
+                                @endphp
                                 <tr>
                                     <td class="institute-cell"><strong>{{ $t['name'] }}</strong></td>
                                     <td>{{ $t['slug'] }}</td>
                                     <td>{{ $t['owner_email'] ?? 'Not set' }}</td>
                                     <td>
                                         <span class="course-state {{ ($t['status'] ?? 'active') === 'active' ? 'active' : 'warning' }}">{{ $t['status'] ?? 'active' }}</span>
+                                        {{-- Availability is a SEPARATE axis from provisioning status,
+                                             so it gets its own badge rather than overwriting it. --}}
+                                        @if($isDoomed)
+                                            <div><span class="lifecycle-badge doomed">Closing {{ \Illuminate\Support\Carbon::parse($t['purge_after'])->format('j M Y') }}</span></div>
+                                        @elseif($isGone)
+                                            <div><span class="lifecycle-badge gone">Closed</span></div>
+                                        @elseif($isOff)
+                                            <div><span class="lifecycle-badge off">Offline</span></div>
+                                        @endif
                                     </td>
                                     <td class="num">{{ $t['created_at'] }}</td>
                                     <td>
                                         <div class="institute-actions">
-                                            <a href="{{ route('admin.lms.institutes.index') }}" class="chip">View</a>
+                                            @if($isGone)
+                                                <span class="lifecycle-note">This institute has been closed. Nothing further can be changed here.</span>
+                                            @else
+                                                <form method="POST" action="{{ route('admin.lms.institutes.resend', $t['id']) }}">
+                                                    @csrf
+                                                    <button type="submit" class="chip">Resend Onboarding</button>
+                                                </form>
 
-                                            <form method="POST" action="{{ route('admin.lms.institutes.resend', $t['id']) }}">
-                                                @csrf
-                                                <button type="submit" class="chip">Resend Onboarding</button>
-                                            </form>
+                                                @if($isOff || $isDoomed)
+                                                    <form method="POST" action="{{ route('admin.lms.institutes.reactivate', $t['id']) }}">
+                                                        @csrf
+                                                        <button type="submit" class="chip">{{ $isDoomed ? 'Cancel Closure' : 'Bring Online' }}</button>
+                                                    </form>
+                                                @else
+                                                    <form method="POST" action="{{ route('admin.lms.institutes.deactivate', $t['id']) }}">
+                                                        @csrf
+                                                        <button type="submit" class="chip">Take Offline</button>
+                                                    </form>
+                                                @endif
 
-                                            <form method="POST" action="{{ route('admin.lms.institutes.delete', $t['id']) }}" id="delete-form-{{ $t['id'] }}">
-                                                @csrf
-                                                <button type="button" class="action danger-ghost" onclick="showDeleteConfirm({{ $t['id'] }})">Delete</button>
+                                                @unless($isDoomed)
+                                                    <form method="POST" action="{{ route('admin.lms.institutes.delete', $t['id']) }}" id="delete-form-{{ $t['id'] }}">
+                                                        @csrf
+                                                        <button type="button" class="action danger-ghost" onclick="showDeleteConfirm({{ $t['id'] }})">Delete</button>
 
-                                                <div class="delete-confirm" id="delete-confirm-{{ $t['id'] }}">
-                                                    <div class="delete-confirm-text">Deleting institute <strong>{{ $t['name'] }}</strong> will also remove its owner account if that account is not linked to any other institute.</div>
-                                                    <label class="delete-confirm-label"><input type="checkbox" id="delete-confirm-check-{{ $t['id'] }}"> I understand and want to delete this institute and its owner account (if applicable)</label>
-                                                    <div class="delete-confirm-actions">
-                                                        <button type="submit" id="delete-confirm-btn-{{ $t['id'] }}" class="btn-confirm-danger" disabled>Confirm Delete</button>
-                                                        <button type="button" onclick="hideDeleteConfirm({{ $t['id'] }})" class="btn-confirm-cancel">Cancel</button>
-                                                    </div>
-                                                </div>
-                                            </form>
+                                                        <div class="delete-confirm" id="delete-confirm-{{ $t['id'] }}">
+                                                            <div class="delete-confirm-text">
+                                                                <strong>{{ $t['name'] }}</strong> goes offline straight away and is permanently closed in
+                                                                {{ $defaultPurgeWindowDays ?? 30 }} days. Until then every student, course, enrolment,
+                                                                payment and certificate it holds is left exactly as it is, and you can cancel this from
+                                                                this page. The institute's owner account is not removed during the window.
+                                                            </div>
+                                                            <label class="delete-confirm-label"><input type="checkbox" id="delete-confirm-check-{{ $t['id'] }}"> I understand this institute will be permanently closed once the window ends</label>
+                                                            <div class="delete-confirm-actions">
+                                                                <button type="submit" id="delete-confirm-btn-{{ $t['id'] }}" class="btn-confirm-danger" disabled>Schedule Closure</button>
+                                                                <button type="button" onclick="hideDeleteConfirm({{ $t['id'] }})" class="btn-confirm-cancel">Cancel</button>
+                                                            </div>
+                                                        </div>
+                                                    </form>
+                                                @endunless
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>

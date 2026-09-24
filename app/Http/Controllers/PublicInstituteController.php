@@ -105,6 +105,10 @@ class PublicInstituteController extends Controller
         $tenants = Tenant::query()
             ->where('slug', '!=', $primarySlug)
             ->where('status', 'active')
+            // A paused or deleted academy is not showcased: this directory is a
+            // shop window, so listing one would send visitors to a closed page.
+            ->whereNull('deactivated_at')
+            ->whereNull('purged_at')
             ->whereIn('plan', $proPlans)
             ->orderBy('name')
             ->get();
@@ -155,6 +159,14 @@ class PublicInstituteController extends Controller
 
         app()->instance('currentTenant', $tenant);
 
+        // "Stop selling": a deactivated academy keeps its name and branding on
+        // this page, but lists no courses and takes no registrations. Not a 404 —
+        // the academy still exists and its enrolled students are unaffected; the
+        // shopfront is simply closed.
+        if (! $tenant->acceptsNewStudents()) {
+            return $this->offlineStorefront($tenant);
+        }
+
         $ctx = $this->pricingContext($tenant, $request);
 
         $courses = LmsCourse::query()
@@ -184,6 +196,13 @@ class PublicInstituteController extends Controller
 
         app()->instance('currentTenant', $tenant);
 
+        // A course page is a shopfront too: with the academy closed, a deep link
+        // from a search result must land on the offline page rather than on a
+        // bookable course, or "stop selling" leaks through the back door.
+        if (! $tenant->acceptsNewStudents()) {
+            return $this->offlineStorefront($tenant);
+        }
+
         $course = LmsCourse::query()
             ->where('slug', $courseSlug)
             ->where('is_active', true)
@@ -201,6 +220,28 @@ class PublicInstituteController extends Controller
             'branding' => $tenant->brandingArray(),
             'profile' => $tenant->profileArray(),
             'course' => $this->serializeCourse($course, $ctx, true),
+        ]);
+    }
+
+    /**
+     * The shopfront of an academy that is not currently selling.
+     *
+     * Same shape as a live storefront, with `courses` empty and a `storefront`
+     * block the frontend keys on to render its closed notice, so the page is a
+     * designed state rather than an error. Branding and profile still go out:
+     * the academy's identity is what a returning visitor needs to recognise.
+     */
+    private function offlineStorefront(Tenant $tenant): JsonResponse
+    {
+        return response()->json([
+            'institute' => $this->instituteMeta($tenant),
+            'branding' => $tenant->brandingArray(),
+            'profile' => $tenant->profileArray(),
+            'courses' => [],
+            'storefront' => [
+                'offline' => true,
+                'message' => 'This academy isn’t accepting new students right now. Please check back soon.',
+            ],
         ]);
     }
 

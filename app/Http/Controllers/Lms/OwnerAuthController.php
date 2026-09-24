@@ -90,6 +90,7 @@ class OwnerAuthController extends BaseLmsController
                 'user_id' => $user->id,
                 'token' => $sessionToken,
                 'expires_at' => now()->addDays(7),
+                ...LmsSession::requestMeta($request),
             ]);
 
             DB::commit();
@@ -153,13 +154,39 @@ class OwnerAuthController extends BaseLmsController
             app()->instance('currentTenant', $tenant);
         }
 
+        // A closed academy refuses its owner too: only the platform can restore a
+        // purge-scheduled or purged academy, so a session here would open a portal
+        // whose every request the gate then refuses. A merely DEACTIVATED academy
+        // lets the owner straight in, because getting in is how they reactivate it.
+        if ($tenant && in_array($tenant->lifecycleState(), ['purge_scheduled', 'purged'], true)) {
+            return response()->json([
+                'academy_unavailable' => true,
+                'lifecycle' => $tenant->lifecycleState(),
+                'message' => $tenant->isAcademyPurged()
+                    ? 'This academy has been closed. Please contact support.'
+                    : 'This academy is scheduled for deletion. Please contact support to cancel it.',
+            ], 403);
+        }
+
         $sessionToken = Str::random(80);
         LmsSession::query()->create([
             'role' => 'owner',
             'user_id' => $user->id,
             'token' => $sessionToken,
             'expires_at' => now()->addDays(7),
+            ...LmsSession::requestMeta($request),
         ]);
+
+        // An academy owner's account is the highest-value login on the platform:
+        // it reaches every student, every payment and the payout account. Alert
+        // them on an unrecognised device.
+        \App\Support\LoginDeviceTracker::record(
+            'owner',
+            $user->id,
+            $user->email,
+            trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) ?: $user->email,
+            $request,
+        );
 
         return response()->json(['token' => $sessionToken]);
     }

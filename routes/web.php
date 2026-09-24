@@ -60,12 +60,27 @@ Route::middleware(['auth', 'tenant.primary'])->prefix(env('ADMIN_DIR', 'admin'))
 	Route::post('/lms/agents/{agentId}/pay', [AdminController::class, 'payCommissions'])->name('admin.lms.agents.pay');
 	Route::get('/lms', [AdminController::class, 'index'])->name('admin.lms.index');
 	Route::get('/lms/institutes', [AdminController::class, 'institutesPage'])->name('admin.lms.institutes.index');
+	// Closure is scheduled, not immediate: /delete arms the 30-day window and
+	// /reactivate cancels it. All three are reversible from the institutes page.
 	Route::post('/lms/institutes/{id}/delete', [AdminController::class, 'deleteInstitute'])->name('admin.lms.institutes.delete');
+	Route::post('/lms/institutes/{id}/deactivate', [AdminController::class, 'deactivateInstitute'])->name('admin.lms.institutes.deactivate');
+	Route::post('/lms/institutes/{id}/reactivate', [AdminController::class, 'reactivateInstitute'])->name('admin.lms.institutes.reactivate');
 	Route::post('/lms/institutes/{id}/resend', [AdminController::class, 'resendInstituteOnboarding'])->name('admin.lms.institutes.resend');
 
 	// Platform-wide announcements (host → every institute's students/staff/agents)
 	Route::get('/lms/announcements', [AdminController::class, 'platformAnnouncementsPage'])->name('admin.lms.announcements.index');
 	Route::post('/lms/announcements', [AdminController::class, 'createPlatformAnnouncement'])->name('admin.lms.announcements.store');
+
+	// Academy reports: what students have told us about their academies. The
+	// academy-level buttons on this page post to the institutes routes above, so
+	// an action taken here is the same reversible action taken there.
+	Route::get('/lms/reports', [AdminController::class, 'reportsPage'])->name('admin.lms.reports.index');
+	Route::post('/lms/reports/{id}', [AdminController::class, 'updateReport'])->name('admin.lms.reports.update');
+
+	// Data-rights requests (access / erasure / portability …) from students,
+	// staff and academy owners. Settling one emails the requester.
+	Route::get('/lms/rights-requests', [AdminController::class, 'rightsRequestsPage'])->name('admin.lms.rights.index');
+	Route::post('/lms/rights-requests/{id}', [AdminController::class, 'updateRightsRequest'])->name('admin.lms.rights.update');
 
 	// CEO's Forum (host schedules live meetings for every institute owner)
 	Route::get('/lms/forums', [AdminController::class, 'ceoForumsPage'])->name('admin.lms.forums.index');

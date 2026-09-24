@@ -82,6 +82,14 @@ class AgentController extends BaseLmsController
             ], 403);
         }
 
+        // Nor does a paused academy want new marketers: an agent's whole job is
+        // bringing in students, and this academy is not taking any.
+        if ($tenant && ! $tenant->acceptsNewStudents()) {
+            return response()->json([
+                'message' => "This academy isn't currently accepting Admission Marketer applications.",
+            ], 403);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             // Unique PER ACADEMY, not globally (mirrors the (tenant_id, email)
@@ -175,6 +183,19 @@ class AgentController extends BaseLmsController
             'token' => $token,
             'expires_at' => now()->addDays(30),
         ]);
+
+        // Alert the marketer on an unrecognised device. Agents are worth warning:
+        // their dashboard carries their referral wallet and their students' names.
+        // Recorded for identification and alerting only — agent sessions live in
+        // `agent_sessions`, and the agent portal has no device-management screen,
+        // so there is no per-device sign-out for this role (see LoginDeviceTracker).
+        \App\Support\LoginDeviceTracker::record(
+            'agent',
+            $agent->id,
+            $agent->email,
+            $agent->name ?? $agent->email,
+            $request,
+        );
 
         return response()->json(['token' => $token, 'agent' => $agent]);
     }
@@ -322,6 +343,17 @@ class AgentController extends BaseLmsController
     public function registerStudent(Request $request): JsonResponse
     {
         $agent = $this->agentOrFail($request);
+
+        // The academy has stopped selling, so an agent cannot enrol into it
+        // either — same rule as the public intake form, enforced at the same
+        // moment (before the course is even read).
+        $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
+        if ($tenant && ! $tenant->acceptsNewStudents()) {
+            return response()->json([
+                'message' => 'This academy isn’t accepting new student registrations right now.',
+                'institute_inactive' => true,
+            ], 422);
+        }
 
         $validated = $request->validate([
             'first_name' => 'required|string|max:120',

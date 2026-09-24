@@ -623,6 +623,33 @@
 
                 <div class="nav-section">Platform</div>
 
+                {{-- Reports and rights requests are the two queues that need a
+                     human decision, so they sit above the broadcast tools. The
+                     counts are outstanding items, not totals. --}}
+                <a href="{{ route('admin.lms.reports.index') }}" class="nav-item {{ ($activeLmsPage ?? '') === 'reports' ? 'active' : '' }}">
+                    <div class="nav-left">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+                        </div>
+                        <span>Academy Reports</span>
+                    </div>
+                    @if (($openReportCount ?? 0) > 0)
+                        <span class="nav-count">{{ $openReportCount }}</span>
+                    @endif
+                </a>
+
+                <a href="{{ route('admin.lms.rights.index') }}" class="nav-item {{ ($activeLmsPage ?? '') === 'rights' ? 'active' : '' }}">
+                    <div class="nav-left">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
+                        </div>
+                        <span>Rights Requests</span>
+                    </div>
+                    @if (($openRightsCount ?? 0) > 0)
+                        <span class="nav-count">{{ $openRightsCount }}</span>
+                    @endif
+                </a>
+
                 <a href="{{ route('admin.lms.announcements.index') }}" class="nav-item {{ ($activeLmsPage ?? '') === 'announcements' ? 'active' : '' }}">
                     <div class="nav-left">
                         <div class="nav-icon">

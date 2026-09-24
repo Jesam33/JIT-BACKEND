@@ -25,6 +25,14 @@ class ResolveTenantFromSession
     {
         $token = $this->bearerToken($request);
 
+        // These bindings are read by EnsureAccountActive and by
+        // BaseLmsController::sessionFromRequest(). They are cleared up front
+        // because the container outlives a single request under a long-running
+        // worker: without this, a request carrying no token at all would still
+        // see the previous request's session.
+        app()->forgetInstance('lmsResolvedSession');
+        app()->forgetInstance('lmsResolvedAgentSession');
+
         if ($token) {
             $tenantId = $this->tenantIdForToken($token);
 
@@ -51,6 +59,11 @@ class ResolveTenantFromSession
      * tenant_id stamped on the session; when that is null (legacy sessions, or
      * sessions minted before login bound a tenant) it falls back to the session
      * USER's own tenant_id, so the portal still resolves the right organisation.
+     *
+     * Binding the resolved session is not decoration: EnsureAccountActive runs
+     * next in the group and must inspect the account behind the token, and
+     * BaseLmsController::sessionFromRequest() must authenticate the request. Both
+     * read these bindings, so the lookup below is the only one per request.
      */
     private function tenantIdForToken(string $token): ?int
     {
@@ -61,6 +74,8 @@ class ResolveTenantFromSession
             ->first();
 
         if ($session) {
+            app()->instance('lmsResolvedSession', $session);
+
             return $session->tenant_id ?? $this->tenantIdForSessionUser($session);
         }
 
@@ -71,6 +86,8 @@ class ResolveTenantFromSession
             ->first();
 
         if ($agentSession) {
+            app()->instance('lmsResolvedAgentSession', $agentSession);
+
             return $agentSession->tenant_id ?? optional(
                 Agent::withoutGlobalScope(TenantScope::class)->find($agentSession->agent_id)
             )->tenant_id;

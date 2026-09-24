@@ -243,6 +243,16 @@
         color: #fff;
     }
 
+    /* A paid student cannot be deleted, so the button is inert rather than
+       absent: the reason is in the title attribute and the note beneath it. */
+    .btn-delete:disabled,
+    .btn-delete:disabled:hover {
+        background: var(--surface-2, rgba(0,0,0,0.05));
+        color: var(--muted);
+        cursor: not-allowed;
+        opacity: 0.7;
+    }
+
     /* Empty state */
     .empty-row td {
         padding: 48px 24px;
@@ -444,12 +454,24 @@
                 >
             </div>
 
+            {{-- Academy filter --}}
+            <select name="tenant_id" class="filter-select">
+                <option value="">All Academies</option>
+                @foreach($academies as $academy)
+                    <option value="{{ $academy->id }}" {{ request('tenant_id') == $academy->id ? 'selected' : '' }}>
+                        {{ $academy->name }}
+                    </option>
+                @endforeach
+            </select>
+
             {{-- Course filter --}}
+            {{-- Labelled with the academy: course titles repeat across academies, so
+                 without it this is a list of indistinguishable "Web Development". --}}
             <select name="course_id" class="filter-select">
                 <option value="">All Courses</option>
                 @foreach($coursesList as $course)
                     <option value="{{ $course->id }}" {{ request('course_id') == $course->id ? 'selected' : '' }}>
-                        {{ $course->title }}
+                        {{ $course->title }}{{ $course->academy ? ' — ' . $course->academy : '' }}
                     </option>
                 @endforeach
             </select>
@@ -459,26 +481,33 @@
                 <option value="">All Tracks</option>
                 @foreach($tracksList as $track)
                     <option value="{{ $track->id }}" {{ request('track_id') == $track->id ? 'selected' : '' }}>
-                        {{ $track->name }}
+                        {{ $track->name }}{{ $track->academy ? ' — ' . $track->academy : '' }}
                     </option>
                 @endforeach
             </select>
 
             <button type="submit" class="action primary">Apply Filters</button>
 
-            @if(request()->hasAny(['search','course_id','track_id']))
+            @if(request()->hasAny(['search','course_id','track_id','tenant_id']))
                 <a href="{{ route('admin.lms.students.index') }}" class="action">Clear</a>
             @endif
         </form>
     </div>
 
     {{-- Active filter chips --}}
-    @if(request()->hasAny(['search','course_id','track_id']))
+    @if(request()->hasAny(['search','course_id','track_id','tenant_id']))
     <div class="active-filters">
         <span class="af-label">Filtered by</span>
         @if(request('search'))
             <a class="af-chip" href="{{ route('admin.lms.students.index', request()->except('search')) }}">
                 Search: "{{ request('search') }}"
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </a>
+        @endif
+        @if(request('tenant_id'))
+            @php ($activeAcademy = $academies->firstWhere('id', (int) request('tenant_id'))) @endphp
+            <a class="af-chip" href="{{ route('admin.lms.students.index', request()->except('tenant_id')) }}">
+                Academy: {{ $activeAcademy?->name ?? 'Unknown' }}
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </a>
         @endif
@@ -515,6 +544,7 @@
             <thead>
                 <tr>
                     <th>Student</th>
+                    <th>Academy</th>
                     <th>Course</th>
                     <th>Track Enrollments</th>
                     <th>Mode</th>
@@ -537,6 +567,11 @@
                                     <div class="student-email">{{ $student->email }}</div>
                                 </div>
                             </div>
+                        </td>
+
+                        {{-- Academy --}}
+                        <td>
+                            <span class="cell-muted">{{ $academyNames[$student->tenant_id] ?? 'Unknown academy' }}</span>
                         </td>
 
                         {{-- Course --}}
@@ -580,25 +615,41 @@
                         {{-- Actions --}}
                         <td>
                             <div class="row-actions">
-                                <button
-                                    type="button"
-                                    class="btn-delete"
-                                    onclick="openDeleteModal({{ $student->id }}, '{{ addslashes($student->first_name . ' ' . $student->last_name) }}', '{{ addslashes($student->email) }}')"
-                                    title="Delete student"
-                                >
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
-                                    Delete
-                                </button>
+                                @if($student->training_registration_id && isset($paidRegistrations[$student->training_registration_id]))
+                                    {{-- A paid student cannot be deleted: the rule is enforced
+                                         server-side, and showing it here is what stops the host
+                                         meeting it as a 422 after confirming a scary modal. --}}
+                                    <button
+                                        type="button"
+                                        class="btn-delete"
+                                        disabled
+                                        title="This student has paid for a course, so their account cannot be deleted. They can ask Jorsas Tech to erase their data instead."
+                                    >
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                                        Delete
+                                    </button>
+                                    <div class="cell-muted" style="font-size:11px;margin-top:4px">Paid — cannot delete</div>
+                                @else
+                                    <button
+                                        type="button"
+                                        class="btn-delete"
+                                        onclick="openDeleteModal({{ $student->id }}, '{{ addslashes($student->first_name . ' ' . $student->last_name) }}', '{{ addslashes($student->email) }}', '{{ addslashes($academyNames[$student->tenant_id] ?? 'Unknown academy') }}')"
+                                        title="Delete student"
+                                    >
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                                        Delete
+                                    </button>
+                                @endif
                             </div>
                         </td>
                     </tr>
                 @empty
                     <tr class="empty-row">
-                        <td colspan="7">
+                        <td colspan="8">
                             <div class="empty-icon">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                             </div>
-                            @if(request()->hasAny(['search','course_id','track_id']))
+                            @if(request()->hasAny(['search','course_id','track_id','tenant_id']))
                                 No students match the current filters.
                             @else
                                 No students registered yet.
@@ -626,14 +677,14 @@
         </div>
         <h2 id="modal-title">Delete Student?</h2>
         <p id="modal-body">
-            You are about to permanently delete this student account. All associated enrollments, submissions, and session data will also be removed. This action <strong>cannot be undone</strong>.
+            This schedules the student's deletion. Their records stay intact for 30 days and the deletion can be cancelled until then.
         </p>
         <form id="deleteForm" method="POST" onsubmit="return handleDelete(event)">
             @csrf
             <div class="modal-actions">
                 <button type="button" class="btn-cancel" onclick="closeDeleteModal()">Cancel</button>
                 <button type="submit" class="btn-confirm-delete" id="confirmDeleteBtn">
-                    <span id="deleteBtnText">Yes, Delete Student</span>
+                    <span id="deleteBtnText">Yes, Schedule Deletion</span>
                     <span id="deleteBtnSpinner" style="display:none">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="spin"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
                         Deleting
@@ -645,11 +696,12 @@
 </div>
 
 <script>
-    function openDeleteModal(id, name, email) {
-        document.getElementById('deleteForm').action = '{{ url(trim(env("ADMIN_DIR","admin"), "/") . "/lms/students") }}/' + id + '/delete';
+    function openDeleteModal(id, name, email, academy) {
+        document.getElementById('deleteForm').action = '{{ url(trim($adminDir, "/") . "/lms/students") }}/' + id + '/delete';
         document.getElementById('modal-body').innerHTML =
-            'You are about to permanently delete <strong>' + escHtml(name) + '</strong> (' + escHtml(email) + '). '
-            + 'All associated enrollments, submissions, and session data will also be removed. This action <strong>cannot be undone</strong>.';
+            'This schedules the deletion of <strong>' + escHtml(name) + '</strong> (' + escHtml(email) + ')'
+            + (academy ? ' at <strong>' + escHtml(academy) + '</strong>' : '') + '. '
+            + 'Their records stay intact for 30 days and the deletion can be cancelled until then.';
         document.getElementById('deleteModal').classList.add('open');
         document.body.style.overflow = 'hidden';
     }

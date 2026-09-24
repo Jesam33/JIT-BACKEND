@@ -135,10 +135,18 @@
                     </div>
                     <div class="row">
                         <label for="course_id">Course</label>
-                        <select id="course_id" name="course_id">
-                            <option value="">Optional</option>
-                            @foreach ($coursesList as $course)
-                                <option value="{{ $course->id }}">{{ $course->title }}</option>
+                        {{-- Required, and grouped by academy. The track's academy is its
+                             course's, so this dropdown is where the academy is chosen.
+                             It used to read "Optional" while the controller required it,
+                             so submitting without one always failed validation. --}}
+                        <select id="course_id" name="course_id" required>
+                            <option value="">Select course</option>
+                            @foreach ($coursesList->groupBy('tenant_id') as $tenantId => $group)
+                                <optgroup label="{{ $academyNames[$tenantId] ?? 'Unknown academy' }}">
+                                    @foreach ($group as $course)
+                                        <option value="{{ $course->id }}">{{ $course->title }}</option>
+                                    @endforeach
+                                </optgroup>
                             @endforeach
                         </select>
                     </div>
@@ -172,6 +180,7 @@
                             <thead>
                                 <tr>
                                     <th>Name</th>
+                                    <th>Academy</th>
                                     <th>Instructor</th>
                                     <th>Course</th>
                                     <th>Batch</th>
@@ -183,6 +192,7 @@
                                 @foreach ($tracksList as $track)
                                     <tr>
                                         <td><strong>{{ $track['name'] }}</strong></td>
+                                        <td>{{ $track['academy'] ?? 'Unknown academy' }}</td>
                                         <td>{{ $track['teacher_name'] ?: 'None' }}</td>
                                         <td>{{ $track['course_title'] ?: 'None' }}</td>
                                         <td>{{ $track['batch_name'] ?: 'None' }}</td>

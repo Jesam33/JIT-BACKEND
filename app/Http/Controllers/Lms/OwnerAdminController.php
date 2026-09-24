@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Lms;
 
+use App\Mail\AccountLifecycleMail;
 use App\Mail\LmsPasswordResetMail;
 use App\Mail\StudentCourseInviteMail;
 use App\Models\CeoForum;
@@ -17,9 +18,11 @@ use App\Models\Payment;
 use App\Models\Tenant;
 use App\Models\TrainingRegistration;
 use App\Models\User;
+use App\Scopes\TenantScope;
 use App\Services\PaystackService;
 use App\Support\CohortCompletion;
 use App\Support\CourseCards;
+use App\Support\NotificationLinks;
 use App\Support\PlanGate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -265,27 +268,63 @@ class OwnerAdminController extends BaseLmsController
         $students = LmsStudent::query()
             ->with('course:id,title')
             ->latest('id')
-            ->get(['id', 'first_name', 'last_name', 'email', 'phone', 'selected_course_id', 'learning_mode', 'onboarding_completed', 'created_at'])
-            ->map(fn (LmsStudent $s) => [
-                'id' => $s->id,
-                'name' => trim("{$s->first_name} {$s->last_name}") ?: ($s->email ?? 'Student'),
-                'email' => $s->email,
-                'phone' => $s->phone,
-                'course' => $s->course?->title,
-                'learning_mode' => $s->learning_mode,
-                'onboarding_completed' => (bool) $s->onboarding_completed,
-                'created_at' => $s->created_at,
-            ]);
+            ->get(['id', 'first_name', 'last_name', 'email', 'phone', 'selected_course_id', 'learning_mode', 'onboarding_completed', 'created_at', 'is_active', 'deactivated_at', 'purge_after', 'purged_at', 'training_registration_id']);
+
+        // Which of these students have paid. Resolved in ONE query for the whole
+        // roster rather than by calling hasSuccessfulPayment() per row, which
+        // would be a query per student on the academy's busiest page (see the
+        // perf pass: this list is the reason the roster stays batched).
+        $paidRegistrationIds = $students->pluck('training_registration_id')->filter()->unique()->values();
+
+        $paid = $paidRegistrationIds->isEmpty()
+            ? collect()
+            : Payment::query()
+                ->withoutGlobalScope(TenantScope::class)
+                ->whereIn('registration_id', $paidRegistrationIds)
+                ->where('status', 'success')
+                ->pluck('registration_id')
+                ->unique()
+                ->flip();
+
+        $students = $students->map(fn (LmsStudent $s) => [
+            'id' => $s->id,
+            'name' => trim("{$s->first_name} {$s->last_name}") ?: ($s->email ?? 'Student'),
+            'email' => $s->email,
+            'phone' => $s->phone,
+            'course' => $s->course?->title,
+            'learning_mode' => $s->learning_mode,
+            'onboarding_completed' => (bool) $s->onboarding_completed,
+            'created_at' => $s->created_at,
+            // The roster has to be able to say WHICH kind of off this is:
+            // a suspended student is one click from coming back, one whose
+            // deletion is scheduled is counting down, and one already purged
+            // is just a name on a certificate nobody can restore.
+            'is_active' => (bool) $s->is_active,
+            'lifecycle' => $s->lifecycleState(),
+            'purge_after' => $s->purge_after,
+            // A paid student cannot be deleted, so the roster greys the button
+            // and shows why instead of letting the owner discover it on the
+            // 422. Same rule as the server: see LmsStudent::purgeBlockedReason().
+            'can_delete' => ! isset($paid[$s->training_registration_id]),
+            'delete_blocked_reason' => isset($paid[$s->training_registration_id])
+                ? 'This student has paid for a course, so their account cannot be deleted. Suspend them instead, or they can ask Jorsas Tech to erase their data.'
+                : null,
+        ]);
 
         return response()->json(['tenant_id' => $tenant->id, 'students' => $students]);
     }
 
     /**
-     * Remove a student from the owner's institute (tenant-scoped findOrFail).
+     * Schedule a student's deletion (the reversible "delete", not a hard delete).
      *
-     * Both models are TenantAware, so an id belonging to another institute 404s
-     * here rather than crossing tenants. We drop the student's cohort
-     * enrollments first so no orphan roster rows linger after the delete.
+     * This used to delete the student's enrolments and the student row outright,
+     * which cascaded to eight tables including CERTIFICATES — a serial an employer
+     * may already have checked — and rewrote the institute's enrolment and revenue
+     * figures with nothing on screen to explain the drop. It now arms the same
+     * 30-day purge window the student's own Delete button uses, so the roster keeps
+     * showing them (marked, and cancellable) until the window closes.
+     *
+     * @see \App\Models\LmsStudent::purge()  what actually happens on the day
      */
     public function destroyStudent(Request $request, int $id): JsonResponse
     {
@@ -294,12 +333,123 @@ class OwnerAdminController extends BaseLmsController
             return response()->json(['message' => 'Not authorized.'], 403);
         }
 
+        // TenantAware, so an id from another institute 404s rather than crossing.
         $student = LmsStudent::query()->findOrFail($id);
 
-        LmsEnrollment::query()->where('student_id', $student->id)->delete();
-        $student->delete();
+        if ($student->isPurged()) {
+            return response()->json(['message' => 'This student has already been deleted.'], 422);
+        }
 
-        return response()->json(['message' => 'Student removed.']);
+        // A student who has paid for a course cannot be erased by the academy.
+        // The payment is the academy's financial record and the student's proof
+        // of purchase; a roster button must not be able to destroy it. Suspension
+        // remains available above, and the student can ask Jorsas directly for
+        // erasure (item 6), so this is a redirect rather than a dead end.
+        if ($reason = $student->purgeBlockedReason()) {
+            return response()->json([
+                'message' => $reason,
+                'purge_blocked' => true,
+            ], 422);
+        }
+
+        $student->schedulePurge();
+        $student = $student->fresh();
+        $this->notifyAccountLifecycle($student, 'student', 'deletion_scheduled');
+
+        return response()->json([
+            'message' => 'Deletion scheduled. '
+                . trim("{$student->first_name} {$student->last_name}")
+                . ' keeps their records and can be restored until ' . $student->purge_after->format('j F Y') . '.',
+            'student' => [
+                'id' => $student->id,
+                'lifecycle' => $student->lifecycleState(),
+                'purge_after' => $student->purge_after,
+            ],
+        ]);
+    }
+
+    /**
+     * Undo a scheduled student deletion, returning them to whatever they were
+     * before it was armed.
+     *
+     * Deliberately NOT setStudentActive(true): an owner who suspended a student
+     * and only later decided to delete them expects Cancel to put them back on the
+     * bench, not to hand their access back. The trait's cancelPurge() remembers
+     * which of the two the purge itself did.
+     */
+    public function cancelStudentDeletion(Request $request, int $id): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        $student = LmsStudent::query()->findOrFail($id);
+
+        if (! $student->isPurgeScheduled()) {
+            return response()->json(['message' => 'This student is not scheduled for deletion.'], 422);
+        }
+
+        $student->cancelPurge();
+        $student = $student->fresh();
+        $this->notifyAccountLifecycle($student, 'student', 'deletion_cancelled');
+
+        return response()->json([
+            'message' => $student->canAccessAccount()
+                ? 'Deletion cancelled. ' . trim("{$student->first_name} {$student->last_name}") . ' has access again.'
+                : 'Deletion cancelled. This student is still suspended.',
+            'student' => [
+                'id' => $student->id,
+                'lifecycle' => $student->lifecycleState(),
+                'purge_after' => $student->purge_after,
+            ],
+        ]);
+    }
+
+    /**
+     * Suspend or restore a student — the reversible half of the pair above, and
+     * the mirror of setStaffActive(). Nothing is deleted and their enrolments stay
+     * untouched; the login gate and the request gate refuse them until restored.
+     */
+    public function setStudentActive(Request $request, int $id): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        $validated = $request->validate([
+            'is_active' => ['required', 'boolean'],
+        ]);
+
+        $student = LmsStudent::query()->findOrFail($id);
+
+        if ($student->isPurged()) {
+            return response()->json(['message' => 'This student has been deleted and cannot be restored.'], 422);
+        }
+
+        $name = trim("{$student->first_name} {$student->last_name}") ?: 'this student';
+
+        if ($validated['is_active']) {
+            $student->reactivate();
+            $this->notifyAccountLifecycle($student, 'student', 'reactivated');
+            $message = "Re-enabled {$name}.";
+        } else {
+            $student->deactivate();
+            $this->notifyAccountLifecycle($student, 'student', 'deactivated');
+            $message = "Suspended {$name}. Their records and enrolments are untouched and you can restore them at any time.";
+        }
+
+        $student = $student->fresh();
+
+        return response()->json([
+            'message' => $message,
+            'student' => [
+                'id' => $student->id,
+                'is_active' => (bool) $student->is_active,
+                'lifecycle' => $student->lifecycleState(),
+            ],
+        ]);
     }
 
     /**
@@ -373,6 +523,16 @@ class OwnerAdminController extends BaseLmsController
         }
 
         [$tenant, $owner] = $context;
+
+        // "Stop selling" covers the owner too: a paused academy is not taking new
+        // enrolments from anyone, and its own invite form is the easiest place to
+        // forget that. Existing students are untouched.
+        if (! $tenant->acceptsNewStudents()) {
+            return response()->json([
+                'message' => 'Your academy is currently paused, so it can’t take new student enrolments. Reactivate it first.',
+                'institute_inactive' => true,
+            ], 422);
+        }
 
         $validated = $request->validate([
             'emails' => ['required', 'array', 'min:1'],
@@ -628,18 +788,83 @@ class OwnerAdminController extends BaseLmsController
             // row to show on the Staff Accounts page.
             ->staffOnly()
             ->latest('id')
-            ->get(['id', 'name', 'email', 'role', 'phone', 'is_active', 'created_at'])
+            ->get(['id', 'name', 'email', 'role', 'staff_role', 'phone', 'is_active', 'created_at'])
             ->map(fn (LmsTeacher $t) => [
                 'id' => $t->id,
                 'name' => $t->name ?: $t->email,
                 'email' => $t->email,
+                // The cosmetic label staff set for themselves ("Instructor",
+                // "teacher"). Unrelated to `staff_role` below — kept because the
+                // Staff Accounts page has always shown it.
                 'role' => $t->role ?: 'teacher',
+                // The RBAC preset, and the sections it grants, so the role
+                // selector on the row renders the truth rather than a guess.
+                'staff_role' => $t->staffRole(),
+                'staff_role_label' => \App\Support\StaffPermissions::label($t->staffRole()),
+                'sections' => $t->allowedSections(),
                 'phone' => $t->phone,
                 'is_active' => (bool) $t->is_active,
+                'lifecycle' => $t->lifecycleState(),
+                'purge_after' => $t->purge_after,
                 'created_at' => $t->created_at,
             ]);
 
-        return response()->json(['tenant_id' => $tenant->id, 'staff' => $staff]);
+        return response()->json([
+            'tenant_id' => $tenant->id,
+            'staff' => $staff,
+            // What the role dropdown may offer, straight from the catalogue so the
+            // client never hard-codes the list. `owner` is absent by design: it is
+            // resolved from is_academy_owner and cannot be assigned.
+            'staff_roles' => \App\Support\StaffPermissions::assignable(),
+        ]);
+    }
+
+    /**
+     * Set a staff member's RBAC preset.
+     *
+     * Section-level, not per-permission: the preset decides which parts of the
+     * staff portal this person can reach (App\Support\StaffPermissions).
+     *
+     * `staffOnly()` matters twice here. It hides the owner's own academy-wide
+     * mirror row from the roster, and it means an owner cannot reach this endpoint
+     * with the mirror's id — the account holder's access is not something a
+     * request should be able to change. A role change is also deliberately NOT
+     * applied to sessions: the gate reads the role on every request, so a demotion
+     * takes effect on the staffer's very next call rather than at next sign-in.
+     */
+    public function setStaffRole(Request $request, int $id): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        $validated = $request->validate([
+            'staff_role' => ['required', 'string'],
+        ]);
+
+        $role = $validated['staff_role'];
+
+        if (! \App\Support\StaffPermissions::isAssignable($role)) {
+            return response()->json([
+                'message' => 'Unknown role. Choose one of: '
+                    . implode(', ', array_keys(\App\Support\StaffPermissions::assignable())) . '.',
+            ], 422);
+        }
+
+        $teacher = LmsTeacher::query()->staffOnly()->findOrFail($id);
+
+        $teacher->forceFill(['staff_role' => $role])->save();
+
+        return response()->json([
+            'message' => $teacher->name . ' is now ' . \App\Support\StaffPermissions::label($role) . '.',
+            'staff' => [
+                'id' => $teacher->id,
+                'staff_role' => $teacher->staffRole(),
+                'staff_role_label' => \App\Support\StaffPermissions::label($teacher->staffRole()),
+                'sections' => $teacher->allowedSections(),
+            ],
+        ]);
     }
 
     /**
@@ -674,9 +899,19 @@ class OwnerAdminController extends BaseLmsController
             ], 422);
         }
 
-        $teacher->delete();
+        $teacher->schedulePurge();
+        $teacher = $teacher->fresh();
+        $this->notifyAccountLifecycle($teacher, 'staff', 'deletion_scheduled');
 
-        return response()->json(['message' => "Removed {$teacher->name}."]);
+        return response()->json([
+            'message' => "Deletion scheduled for {$teacher->name}. They can be restored until "
+                . $teacher->purge_after->format('j F Y') . '.',
+            'staff' => [
+                'id' => $teacher->id,
+                'lifecycle' => $teacher->lifecycleState(),
+                'purge_after' => $teacher->purge_after,
+            ],
+        ]);
     }
 
     /**
@@ -742,16 +977,147 @@ class OwnerAdminController extends BaseLmsController
         // can never be removed, suspended or "re-invited" from the Staff Accounts
         // page — deleting it would silently strip the owner of every staff feature.
         $teacher = LmsTeacher::query()->staffOnly()->findOrFail($id);
-        $teacher->is_active = $validated['is_active'];
-        $teacher->save();
+
+        if ($teacher->isPurged()) {
+            return response()->json(['message' => 'This staff member has been deleted and cannot be restored.'], 422);
+        }
+
+        if ($validated['is_active']) {
+            $teacher->reactivate();
+            $this->notifyAccountLifecycle($teacher->fresh(), 'staff', 'reactivated');
+        } else {
+            $teacher->deactivate();
+            $this->notifyAccountLifecycle($teacher->fresh(), 'staff', 'deactivated');
+        }
+
+        $teacher = $teacher->fresh();
 
         return response()->json([
             'message' => $teacher->is_active ? "Re-enabled {$teacher->name}." : "Suspended {$teacher->name}.",
             'staff' => [
                 'id' => $teacher->id,
                 'is_active' => (bool) $teacher->is_active,
+                'lifecycle' => $teacher->lifecycleState(),
             ],
         ]);
+    }
+
+    /** Staff twin of cancelStudentDeletion(). */
+    public function cancelStaffDeletion(Request $request, int $id): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        $teacher = LmsTeacher::query()->staffOnly()->findOrFail($id);
+
+        if (! $teacher->isPurgeScheduled()) {
+            return response()->json(['message' => 'This staff member is not scheduled for deletion.'], 422);
+        }
+
+        $teacher->cancelPurge();
+        $teacher = $teacher->fresh();
+        $this->notifyAccountLifecycle($teacher, 'staff', 'deletion_cancelled');
+
+        return response()->json([
+            'message' => $teacher->canAccessAccount()
+                ? "Deletion cancelled. {$teacher->name} has access again."
+                : "Deletion cancelled. {$teacher->name} is still suspended.",
+            'staff' => [
+                'id' => $teacher->id,
+                'lifecycle' => $teacher->lifecycleState(),
+                'purge_after' => $teacher->purge_after,
+            ],
+        ]);
+    }
+
+    // ---------------------------------------------------------------- ACADEMY
+    // The owner's own deactivate / delete / reactivate over their whole academy.
+    // Deliberately a different pair of verbs from the ones above: suspending a
+    // student freezes one person, while deactivating the academy keeps every
+    // student and staffer working and takes the STOREFRONT and new enrolments
+    // offline ("keep teaching, stop selling"). The permanent closure of an academy
+    // is not here at all — only the platform can do that.
+
+    /** Where the owner's profile page reads the academy's lifecycle state from. */
+    public function academyLifecycle(Request $request): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        [$tenant] = $context;
+
+        return response()->json($tenant->fresh()->academyLifecycleInfo());
+    }
+
+    /**
+     * Take the academy off the market without disturbing anyone already learning.
+     *
+     * The storefront goes offline and new registrations, enrolments and agent
+     * referrals stop; every enrolled student and every staff member keeps full
+     * access to the portal, and nothing is deleted. Reversible instantly.
+     */
+    public function academyDeactivate(Request $request): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        [$tenant, $user] = $context;
+        $tenant->fresh()->deactivateAcademy();
+        $this->notifyAcademyLifecycle($tenant->fresh(), $user, 'academy_deactivated');
+
+        return response()->json([
+            'message' => 'Your academy is now offline. Your students and staff keep full access, but the '
+                . 'public page is hidden and no new students can register until you switch it back on.',
+        ] + $tenant->fresh()->academyLifecycleInfo());
+    }
+
+    /** Put the academy back on the market. */
+    public function academyReactivate(Request $request): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        [$tenant, $user] = $context;
+        $tenant->fresh()->reactivateAcademy();
+        $this->notifyAcademyLifecycle($tenant->fresh(), $user, 'academy_reactivated');
+
+        return response()->json([
+            'message' => 'Your academy is live again. Your public page is back and new students can register.',
+        ] + $tenant->fresh()->academyLifecycleInfo());
+    }
+
+    /**
+     * Tell the owner their own academy changed state.
+     *
+     * Sent to the owner's own address rather than through notifyAccountLifecycle(),
+     * which is built around a PERSON row with first_name/last_name. Same failure
+     * rule applies: mail is synchronous, so a bounced send must not undo the change.
+     */
+    private function notifyAcademyLifecycle(Tenant $tenant, User $owner, string $kind): void
+    {
+        if (! $owner->email) {
+            return;
+        }
+
+        try {
+            Mail::to($owner->email)->send(AccountLifecycleMail::make($kind, [
+                'name' => $owner->name ?: 'there',
+                'academy' => $tenant->name,
+                'tenant_id' => $tenant->id,
+                'purge_after' => null,
+                'url' => NotificationLinks::profileUrl('owner', $tenant->slug),
+            ]));
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
 

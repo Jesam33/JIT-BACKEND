@@ -27,6 +27,12 @@ class Tenant extends Model
     protected $casts = [
         'settings' => 'array',
         'current_period_end' => 'datetime',
+        // Account lifecycle (see the deactivate / purge block below). Cast so
+        // `purge_after` can be compared and formatted — the purge sweep decides
+        // what is due with `->isPast()` and the emails print the date.
+        'deactivated_at' => 'datetime',
+        'purge_after' => 'datetime',
+        'purged_at' => 'datetime',
     ];
 
     /**
@@ -485,6 +491,165 @@ class Tenant extends Model
             'current_period_end' => $end,
             'grace_ends_at' => ($eligible && $end) ? $end->copy()->addDays($graceDays) : null,
             'grace_days' => $graceDays,
+        ];
+    }
+
+    // -------------------------------------------------------------------------
+    // Academy lifecycle: deactivate / delete (scheduled purge) / reactivate
+    //
+    // A SEPARATE state machine from the subscription above, and deliberately so.
+    // `frozen` means WE turned the academy off because a payment lapsed;
+    // `deactivated` means the OWNER turned it off by choice. Merging the two would
+    // produce the support ticket "my academy says frozen but I never cancelled",
+    // and would make reactivating a voluntarily-paused academy look like it
+    // settled an unpaid invoice.
+    //
+    // `tenants.status` is NOT used for any of this. It is a provisioning marker:
+    // TenantSignupController::verify() reads `status === 'active'` to mean "already
+    // provisioned, idempotent success", so writing 'deactivated' there would make a
+    // re-verify re-provision the academy. State lives in deactivated_at /
+    // purge_after / purged_at instead.
+    // -------------------------------------------------------------------------
+
+    /** active | deactivated | purge_scheduled | purged */
+    public function lifecycleState(): string
+    {
+        if ($this->purged_at) {
+            return 'purged';
+        }
+
+        if ($this->purge_after) {
+            return 'purge_scheduled';
+        }
+
+        return $this->deactivated_at ? 'deactivated' : 'active';
+    }
+
+    /**
+     * Whether the academy is paused by its owner.
+     *
+     * "Keep teaching, stop selling": this does NOT lock students or staff out.
+     * It takes the public storefront offline and stops new registrations and
+     * enrolments. Learners already mid-course carry on.
+     */
+    public function isAcademyDeactivated(): bool
+    {
+        return (bool) $this->deactivated_at && ! $this->purged_at;
+    }
+
+    /** Whether a purge is armed but not yet run — the cancellable window. */
+    public function isPurgeScheduled(): bool
+    {
+        return (bool) $this->purge_after && ! $this->purged_at;
+    }
+
+    public function isAcademyPurged(): bool
+    {
+        return (bool) $this->purged_at;
+    }
+
+    /** Whether the academy may accept new students at all (storefront + intake). */
+    public function acceptsNewStudents(): bool
+    {
+        return $this->lifecycleState() === 'active';
+    }
+
+    /** Pause the academy by the owner's choice. Nothing is deleted. */
+    public function deactivateAcademy(): void
+    {
+        // Clearing purge_after matters: deactivating an academy whose deletion was
+        // already scheduled means "actually, just pause us", and leaving the purge
+        // armed would destroy it on the day anyway.
+        $this->forceFill([
+            'deactivated_at' => $this->deactivated_at ?: now(),
+            'purge_after' => null,
+            'purge_froze_access' => false,
+        ])->save();
+    }
+
+    /** Undo a deactivation or a scheduled purge. */
+    public function reactivateAcademy(): void
+    {
+        $this->forceFill([
+            'deactivated_at' => null,
+            'purge_after' => null,
+            'purge_requested_by' => null,
+            'purge_froze_access' => false,
+        ])->save();
+    }
+
+    /**
+     * Arm the 30-day purge window. The academy keeps working for its current
+     * students and staff throughout — only the storefront and new enrolments stop,
+     * exactly as with a plain deactivation, so the window is a real chance to
+     * change your mind rather than a slow-motion outage.
+     */
+    public function scheduleAcademyPurge(?int $requestedByUserId = null): void
+    {
+        // Captured BEFORE the pause below: this is what decides whether cancelling
+        // re-opens the academy or returns it to the paused state it was in.
+        $weArePausingIt = $this->deactivated_at === null;
+
+        $this->forceFill([
+            'deactivated_at' => $this->deactivated_at ?: now(),
+            'purge_after' => now()->addDays(self::purgeWindowDays()),
+            'purge_requested_by' => $requestedByUserId,
+            'purge_froze_access' => $weArePausingIt,
+        ])->save();
+    }
+
+    /**
+     * Undo a scheduled purge, returning the academy to exactly the state it was
+     * in before.
+     *
+     * The distinction matters more here than it does for a person: a purge is
+     * normally scheduled on an academy its owner had ALREADY paused and walked
+     * away from, so unconditional restoration would quietly put a storefront back
+     * on sale that someone had deliberately closed. When the purge is what paused
+     * the academy, cancelling reopens it, and the owner can pause it again.
+     */
+    public function cancelAcademyPurge(): void
+    {
+        if ($this->purge_froze_access) {
+            $this->reactivateAcademy();
+
+            return;
+        }
+
+        $this->forceFill([
+            'purge_after' => null,
+            'purge_requested_by' => null,
+            'purge_froze_access' => false,
+        ])->save();
+    }
+
+    /** How long the undo window lasts, shared with the person-level accounts. */
+    public static function purgeWindowDays(): int
+    {
+        return max(1, (int) config('saas.purge_window_days', 30));
+    }
+
+    /** Academies whose purge window has closed. */
+    public function scopePurgeDue($query)
+    {
+        return $query->whereNotNull('purge_after')->where('purge_after', '<=', now());
+    }
+
+    /**
+     * Lifecycle shaped for the owner + host UIs. Kept parallel to
+     * subscriptionInfo() rather than folded into it, for the reason at the top of
+     * this block. Carbon values serialize to ISO strings on JSON encode.
+     */
+    public function academyLifecycleInfo(): array
+    {
+        return [
+            'state' => $this->lifecycleState(),
+            'deactivated' => $this->isAcademyDeactivated(),
+            'deactivated_at' => $this->deactivated_at,
+            'purge_scheduled' => $this->isPurgeScheduled(),
+            'purge_after' => $this->purge_after,
+            'purged' => $this->isAcademyPurged(),
+            'purge_window_days' => self::purgeWindowDays(),
         ];
     }
 

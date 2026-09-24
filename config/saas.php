@@ -79,6 +79,13 @@ return [
     'training_admin_email' => env('TRAINING_ADMIN_EMAIL'),
     'admin_dir' => env('ADMIN_DIR', 'admin'),
 
+    // The platform's own inbox: where a student's report about an academy and a
+    // data-rights request are sent. Falls back to mail.from.address when unset
+    // (see AccountSafetyController::platformInbox), so a missing key means "send
+    // it to us" rather than "lose it". Config-bound, never env() at the call
+    // site, so it survives `php artisan config:cache`.
+    'report_email' => env('REPORT_EMAIL'),
+
     // On/off for the public marketing content API (FrontendContentController::home()).
     // Same config-not-env rule so it survives config:cache. Opt-in (default off).
     'frontend_api_enabled' => filter_var(env('FRONTEND_API_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
@@ -205,6 +212,16 @@ return [
     // Falls back to the training admin address if that is configured. Read via
     // config so it survives config:cache.
     'support_email' => env('SUPPORT_EMAIL', env('TRAINING_ADMIN_EMAIL')),
+
+    // The undo window between a "delete" and the purge that carries it out, for
+    // BOTH person accounts (students/staff, purged by
+    // `lms:purge-scheduled-accounts`) and whole academies. One knob on purpose:
+    // the copy promises the same number everywhere, so the promise and the
+    // command that enforces it can never drift apart. Default 30 days.
+    //
+    // Nothing is removed during the window — the account is frozen and the row is
+    // left untouched, so cancelling restores it completely.
+    'purge_window_days' => (int) env('PURGE_WINDOW_DAYS', 30),
 
     // Who bears Paystack's transaction fee (~1.5%) on split payments to an
     // institute's subaccount. `subaccount` (default) = the institute absorbs it

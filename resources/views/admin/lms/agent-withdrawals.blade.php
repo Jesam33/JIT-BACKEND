@@ -53,6 +53,7 @@
             <thead>
                 <tr>
                     <th>Agent</th>
+                    <th>Academy</th>
                     <th>Bank Details</th>
                     <th>Amount</th>
                     <th>Date</th>
@@ -73,6 +74,9 @@
                             </div>
                         </div>
                     </td>
+                    {{-- The commission row's academy, falling back to the agent's: both
+                         are stamped on create and agree. --}}
+                    <td style="font-size:12px">{{ $academyNames[$wd->tenant_id] ?? ($academyNames[$a->tenant_id] ?? 'Unknown academy') }}</td>
                     <td class="bank-details">
                         @if($a && ($a->bank_name || $a->account_number))
                             <div><span class="k">Bank:</span> {{ $a->bank_name }}</div>
@@ -93,7 +97,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="5" style="padding:44px 18px;text-align:center;color:var(--muted)">No pending withdrawal requests.</td>
+                    <td colspan="6" style="padding:44px 18px;text-align:center;color:var(--muted)">No pending withdrawal requests.</td>
                 </tr>
                 @endforelse
             </tbody>
@@ -115,6 +119,7 @@
             <thead>
                 <tr>
                     <th>Agent</th>
+                    <th>Academy</th>
                     <th>Bank Details</th>
                     <th>Amount</th>
                     <th>Date</th>
@@ -130,6 +135,7 @@
                             <div class="agent-name">{{ $a->name ?? 'Unknown' }}</div>
                         </div>
                     </td>
+                    <td style="font-size:12px">{{ $academyNames[$wd->tenant_id] ?? ($academyNames[$a->tenant_id] ?? 'Unknown academy') }}</td>
                     <td style="font-size:12px;color:#30465b">
                         @if($a && ($a->bank_name || $a->account_number))
                             {{ $a->bank_name }} &middot; {{ $a->account_number }}

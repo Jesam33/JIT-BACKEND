@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Lms;
 
 use App\Mail\LmsTeacherCredentialsMail;
+use App\Models\AcademyReport;
 use App\Models\Batch;
 use App\Models\LmsClassroom;
 use App\Models\LmsCourse;
@@ -15,6 +16,7 @@ use App\Models\LmsTeacher;
 use App\Models\LmsTrack;
 use App\Models\Payment;
 use App\Models\PlatformAnnouncement;
+use App\Models\RightsRequest;
 use App\Models\CeoForum;
 use App\Models\TrainingRegistration;
 use Illuminate\Http\JsonResponse;
@@ -25,7 +27,6 @@ use Illuminate\Support\Str;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use App\Notifications\OnboardingCompleted;
 
 class AdminController extends BaseLmsController
@@ -379,26 +380,35 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        $studentCounts = LmsStudent::query()
+        // Every academy's courses, not just Jorsas Tech's. The three count maps are
+        // unscoped for the same reason: a course of another academy would otherwise
+        // render with 0 students / 0 classrooms / 0 tasks.
+        $studentCounts = $this->hostQuery(LmsStudent::class)
             ->whereNotNull('selected_course_id')
             ->selectRaw('selected_course_id, COUNT(*) as aggregate')
             ->groupBy('selected_course_id')
             ->pluck('aggregate', 'selected_course_id');
 
-        $classroomCounts = LmsClassroom::query()
+        $classroomCounts = $this->hostQuery(LmsClassroom::class)
             ->selectRaw('course_id, COUNT(*) as aggregate')
             ->groupBy('course_id')
             ->pluck('aggregate', 'course_id');
 
-        $taskCounts = \App\Models\LmsTask::query()
+        $taskCounts = $this->hostQuery(\App\Models\LmsTask::class)
             ->selectRaw('course_id, COUNT(*) as aggregate')
             ->groupBy('course_id')
             ->pluck('aggregate', 'course_id');
 
-        $coursesList = LmsCourse::query()
-            ->orderByDesc('created_at')
-            ->get()
-            ->map(function (LmsCourse $course) use ($studentCounts, $classroomCounts, $taskCounts) {
+        $query = $this->hostQuery(LmsCourse::class)->orderByDesc('created_at');
+
+        if ($tenantId = $request->input('tenant_id')) {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        $academyNames = $this->academyNames();
+
+        $coursesList = $query->get()
+            ->map(function (LmsCourse $course) use ($studentCounts, $classroomCounts, $taskCounts, $academyNames) {
                 return [
                     'id' => $course->id,
                     'title' => $course->title,
@@ -412,6 +422,8 @@ class AdminController extends BaseLmsController
                     'students' => (int) ($studentCounts[$course->id] ?? 0),
                     'classrooms' => (int) ($classroomCounts[$course->id] ?? 0),
                     'tasks' => (int) ($taskCounts[$course->id] ?? 0),
+                    'tenant_id' => $course->tenant_id,
+                    'academy' => $academyNames[$course->tenant_id] ?? null,
                     'created_at' => $course->created_at,
                 ];
             });
@@ -427,6 +439,10 @@ class AdminController extends BaseLmsController
         $this->ensureSuperAdmin($request);
 
         $validated = $request->validate([
+            // The academy the course belongs to. Required: TenantAware would
+            // otherwise stamp the PRIMARY tenant, so a course created while looking
+            // at another academy's row would silently land on Jorsas Tech.
+            'tenant_id' => ['required', 'integer', 'exists:tenants,id'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'requirements' => ['nullable', 'string'],
@@ -436,7 +452,11 @@ class AdminController extends BaseLmsController
             'is_prerecorded_available' => ['nullable', 'boolean'],
         ]);
 
-        $course = LmsCourse::query()->create([
+        // createForTenant, not create(['tenant_id' => ...]): tenant_id is guarded
+        // (see TenantAware), so mass assignment drops the key and TenantAware then
+        // stamps the BOUND academy — the picker would silently do nothing and the
+        // course would land on Jorsas Tech.
+        $course = LmsCourse::createForTenant((int) $validated['tenant_id'], [
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'requirements' => $validated['requirements'] ?? null,
@@ -461,7 +481,8 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        $course = LmsCourse::query()->findOrFail($id);
+        // Unscoped: the host deletes a course of whichever academy owns it.
+        $course = $this->hostQuery(LmsCourse::class)->findOrFail($id);
         $course->delete();
 
         if ($request->expectsJson() || $request->wantsJson()) {
@@ -478,7 +499,7 @@ class AdminController extends BaseLmsController
 
         return view('admin.lms.teachers.index', array_merge(
             $this->adminShellData(),
-            ['teachersList' => LmsTeacher::query()->staffOnly()->orderByDesc('created_at')->get()]
+            ['teachersList' => $this->hostQuery(LmsTeacher::class)->staffOnly()->orderByDesc('created_at')->get()]
         ));
     }
 
@@ -488,13 +509,18 @@ class AdminController extends BaseLmsController
         $this->ensureSuperAdmin($request);
 
         $validated = $request->validate([
+            // See createCourse(): without this, TenantAware stamps the primary
+            // tenant and the staffer silently joins Jorsas Tech.
+            'tenant_id' => ['required', 'integer', 'exists:tenants,id'],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:lms_teachers,email'],
         ]);
 
         $password = Str::random(12);
 
-        $teacher = LmsTeacher::query()->create([
+        // createForTenant, not create(['tenant_id' => ...]) — tenant_id is guarded.
+        // See TenantAware::createForTenant().
+        $teacher = LmsTeacher::createForTenant((int) $validated['tenant_id'], [
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => Hash::make($password),
@@ -515,16 +541,20 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        $coursesList = LmsCourse::query()->orderBy('title')->get();
+        // Every academy's, so the pickers below can offer any of them.
+        $coursesList = $this->hostQuery(LmsCourse::class)->orderBy('title')->get();
         // staffOnly(): never offer an academy's synthetic owner-mirror as an instructor.
-        $teachersList = LmsTeacher::query()->staffOnly()->where('is_active', true)->orderBy('name')->get();
+        $teachersList = $this->hostQuery(LmsTeacher::class)->staffOnly()->where('is_active', true)->orderBy('name')->get();
 
         $courseMap = $coursesList->keyBy('id');
         $teacherMap = $teachersList->keyBy('id');
-        $trackMap = LmsTrack::query()->get()->keyBy('id');
+        $trackMap = $this->hostQuery(LmsTrack::class)->get()->keyBy('id');
+        $academyNames = $this->academyNames();
 
-        $classroomsList = LmsClassroom::query()->orderByDesc('created_at')->get()->map(function ($classroom) use ($courseMap, $teacherMap) {
+        $classroomsList = $this->hostQuery(LmsClassroom::class)->orderByDesc('created_at')->get()->map(function ($classroom) use ($courseMap, $teacherMap, $academyNames) {
 
+            // The classroom's academy is its course's academy; a classroom carries a
+            // tenant_id of its own, and they agree (both are stamped on create).
             return [
                 'id' => $classroom->id,
                 'title' => $classroom->title,
@@ -534,6 +564,8 @@ class AdminController extends BaseLmsController
                 'meeting_url' => $classroom->meeting_url,
                 'course_title' => $courseMap->get($classroom->course_id)?->title,
                 'teacher_name' => $teacherMap->get($classroom->teacher_id)?->name,
+                'tenant_id' => $classroom->tenant_id,
+                'academy' => $academyNames[$classroom->tenant_id] ?? null,
             ];
         });
 
@@ -549,15 +581,30 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
+        // These rules now match the form that actually posts here. They previously
+        // required `track_id` — a column lms_classrooms does not have — so every
+        // submission failed validation, while the course, instructor and meeting
+        // URL the form does send were silently discarded. Create Classroom has
+        // been broken from this page since it was written.
         $validated = $request->validate([
-            'track_id' => ['required', 'integer', 'exists:lms_tracks,id'],
+            'course_id' => ['required', 'integer', 'exists:lms_courses,id'],
+            'teacher_id' => ['nullable', 'integer', 'exists:lms_teachers,id'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
+            'meeting_url' => ['required', 'string', 'max:2048'],
             'starts_at' => ['required', 'date'],
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
         ]);
 
-        $classroom = LmsClassroom::query()->create($validated + ['is_active' => true]);
+        // The academy is the course's, so a classroom can never be filed under an
+        // academy that does not own its course.
+        $course = $this->hostQuery(LmsCourse::class)->findOrFail($validated['course_id']);
+
+        $this->maybeFillPasscode($validated);
+
+        // createForTenant, not create + tenant_id: tenant_id is guarded, so mass
+        // assignment would drop it and TenantAware would stamp the bound academy.
+        $classroom = LmsClassroom::createForTenant($course->tenant_id, $validated);
 
         if ($request->expectsJson() || $request->wantsJson()) {
             return response()->json($classroom, 201);
@@ -571,7 +618,7 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        $classroom = LmsClassroom::query()->findOrFail($id);
+        $classroom = $this->hostQuery(LmsClassroom::class)->findOrFail($id);
         $classroom->delete();
 
         if ($request->expectsJson() || $request->wantsJson()) {
@@ -587,21 +634,24 @@ class AdminController extends BaseLmsController
         $this->ensureSuperAdmin($request);
 
         // staffOnly(): never offer an academy's synthetic owner-mirror as an instructor.
-        $teachersList = LmsTeacher::query()->staffOnly()->where('is_active', true)->orderBy('name')->get();
-        $coursesList = LmsCourse::query()->orderBy('title')->get();
+        $teachersList = $this->hostQuery(LmsTeacher::class)->staffOnly()->where('is_active', true)->orderBy('name')->get();
+        $coursesList = $this->hostQuery(LmsCourse::class)->orderBy('title')->get();
         $batchesList = Batch::query()->orderByDesc('id')->get();
 
         $teacherMap = $teachersList->keyBy('id');
         $courseMap = $coursesList->keyBy('id');
         $batchMap = $batchesList->keyBy('id');
+        $academyNames = $this->academyNames();
 
-        $tracksList = LmsTrack::query()->orderByDesc('created_at')->get()->map(function (LmsTrack $track) use ($teacherMap, $courseMap, $batchMap) {
+        $tracksList = $this->hostQuery(LmsTrack::class)->orderByDesc('created_at')->get()->map(function (LmsTrack $track) use ($teacherMap, $courseMap, $batchMap, $academyNames) {
             return [
                 'id' => $track->id,
                 'name' => $track->name,
                 'teacher_name' => $teacherMap->get($track->instructor_id)?->name,
                 'course_title' => $courseMap->get($track->course_id)?->title,
                 'batch_name' => $batchMap->get($track->batch_id)?->name,
+                'tenant_id' => $track->tenant_id,
+                'academy' => $academyNames[$track->tenant_id] ?? null,
                 'created_at' => $track->created_at,
             ];
         });
@@ -630,12 +680,21 @@ class AdminController extends BaseLmsController
                 'status' => $t->status,
                 'owner_email' => $owner?->email,
                 'created_at' => $t->created_at,
+                // Lifecycle is reported separately from `status`, which stays what
+                // it always was: a provisioning marker, not an availability one.
+                'lifecycle' => $t->lifecycleState(),
+                'deactivated_at' => $t->deactivated_at,
+                'purge_after' => $t->purge_after,
+                'purged_at' => $t->purged_at,
             ];
         });
 
         return view('admin.lms.institutes.index', array_merge($this->adminShellData(), [
             'tenantsList' => $tenants,
             'tenantCount' => $tenants->count(),
+            // Read from the same config knob the sweep uses, so the window the
+            // confirmation dialog promises is the window that actually runs.
+            'defaultPurgeWindowDays' => Tenant::purgeWindowDays(),
         ]));
     }
 
@@ -736,43 +795,361 @@ class AdminController extends BaseLmsController
         ]));
     }
 
+    /**
+     * Schedule an institute's closure, 30 days out.
+     *
+     * This used to be a one-click hard delete of the tenant row, which was worse
+     * than it looked: there are no foreign keys from an institute's data to
+     * `tenants`, so deleting one did not cascade — it ORPHANED every student,
+     * course, enrolment and payment at a dangling tenant_id. `TenantScope` then made
+     * them permanently unreachable and the revenue page (which iterates tenants)
+     * silently dropped that institute's payments. Unrecoverable, and quietly wrong
+     * in the books.
+     *
+     * Now it arms the same reversible window the rest of the feature uses: the
+     * academy goes dark immediately, everything it holds stays exactly where it is,
+     * and the platform can undo it from this page until the sweep runs. The owner
+     * links and invitations are deliberately left alone for the same reason — they
+     * are part of what makes the closure reversible.
+     *
+     * @see \App\Console\Commands\PurgeScheduledAccounts  what runs on the day
+     */
     public function deleteInstitute(Request $request, int $id)
     {
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
         $tenant = Tenant::query()->findOrFail($id);
-        // before deleting tenant, clean up related owner links and invitations
-        $ownerRow = DB::table('tenant_admins')->where('tenant_id', $tenant->id)->first();
-        if ($ownerRow && isset($ownerRow->user_id)) {
-            $userId = $ownerRow->user_id;
-            // remove tenant_admins link for this tenant
-            DB::table('tenant_admins')->where('tenant_id', $tenant->id)->delete();
 
-            // remove any owner invitations for this tenant (table may not exist in older installs)
-            if (Schema::hasTable('owner_invitations')) {
-                DB::table('owner_invitations')->where('tenant_id', $tenant->id)->delete();
-            }
-
-            // if this user is not attached to any other tenant, delete the user record as well
-            $stillLinked = DB::table('tenant_admins')->where('user_id', $userId)->exists();
-            if (! $stillLinked) {
-                try {
-                    \App\Models\User::where('id', $userId)->delete();
-                } catch (\Throwable $e) {
-                    logger()->warning('Failed deleting owner user during tenant delete', ['err' => $e->getMessage()]);
-                }
-            }
+        if ($tenant->isAcademyPurged()) {
+            return $this->instituteRedirect($request, 'That institute has already been closed.', 'error');
         }
 
-        // perform delete (hard delete), consider soft delete if required
-        $tenant->delete();
+        // purge_requested_by records that the PLATFORM asked for this, not the
+        // owner, which is what the audit trail and the copy both turn on.
+        $tenant->scheduleAcademyPurge(auth()->id());
 
+        $fresh = $tenant->fresh();
+
+        return $this->instituteRedirect(
+            $request,
+            "{$fresh->name} is scheduled for closure on {$fresh->purge_after->format('j F Y')}. "
+                . 'Everything it holds is untouched and you can cancel this until then.',
+            'status'
+        );
+    }
+
+    /** Take an institute offline without scheduling anything. Reversible. */
+    public function deactivateInstitute(Request $request, int $id)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $tenant = Tenant::query()->findOrFail($id);
+
+        if ($tenant->isAcademyPurged()) {
+            return $this->instituteRedirect($request, 'That institute has already been closed.', 'error');
+        }
+
+        $tenant->deactivateAcademy();
+
+        return $this->instituteRedirect(
+            $request,
+            "{$tenant->name} is offline. Its public page is hidden and it cannot take new students, "
+                . 'but its students and staff keep full access.',
+            'status'
+        );
+    }
+
+    /** Put an institute back online / cancel a scheduled closure. */
+    public function reactivateInstitute(Request $request, int $id)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $tenant = Tenant::query()->findOrFail($id);
+
+        if ($tenant->isAcademyPurged()) {
+            return $this->instituteRedirect($request, 'That institute has already been closed.', 'error');
+        }
+
+        $wasScheduled = $tenant->isPurgeScheduled();
+        $tenant->reactivateAcademy();
+
+        return $this->instituteRedirect(
+            $request,
+            $wasScheduled
+                ? "The scheduled closure of {$tenant->name} has been cancelled and it is live again."
+                : "{$tenant->name} is live again.",
+            'status'
+        );
+    }
+
+    /** One response shape for both the JSON callers and the Blade buttons. */
+    private function instituteRedirect(Request $request, string $message, string $key)
+    {
         if ($request->expectsJson() || $request->wantsJson()) {
-            return response()->json(['message' => 'Institute deleted.']);
+            return response()->json([$key === 'error' ? 'message' : 'status' => $message], $key === 'error' ? 422 : 200);
         }
 
-        return redirect()->back()->with('status', 'Institute deleted.');
+        return redirect()->back()->with($key, $message);
+    }
+
+    /* ---------------------------------------------------------------------
+     | Platform safety queues
+     |
+     | Both of these cross tenant boundaries by definition — a report is about
+     | one academy and read by the platform, and a rights request may have no
+     | tenant at all. host.primary binds the PRIMARY tenant for every host
+     | request, so both models' TenantScope is dropped explicitly; without that
+     | these pages would quietly show only Jorsas' own academy's rows.
+     --------------------------------------------------------------------- */
+
+    /** Every academy a student has reported, grouped so one academy reads as one problem. */
+    public function reportsPage(Request $request)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $showResolved = $request->boolean('resolved');
+
+        $query = AcademyReport::query()
+            ->withoutGlobalScope(\App\Scopes\TenantScope::class)
+            ->orderByDesc('id');
+
+        if (! $showResolved) {
+            $query->open();
+        }
+
+        $reports = $query->limit(300)->get();
+
+        // Students and schools are looked up in bulk rather than through the
+        // relations: both models are tenant-scoped and the host request has the
+        // primary tenant bound, so `$report->student` would come back null for
+        // every academy except Jorsas' own.
+        $students = LmsStudent::query()
+            ->withoutGlobalScope(\App\Scopes\TenantScope::class)
+            ->whereIn('id', $reports->pluck('student_id')->filter()->unique())
+            ->get(['id', 'first_name', 'last_name', 'email'])
+            ->keyBy('id');
+
+        $tenants = Tenant::query()
+            ->whereIn('id', $reports->pluck('tenant_id')->filter()->unique())
+            ->get()
+            ->keyBy('id');
+
+        $groups = $reports
+            ->groupBy('tenant_id')
+            ->map(fn ($rows, $tenantId) => [
+                'tenant' => $tenants[$tenantId] ?? null,
+                'reports' => $rows->map(function (AcademyReport $r) use ($students) {
+                    $student = $students[$r->student_id] ?? null;
+
+                    return [
+                        'id' => $r->id,
+                        'category_label' => AcademyReport::CATEGORIES[$r->category] ?? $r->category,
+                        'details' => $r->details,
+                        'status' => $r->status,
+                        'status_class' => match ($r->status) {
+                            'resolved' => 'active',
+                            'dismissed' => 'danger',
+                            'reviewing' => 'warning',
+                            default => '',
+                        },
+                        'resolution_note' => $r->resolution_note,
+                        'student' => $student
+                            ? (trim("{$student->first_name} {$student->last_name}") ?: $student->email)
+                            : 'A student (account since removed)',
+                        'student_email' => $student?->email ?? '—',
+                        'age' => $r->created_at?->diffForHumans(),
+                        'settled' => in_array($r->status, ['resolved', 'dismissed'], true),
+                    ];
+                }),
+            ])
+            // Academies with the most open complaints first: the repeat offender
+            // is the thing worth looking at, and it should not be found by
+            // scrolling.
+            ->sortByDesc(fn ($g) => $g['reports']->count())
+            ->values();
+
+        return view('admin.lms.reports.index', array_merge($this->adminShellData(), [
+            'activeLmsPage' => 'reports',
+            'groups' => $groups,
+            'showResolved' => $showResolved,
+        ]));
+    }
+
+    /** Record a decision on one report. Does not email the student — see below. */
+    public function updateReport(Request $request, int $id)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $validated = $request->validate([
+            'status' => ['required', 'string', 'in:' . implode(',', AcademyReport::STATUSES)],
+            'resolution_note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $report = AcademyReport::query()
+            ->withoutGlobalScope(\App\Scopes\TenantScope::class)
+            ->findOrFail($id);
+
+        // 'open' is a valid stored value but never a decision someone makes, so
+        // it is not reachable from this form — the validation list is wider than
+        // the buttons on purpose, because the column's vocabulary and the set of
+        // actions a human can take are not the same list.
+        if ($validated['status'] === 'open') {
+            return $this->instituteRedirect($request, 'Choose reviewing, resolved or dismissed.', 'error');
+        }
+
+        $report->forceFill([
+            'status' => $validated['status'],
+            'resolution_note' => $validated['resolution_note'] ?: $report->resolution_note,
+            'handled_by' => $request->user()?->getKey(),
+            'handled_at' => now(),
+        ])->save();
+
+        // Deliberately NO email to the student here. A report is a complaint
+        // about the academy's own staff, and telling the academy's student portal
+        // that the platform has taken action is a message that needs a human's
+        // wording, not a template's. The platform replies by email from the queue
+        // once it has decided what to say.
+        return $this->instituteRedirect(
+            $request,
+            'Report marked ' . $validated['status'] . '.',
+            'status'
+        );
+    }
+
+    /** The data-rights queue. */
+    public function rightsRequestsPage(Request $request)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $showClosed = $request->boolean('closed');
+
+        $query = RightsRequest::query()
+            ->withoutGlobalScope(\App\Scopes\TenantScope::class)
+            ->orderByDesc('id');
+
+        if (! $showClosed) {
+            $query->open();
+        }
+
+        $requests = $query->limit(300)->get();
+
+        $tenants = Tenant::query()
+            ->whereIn('id', $requests->pluck('tenant_id')->filter()->unique())
+            ->get()
+            ->keyBy('id');
+
+        return view('admin.lms.rights.index', array_merge($this->adminShellData(), [
+            'activeLmsPage' => 'rights',
+            'showClosed' => $showClosed,
+            'requests' => $requests->map(fn (RightsRequest $r) => [
+                'id' => $r->id,
+                'type_label' => RightsRequest::TYPES[$r->type] ?? $r->type,
+                'details' => $r->details,
+                'status' => $r->status,
+                'status_class' => match ($r->status) {
+                    'completed' => 'active',
+                    'refused' => 'danger',
+                    'in_progress' => 'warning',
+                    default => '',
+                },
+                'response_note' => $r->response_note,
+                'requester_role' => ucfirst($r->requester_role),
+                'requester_email' => $r->requester_email,
+                'academy' => $tenants[$r->tenant_id]?->name ?? null,
+                'age' => $r->created_at?->diffForHumans(),
+                'settled' => in_array($r->status, ['completed', 'refused'], true),
+            ]),
+        ]));
+    }
+
+    /**
+     * Move a rights request on, and email the requester when the request is
+     * SETTLED (completed or refused) — an email per status wobble would be noise,
+     * and 'in_progress' is an internal note-to-self.
+     *
+     * The reply goes to the SNAPSHOT address on the row, not to any account: an
+     * erasure request has to remain answerable after the account it names has
+     * been anonymised, which is the whole reason the column exists.
+     */
+    public function updateRightsRequest(Request $request, int $id)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $validated = $request->validate([
+            'status' => ['required', 'string', 'in:' . implode(',', RightsRequest::STATUSES)],
+            'response_note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $rightsRequest = RightsRequest::query()
+            ->withoutGlobalScope(\App\Scopes\TenantScope::class)
+            ->findOrFail($id);
+
+        if ($validated['status'] === 'open') {
+            return $this->instituteRedirect($request, 'Choose in progress, completed or refused.', 'error');
+        }
+
+        // Completing or refusing is a reply to a person, so a note is required.
+        // Without it the requester would receive an email saying their request
+        // was answered and nothing else.
+        $settling = in_array($validated['status'], ['completed', 'refused'], true);
+
+        if ($settling && trim((string) $validated['response_note']) === '') {
+            return $this->instituteRedirect(
+                $request,
+                'Write what you are telling the requester — completing or refusing sends it to them.',
+                'error'
+            );
+        }
+
+        $rightsRequest->forceFill([
+            'status' => $validated['status'],
+            'response_note' => $validated['response_note'] ?: $rightsRequest->response_note,
+            'handled_by' => $request->user()?->getKey(),
+            'handled_at' => now(),
+        ])->save();
+
+        $emailed = false;
+
+        if ($settling && $rightsRequest->requester_email) {
+            $tenant = $rightsRequest->tenant_id
+                ? Tenant::query()->find($rightsRequest->tenant_id)
+                : null;
+
+            try {
+                \Illuminate\Support\Facades\Mail::to($rightsRequest->requester_email)->send(
+                    \App\Mail\RightsRequestMail::make('answered', [
+                        'name' => 'there',
+                        'academy' => $tenant?->name,
+                        'tenant_id' => $tenant?->id,
+                        'type' => RightsRequest::TYPES[$rightsRequest->type] ?? $rightsRequest->type,
+                        'details' => $rightsRequest->details,
+                        'response' => $rightsRequest->response_note,
+                    ])
+                );
+                $emailed = true;
+            } catch (\Throwable $e) {
+                // The decision is saved either way; a mail failure must not make
+                // the operator think their decision was lost.
+                report($e);
+            }
+        }
+
+        $message = 'Request marked ' . str_replace('_', ' ', $validated['status']) . '.';
+
+        if ($settling) {
+            $message .= $emailed
+                ? ' The requester has been emailed.'
+                : ' The requester could NOT be emailed — no address on file, or the mail failed. Check the log.';
+        }
+
+        return $this->instituteRedirect($request, $message, 'status');
     }
 
     public function resendInstituteOnboarding(Request $request, int $id)
@@ -818,9 +1195,15 @@ class AdminController extends BaseLmsController
             'starts_at' => ['nullable', 'date'],
         ]);
 
-        $track = LmsTrack::query()->create($validated);
+        // The academy is the course's, so a track can never land in an academy
+        // that does not own its course. Every course id here is also unbounded by
+        // `exists`, which validates on the raw builder and ignores global scopes
+        // — so the cross-tenant read below is deliberate, not a leak.
+        $course = $this->hostQuery(LmsCourse::class)->findOrFail($validated['course_id']);
 
-        LmsGroupChat::query()->firstOrCreate(['track_id' => $track->id]);
+        $track = LmsTrack::createForTenant($course->tenant_id, $validated);
+
+        LmsGroupChat::firstOrCreateForTenant($track->tenant_id, ['track_id' => $track->id]);
 
         if ($request->expectsJson() || $request->wantsJson()) {
             return response()->json($track, 201);
@@ -834,7 +1217,7 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        $track = LmsTrack::query()->findOrFail($id);
+        $track = $this->hostQuery(LmsTrack::class)->findOrFail($id);
         $track->delete();
 
         if ($request->expectsJson() || $request->wantsJson()) {
@@ -849,18 +1232,30 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        $tracks = LmsTrack::query()
-            ->with(['teacher', 'course', 'batch'])
+        $tracks = $this->hostQuery(LmsTrack::class)
+            // The eager-loaded relations carry TenantScope too, so without
+            // dropping it on each one every non-JIT track would report a null
+            // teacher and course — the row would render, but empty.
+            ->with([
+                'teacher' => fn ($q) => $q->withoutGlobalScope(TenantScope::class),
+                'course' => fn ($q) => $q->withoutGlobalScope(TenantScope::class),
+                'batch',
+            ])
             ->orderByDesc('created_at')
-            ->get()
-            ->map(fn ($t) => [
-                'id' => $t->id,
-                'name' => $t->name,
-                'teacher_name' => $t->teacher?->name,
-                'course_title' => $t->course?->title,
-                'batch_name' => $t->batch?->name,
-                'created_at' => $t->created_at?->toIso8601String(),
-            ]);
+            ->get();
+
+        $academyNames = $this->academyNames();
+
+        $tracks = $tracks->map(fn ($t) => [
+            'id' => $t->id,
+            'name' => $t->name,
+            'teacher_name' => $t->teacher?->name,
+            'course_title' => $t->course?->title,
+            'batch_name' => $t->batch?->name,
+            'tenant_id' => $t->tenant_id,
+            'academy' => $academyNames[$t->tenant_id] ?? null,
+            'created_at' => $t->created_at?->toIso8601String(),
+        ]);
 
         return response()->json($tracks);
     }
@@ -877,9 +1272,12 @@ class AdminController extends BaseLmsController
             'batch_id' => ['nullable', 'integer', 'exists:batches,id'],
         ]);
 
-        $track = LmsTrack::query()->create($validated);
+        // Same rule as createTrack: the academy follows the course.
+        $course = $this->hostQuery(LmsCourse::class)->findOrFail($validated['course_id']);
 
-        LmsGroupChat::query()->firstOrCreate(['track_id' => $track->id]);
+        $track = LmsTrack::createForTenant($course->tenant_id, $validated);
+
+        LmsGroupChat::firstOrCreateForTenant($track->tenant_id, ['track_id' => $track->id]);
 
         return response()->json($track, 201);
     }
@@ -889,7 +1287,7 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        $track = LmsTrack::query()->findOrFail($id);
+        $track = $this->hostQuery(LmsTrack::class)->findOrFail($id);
 
         $validated = $request->validate([
             'name' => ['nullable', 'string', 'max:255'],
@@ -898,7 +1296,15 @@ class AdminController extends BaseLmsController
             'batch_id' => ['nullable', 'integer', 'exists:batches,id'],
         ]);
 
-        $track->update($validated);
+        // Moving a track to another academy's course must move the track with it,
+        // or the row stays filed under an academy that no longer owns its course.
+        // forceFill because tenant_id is guarded and update() would drop it.
+        if (! empty($validated['course_id'])) {
+            $course = $this->hostQuery(LmsCourse::class)->findOrFail($validated['course_id']);
+            $track->forceFill(['tenant_id' => $course->tenant_id]);
+        }
+
+        $track->fill($validated)->save();
 
         return response()->json($track);
     }
@@ -908,7 +1314,7 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        LmsTrack::query()->findOrFail($id)->delete();
+        $this->hostQuery(LmsTrack::class)->findOrFail($id)->delete();
 
         return response()->json(['message' => 'Track deleted.']);
     }
@@ -1153,17 +1559,40 @@ class AdminController extends BaseLmsController
             'track_id' => ['required', 'integer', 'exists:lms_tracks,id'],
         ]);
 
-        $enrollment = LmsEnrollment::query()->updateOrCreate(
-            ['student_id' => $validated['student_id']],
-            ['track_id' => $validated['track_id']]
-        );
+        $student = $this->hostQuery(LmsStudent::class)->findOrFail($validated['student_id']);
+        $track = $this->hostQuery(LmsTrack::class)->findOrFail($validated['track_id']);
 
-        $track = LmsTrack::query()->findOrFail($validated['track_id']);
+        // A cohort placement only means something inside one academy. Enrolling a
+        // student into another academy's cohort would file them into a classroom,
+        // group chat and DM thread they can never reach — and both ids arrive from
+        // the request, so nothing else stops the pairing.
+        if ((int) $student->tenant_id !== (int) $track->tenant_id) {
+            return response()->json([
+                'message' => 'That student and that cohort belong to different academies.',
+            ], 422);
+        }
 
-        LmsGroupChat::query()->firstOrCreate(['track_id' => $track->id]);
+        // All three file under the COHORT's academy, via the trait's explicit-tenant
+        // helpers: tenant_id is guarded, so passing it to updateOrCreate /
+        // firstOrCreate is dropped on create and TenantAware then stamps whichever
+        // academy the back office has bound.
+        $enrollment = LmsEnrollment::query()->withoutGlobalScope(TenantScope::class)
+            ->where('student_id', $student->id)
+            ->first();
 
-        LmsDmThread::query()->firstOrCreate([
-            'student_id' => $validated['student_id'],
+        if ($enrollment) {
+            $enrollment->update(['track_id' => $track->id]);
+        } else {
+            $enrollment = LmsEnrollment::createForTenant($track->tenant_id, [
+                'student_id' => $student->id,
+                'track_id' => $track->id,
+            ]);
+        }
+
+        LmsGroupChat::firstOrCreateForTenant($track->tenant_id, ['track_id' => $track->id]);
+
+        LmsDmThread::firstOrCreateForTenant($track->tenant_id, [
+            'student_id' => $student->id,
             'instructor_id' => $track->instructor_id,
             'track_id' => $track->id,
         ]);
@@ -1176,8 +1605,12 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        $query = LmsStudent::query()
-            ->with('course')
+        // Unscoped: the back office lists every academy's students, and
+        // TenantScope is bound to the primary tenant here. The eager-loaded
+        // course needs the same treatment or it resolves to null for every
+        // student outside JIT.
+        $query = $this->hostQuery(LmsStudent::class)
+            ->with(['course' => fn ($q) => $q->withoutGlobalScope(TenantScope::class)])
             ->withCount('enrollments');
 
         if ($search = $request->input('search')) {
@@ -1196,10 +1629,46 @@ class AdminController extends BaseLmsController
             $query->whereHas('enrollments', fn ($q) => $q->where('track_id', $trackId));
         }
 
+        if ($tenantId = $request->input('tenant_id')) {
+            $query->where('tenant_id', $tenantId);
+        }
+
         $students = $query->orderBy('created_at', 'desc')->paginate(50)->withQueryString();
 
-        $coursesList = LmsCourse::query()->orderBy('title')->get(['id', 'title']);
-        $tracksList  = LmsTrack::query()->orderBy('name')->get(['id', 'name']);
+        // Which of the students on this page have paid, in ONE query rather than a
+        // query per row. A paid student cannot be deleted (see
+        // LmsStudent::purgeBlockedReason()), and the page has to say so up front
+        // instead of letting the host find out from a 422.
+        $registrationIds = $students->getCollection()
+            ->pluck('training_registration_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $paidRegistrations = $registrationIds->isEmpty()
+            ? collect()
+            : \App\Models\Payment::query()
+                ->withoutGlobalScope(TenantScope::class)
+                ->whereIn('registration_id', $registrationIds)
+                ->where('status', 'success')
+                ->pluck('registration_id')
+                ->unique()
+                ->flip();
+
+        // Course and cohort titles repeat across academies, so each option is
+        // labelled with its academy — otherwise the filter is a list of
+        // indistinguishable "Web Development" entries.
+        $academyNames = $this->academyNames();
+
+        $coursesList = $this->hostQuery(LmsCourse::class)
+            ->orderBy('title')
+            ->get(['id', 'title', 'tenant_id'])
+            ->each(fn ($c) => $c->academy = $academyNames[$c->tenant_id] ?? null);
+
+        $tracksList = $this->hostQuery(LmsTrack::class)
+            ->orderBy('name')
+            ->get(['id', 'name', 'tenant_id'])
+            ->each(fn ($t) => $t->academy = $academyNames[$t->tenant_id] ?? null);
 
         $shell = $this->adminShellData();
 
@@ -1207,6 +1676,7 @@ class AdminController extends BaseLmsController
             'students'    => $students,
             'coursesList' => $coursesList,
             'tracksList'  => $tracksList,
+            'paidRegistrations' => $paidRegistrations,
         ]));
     }
 
@@ -1215,14 +1685,34 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        $student = LmsStudent::query()->findOrFail($id);
-        $student->delete();
+        $student = $this->hostQuery(LmsStudent::class)->findOrFail($id);
 
-        if ($request->expectsJson() || $request->wantsJson()) {
-            return response()->json(['message' => 'Student deleted.']);
+        // Two bugs met in this one line. It hard-deleted, while every other delete
+        // path on the platform schedules a 30-day reversible purge — so Jorsas'
+        // back office could destroy a student's enrolments, attendance and
+        // certificate serials outright, with no undo and no trace. And it skipped
+        // the paid-student rule entirely, which is the whole of "once a student
+        // has paid, the account cannot be deleted". Same guard the academy and the
+        // student's own profile go through, so all three agree.
+        if ($reason = $student->purgeBlockedReason()) {
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json(['message' => $reason], 422);
+            }
+
+            return redirect()->back()->with('error', $reason);
         }
 
-        return redirect()->back()->with('status', 'Student deleted successfully.');
+        $student->schedulePurge();
+
+        $message = 'Student deletion scheduled. Their records stay intact for '
+            . \App\Traits\HasAccountLifecycle::purgeWindowDays()
+            . ' days and can be restored until then.';
+
+        if ($request->expectsJson() || $request->wantsJson()) {
+            return response()->json(['message' => $message]);
+        }
+
+        return redirect()->back()->with('status', $message);
     }
 
     public function agentsPage(Request $request)
@@ -1230,14 +1720,17 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        $agents = \App\Models\Agent::query()
+        $agents = $this->hostQuery(\App\Models\Agent::class)
             ->orderBy('created_at', 'desc')
             ->paginate(50);
+
+        $academyNames = $this->academyNames();
 
         $shell = $this->adminShellData();
 
         return view('admin.lms.agents', array_merge($shell, [
             'agents' => $agents,
+            'academyNames' => $academyNames,
         ]));
     }
 
@@ -1246,7 +1739,7 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        $agent = \App\Models\Agent::query()->findOrFail($id);
+        $agent = $this->hostQuery(\App\Models\Agent::class)->findOrFail($id);
 
         $password = \Illuminate\Support\Str::random(12);
         $agent->update([
@@ -1281,7 +1774,7 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        \App\Models\Agent::query()->findOrFail($id)->update(['status' => 'rejected']);
+        $this->hostQuery(\App\Models\Agent::class)->findOrFail($id)->update(['status' => 'rejected']);
 
         if ($request->expectsJson() || $request->wantsJson()) {
             return response()->json(['message' => 'Agent rejected.']);
@@ -1295,11 +1788,15 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        $agent = \App\Models\Agent::query()->findOrFail($id);
+        $agent = $this->hostQuery(\App\Models\Agent::class)->findOrFail($id);
 
-        $agent->sessions()->delete();
-        $agent->notifications()->delete();
-        $agent->commissions()->delete();
+        // Each relation carries its own global scope, so deleting through the
+        // relationship without dropping it would remove the agent's row while
+        // leaving every session, notification and commission behind — orphaned
+        // rows that keep counting toward an academy's agent payouts.
+        $agent->sessions()->withoutGlobalScope(TenantScope::class)->delete();
+        $agent->notifications()->withoutGlobalScope(TenantScope::class)->delete();
+        $agent->commissions()->withoutGlobalScope(TenantScope::class)->delete();
         $agent->delete();
 
         return redirect()->back()->with('status', 'Agent deleted successfully.');
@@ -1310,25 +1807,30 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        $withdrawals = \App\Models\AgentCommission::query()
+        // `agent` is eager-loaded through a tenant-scoped relation, so without
+        // dropping the scope the withdrawal rows render with a blank agent.
+        $withdrawals = $this->hostQuery(\App\Models\AgentCommission::class)
             ->where('type', 'withdrawal')
             ->where('status', 'withdrawal_requested')
-            ->with('agent')
+            ->with(['agent' => fn ($q) => $q->withoutGlobalScope(TenantScope::class)])
             ->orderByDesc('id')
             ->paginate(50);
 
-        $paid = \App\Models\AgentCommission::query()
+        $paid = $this->hostQuery(\App\Models\AgentCommission::class)
             ->where('type', 'withdrawal')
             ->where('status', 'paid')
-            ->with('agent')
+            ->with(['agent' => fn ($q) => $q->withoutGlobalScope(TenantScope::class)])
             ->orderByDesc('id')
             ->paginate(50, ['*'], 'paid-page');
+
+        $academyNames = $this->academyNames();
 
         $shell = $this->adminShellData();
 
         return view('admin.lms.agent-withdrawals', array_merge($shell, [
             'withdrawals' => $withdrawals,
             'paid' => $paid,
+            'academyNames' => $academyNames,
         ]));
     }
 
@@ -1337,7 +1839,8 @@ class AdminController extends BaseLmsController
         $this->ensureLmsEnabled();
         $this->ensureSuperAdmin($request);
 
-        \App\Models\AgentCommission::where('agent_id', $agentId)
+        $this->hostQuery(\App\Models\AgentCommission::class)
+            ->where('agent_id', $agentId)
             ->where('type', 'withdrawal')
             ->whereIn('status', ['withdrawal_requested'])
             ->update(['status' => 'paid', 'paid_at' => now()]);

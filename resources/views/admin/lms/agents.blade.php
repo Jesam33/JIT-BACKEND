@@ -111,6 +111,7 @@ function toggleRow(el) {
                 <tr>
                     <th style="width:24px"></th>
                     <th>Name &amp; Contact</th>
+                    <th>Academy</th>
                     <th>Qualification</th>
                     <th>Referral Code</th>
                     <th>Status</th>
@@ -137,6 +138,7 @@ function toggleRow(el) {
                             </div>
                         </div>
                     </td>
+                    <td style="font-size:12px">{{ $academyNames[$agent->tenant_id] ?? 'Unknown academy' }}</td>
                     <td style="font-size:12px">{{ $agent->qualification }}</td>
                     <td><span class="ref-code">{{ $agent->referral_code ?? 'N/A' }}</span></td>
                     <td>
@@ -167,7 +169,7 @@ function toggleRow(el) {
                     </td>
                 </tr>
                 <tr class="answers-row">
-                    <td colspan="7">
+                    <td colspan="8">
                         <div class="answers-inner">
                             <div class="answer-card full">
                                 <div class="label">Address</div>
@@ -184,7 +186,7 @@ function toggleRow(el) {
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="7" style="padding:48px 24px;text-align:center;color:var(--muted)">
+                    <td colspan="8" style="padding:48px 24px;text-align:center;color:var(--muted)">
                         <div class="empty-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
                         </div>

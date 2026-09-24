@@ -25,8 +25,37 @@ class NotificationLinks
      */
     public static function forNotification(string $audience, ?string $refType, $refId = null, ?string $tenantSlug = null): string
     {
-        $base = rtrim((string) config('saas.frontend_url'), '/');
-        $url = $base . self::pathFor($audience, $refType, $refId);
+        return self::tenantPinned(self::pathFor($audience, $refType, $refId), $tenantSlug);
+    }
+
+    /**
+     * Absolute link to a portal profile page, tenant-pinned.
+     *
+     * Used by the account lifecycle emails: the Reactivate and Cancel-deletion
+     * controls live on the profile page, so a deactivated person's email has to
+     * land them somewhere they can actually act, on the right institute.
+     *
+     * @param string $audience 'student' | 'staff' | 'owner'
+     */
+    public static function profileUrl(string $audience, ?string $tenantSlug = null): string
+    {
+        $path = match ($audience) {
+            'staff' => '/lms/staff/profile',
+            'owner' => '/lms/admin/profile',
+            default => '/lms/app/profile',
+        };
+
+        return self::tenantPinned($path, $tenantSlug);
+    }
+
+    /**
+     * Join a frontend path onto the configured frontend URL and pin the tenant.
+     * Every emailed link goes through here, because a bare path on a non-primary
+     * institute lands the recipient in the wrong academy (see the tenant cookie).
+     */
+    public static function tenantPinned(string $path, ?string $tenantSlug = null): string
+    {
+        $url = rtrim((string) config('saas.frontend_url'), '/') . $path;
 
         if ($tenantSlug) {
             $sep = str_contains($url, '?') ? '&' : '?';

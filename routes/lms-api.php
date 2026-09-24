@@ -4,6 +4,8 @@ use App\Http\Controllers\FrontendContentController;
 use App\Http\Controllers\LmsIntakeController;
 use App\Http\Controllers\PublicInstituteController;
 use App\Http\Controllers\Lms\TenantBillingController;
+use App\Http\Controllers\Lms\AccountLifecycleController;
+use App\Http\Controllers\Lms\AccountSafetyController;
 use App\Http\Controllers\Lms\OwnerAdminController;
 use App\Http\Controllers\Lms\OwnerAgentController;
 use App\Http\Controllers\Lms\OwnerGammaController;
@@ -87,7 +89,7 @@ Route::get('/api/frontend/lms/invite', [StudentAuthController::class, 'invite'])
 Route::get('/api/frontend/lms/courses', [StudentAuthController::class, 'courses']);
 Route::post('/api/frontend/lms/signup', [StudentAuthController::class, 'signup'])->middleware('throttle:10,1');
 Route::post('/api/frontend/lms/setup-password', [StudentAuthController::class, 'setupPassword'])->middleware('throttle:10,1');
-Route::post('/api/frontend/lms/forgot-password', [StudentAuthController::class, 'forgotPassword'])->middleware('throttle:10,1');
+Route::post('/api/frontend/lms/forgot-password', [StudentAuthController::class, 'forgotPassword'])->middleware('throttle:lms-password-reset');
 Route::post('/api/frontend/lms/reset-password', [StudentAuthController::class, 'resetPassword'])->middleware('throttle:10,1');
 
 // Institute branding for UNAUTHENTICATED pages (login / password setup / reset):
@@ -98,17 +100,19 @@ Route::get('/api/frontend/lms/branding/public', [\App\Http\Controllers\Lms\Brand
 // Owner invite / setup / login (tenant established from invite/payload)
 Route::get('/api/frontend/lms/owner-invite', [\App\Http\Controllers\Lms\OwnerAuthController::class, 'invite']);
 Route::post('/api/frontend/lms/owner-setup', [\App\Http\Controllers\Lms\OwnerAuthController::class, 'setup'])->middleware('throttle:10,1');
-Route::post('/api/frontend/lms/owner-login', [\App\Http\Controllers\Lms\OwnerAuthController::class, 'login'])->middleware('throttle:10,1');
+Route::post('/api/frontend/lms/owner-login', [\App\Http\Controllers\Lms\OwnerAuthController::class, 'login'])->middleware('throttle:lms-login');
 
 // Staff Auth (public password flows)
-Route::post('/api/frontend/lms/staff/forgot-password', [StaffAuthController::class, 'forgotPassword'])->middleware('throttle:10,1');
+Route::post('/api/frontend/lms/staff/forgot-password', [StaffAuthController::class, 'forgotPassword'])->middleware('throttle:lms-password-reset');
 Route::post('/api/frontend/lms/staff/reset-password', [StaffAuthController::class, 'resetPassword'])->middleware('throttle:10,1');
 
 // Agent Auth (public bootstrap) + public course list
-Route::post('/api/frontend/lms/agents/apply', [AgentController::class, 'apply']);
-Route::post('/api/frontend/lms/agents/login', [AgentController::class, 'login']);
-Route::post('/api/frontend/lms/agents/forgot-password', [AgentController::class, 'forgotPassword']);
-Route::post('/api/frontend/lms/agents/reset-password', [AgentController::class, 'resetPassword']);
+Route::post('/api/frontend/lms/agents/apply', [AgentController::class, 'apply'])->middleware('throttle:10,1');
+// Agent login was the one credential route with no limiter at all, which made it
+// the cheapest place on the platform to guess passwords.
+Route::post('/api/frontend/lms/agents/login', [AgentController::class, 'login'])->middleware('throttle:lms-login');
+Route::post('/api/frontend/lms/agents/forgot-password', [AgentController::class, 'forgotPassword'])->middleware('throttle:lms-password-reset');
+Route::post('/api/frontend/lms/agents/reset-password', [AgentController::class, 'resetPassword'])->middleware('throttle:10,1');
 Route::get('/api/frontend/lms/agents/courses', [AgentController::class, 'courses']);
 
 /*
@@ -192,8 +196,13 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     // Course storefront cover image (upload / remove) — multipart, owner-scoped.
     Route::post('/api/frontend/lms/owner/courses/{id}/cover', [OwnerAdminController::class, 'uploadCourseCover']);
 
-    // Owner student management (remove a student, re-send a set-password invite).
-    // Tenant-scoped: findOrFail resolves only within the owner's institute.
+    // Owner student management (suspend/restore, schedule a deletion, re-send a
+    // set-password invite). Tenant-scoped: findOrFail resolves only within the
+    // owner's institute. DELETE no longer hard-deletes — it arms the 30-day purge
+    // window, so the roster can still cancel it and the certificate serials and
+    // revenue history the academy depends on are not rewritten retroactively.
+    Route::post('/api/frontend/lms/owner/students/{id}/active', [OwnerAdminController::class, 'setStudentActive']);
+    Route::post('/api/frontend/lms/owner/students/{id}/cancel-deletion', [OwnerAdminController::class, 'cancelStudentDeletion']);
     Route::delete('/api/frontend/lms/owner/students/{id}', [OwnerAdminController::class, 'destroyStudent']);
     Route::post('/api/frontend/lms/owner/students/{id}/resend-invite', [OwnerAdminController::class, 'resendStudentInvite']);
     // Owner course invite: attach a student to a specific course — paid via the
@@ -207,6 +216,23 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::delete('/api/frontend/lms/owner/staff/{id}', [OwnerAdminController::class, 'destroyStaff']);
     Route::post('/api/frontend/lms/owner/staff/{id}/resend-invite', [OwnerAdminController::class, 'resendStaffInvite']);
     Route::post('/api/frontend/lms/owner/staff/{id}/active', [OwnerAdminController::class, 'setStaffActive']);
+    Route::post('/api/frontend/lms/owner/staff/{id}/cancel-deletion', [OwnerAdminController::class, 'cancelStaffDeletion']);
+    // The RBAC preset for one staff member (owner|admin|instructor|assistant).
+    // Takes effect on their next request, not their next sign-in — the gate reads
+    // the role live.
+    Route::post('/api/frontend/lms/owner/staff/{id}/role', [OwnerAdminController::class, 'setStaffRole']);
+
+    // The owner's own academy: deactivate (storefront offline, teaching carries on),
+    // reactivate, and read the state for the profile page. Permanent closure is
+    // deliberately absent — that is the platform's call, from the host admin.
+    Route::get('/api/frontend/lms/owner/academy-lifecycle', [OwnerAdminController::class, 'academyLifecycle']);
+    Route::post('/api/frontend/lms/owner/academy/deactivate', [OwnerAdminController::class, 'academyDeactivate']);
+    Route::post('/api/frontend/lms/owner/academy/reactivate', [OwnerAdminController::class, 'academyReactivate']);
+
+    // The academy owner's own data-rights request, about their academy. The
+    // student/staff twin lives at /account/rights-request; device management is
+    // shared (see /account/devices above).
+    Route::post('/api/frontend/lms/owner/rights-request', [AccountSafetyController::class, 'ownerRightsRequest'])->middleware('throttle:lms-password-reset');
 
     // Owner Admission Marketer (agent) management: everyone advertising the
     // academy with their referral numbers and payout balance, plus
@@ -284,7 +310,7 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::get('/api/frontend/lms/branding', [\App\Http\Controllers\Lms\BrandingController::class, 'show']);
 
     // Student Auth (login — tenant from header/subdomain at entry)
-    Route::post('/api/frontend/lms/login', [StudentAuthController::class, 'login'])->middleware('throttle:10,1');
+    Route::post('/api/frontend/lms/login', [StudentAuthController::class, 'login'])->middleware('throttle:lms-login');
 
     // Student Profile
     Route::get('/api/frontend/lms/me', [StudentProfileController::class, 'me']);
@@ -293,6 +319,33 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::post('/api/frontend/lms/profile/password', [StudentProfileController::class, 'changePassword']);
     Route::post('/api/frontend/lms/profile/photo', [StudentProfileController::class, 'uploadPhoto']);
     Route::get('/api/frontend/lms/certificates', [StudentProfileController::class, 'certificates']);
+
+    // Student account lifecycle (deactivate / delete / reactivate). The same
+    // controller serves the staff block below; it resolves the actor from
+    // whichever bearer session the request carries. `reactivate` and
+    // `cancel-deletion` are the two paths EnsureAccountActive deliberately lets a
+    // frozen account reach, or the person could never undo their own decision.
+    Route::get('/api/frontend/lms/account', [AccountLifecycleController::class, 'show']);
+    Route::post('/api/frontend/lms/account/deactivate', [AccountLifecycleController::class, 'deactivate']);
+    Route::post('/api/frontend/lms/account/reactivate', [AccountLifecycleController::class, 'reactivate']);
+    Route::post('/api/frontend/lms/account/delete', [AccountLifecycleController::class, 'destroy']);
+    Route::post('/api/frontend/lms/account/cancel-deletion', [AccountLifecycleController::class, 'cancelDeletion']);
+
+    // Safety & privacy — the third tab on the student profile: report the
+    // academy, exercise a data right, and manage the devices signed in.
+    //
+    // Reporting is throttled: it is an email-sending endpoint pointed at the
+    // platform's inbox, and the "one open report per student per academy" rule
+    // inside the controller is the real cap — the limiter just stops a script
+    // from probing it.
+    Route::post('/api/frontend/lms/account/report-academy', [AccountSafetyController::class, 'reportAcademy'])->middleware('throttle:lms-password-reset');
+    Route::post('/api/frontend/lms/account/rights-request', [AccountSafetyController::class, 'rightsRequest'])->middleware('throttle:lms-password-reset');
+    // Devices: the list, per-device sign-out, and the panic button. Shared by the
+    // student, staff and owner profiles — the controller accepts all three
+    // session roles, so this route is mounted once rather than per portal.
+    Route::get('/api/frontend/lms/account/devices', [AccountSafetyController::class, 'devices']);
+    Route::post('/api/frontend/lms/account/devices/sign-out', [AccountSafetyController::class, 'signOutDevice']);
+    Route::post('/api/frontend/lms/account/devices/sign-out-everywhere', [AccountSafetyController::class, 'signOutEverywhere']);
 
     // Student Dashboard
     Route::get('/api/frontend/lms/dashboard', [StudentDashboardController::class, 'dashboard']);
@@ -352,22 +405,51 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::get('/api/frontend/lms/chats/unread', [StudentChatController::class, 'unreadCount']);
 
     // Staff Auth (login — tenant from header/subdomain at entry) + authenticated staff identity
-    Route::post('/api/frontend/lms/staff/login', [StaffAuthController::class, 'login'])->middleware('throttle:10,1');
+    Route::post('/api/frontend/lms/staff/login', [StaffAuthController::class, 'login'])->middleware('throttle:lms-login');
     Route::get('/api/frontend/lms/staff/dashboard', [StaffAuthController::class, 'dashboard']);
     Route::get('/api/frontend/lms/staff/me', [StaffAuthController::class, 'me']);
+
+    // Staff account lifecycle — the student block's twin, sharing one controller.
+    // A staffer leaving can pause or delete their own login without the owner
+    // having to remove them and cascade a cohort away with them.
+    Route::get('/api/frontend/lms/staff/account', [AccountLifecycleController::class, 'show']);
+    Route::post('/api/frontend/lms/staff/account/deactivate', [AccountLifecycleController::class, 'deactivate']);
+    Route::post('/api/frontend/lms/staff/account/reactivate', [AccountLifecycleController::class, 'reactivate']);
+    Route::post('/api/frontend/lms/staff/account/delete', [AccountLifecycleController::class, 'destroy']);
+    Route::post('/api/frontend/lms/staff/account/cancel-deletion', [AccountLifecycleController::class, 'cancelDeletion']);
 
     // Staff Tasks. listTasks/showTask live in StaffPortalController (below);
     // update/delete are scoped to the teacher's assigned courses inside the
     // controller.
-    Route::post('/api/frontend/lms/staff/tasks', [StaffTaskController::class, 'createTask']);
-    Route::put('/api/frontend/lms/staff/tasks/{taskId}', [StaffTaskController::class, 'updateTask']);
-    Route::delete('/api/frontend/lms/staff/tasks/{taskId}', [StaffTaskController::class, 'deleteTask']);
-    Route::post('/api/frontend/lms/staff/tasks/{taskId}/submissions/{submissionId}/grade', [StaffTaskController::class, 'gradeSubmission']);
-    // All submissions across the teacher's tasks — backing for the Submissions tab.
-    Route::get('/api/frontend/lms/staff/task-submissions', [StaffTaskController::class, 'submissions']);
+    //
+    // Everything from here down is wrapped per SECTION with `staff.can:<section>`
+    // (see App\Support\StaffPermissions). The section is named at the route rather
+    // than inferred from the URL prefix so that a new route is gated by whoever
+    // writes it, and an unknown section name is refused loudly instead of
+    // silently ungating the route — see EnsureStaffPermission.
+    //
+    // Four blocks are deliberately NOT gated, and each for a reason:
+    //   - identity and self-service (`/staff/login`, `/me`, `/dashboard`,
+    //     `/staff/account/*`, `/staff/profile/*`): every role has these.
+    //   - `/staff/courses` and `/staff/tracks` (the teacher's own assignments):
+    //     read as a lookup by the Classroom, Leaderboard, Materials, Modules and
+    //     Tasks pages, which every role can reach. Gating them would break those
+    //     pages for an assistant. They return only the caller's own rows, so the
+    //     assistant who opens /lms/staff/courses directly sees nothing they were
+    //     not already entitled to.
+    //   - `/staff/certificates`: not a sidebar section, and the certificate UI is
+    //     reached from Students.
+    Route::middleware('staff.can:tasks')->group(function () {
+        Route::post('/api/frontend/lms/staff/tasks', [StaffTaskController::class, 'createTask']);
+        Route::put('/api/frontend/lms/staff/tasks/{taskId}', [StaffTaskController::class, 'updateTask']);
+        Route::delete('/api/frontend/lms/staff/tasks/{taskId}', [StaffTaskController::class, 'deleteTask']);
+        Route::post('/api/frontend/lms/staff/tasks/{taskId}/submissions/{submissionId}/grade', [StaffTaskController::class, 'gradeSubmission']);
+        // All submissions across the teacher's tasks — backing for the Submissions tab.
+        Route::get('/api/frontend/lms/staff/task-submissions', [StaffTaskController::class, 'submissions']);
+    });
 
     // Staff Chat — messaging gated to paid plans (plan.chat); unread stays open.
-    Route::middleware('plan.chat')->group(function () {
+    Route::middleware(['plan.chat', 'staff.can:chats'])->group(function () {
         Route::get('/api/frontend/lms/staff/chats/group/messages', [StaffChatController::class, 'groupMessages']);
         Route::post('/api/frontend/lms/staff/chats/group/messages', [StaffChatController::class, 'sendGroupMessage']);
         Route::post('/api/frontend/lms/staff/chats/group/messages/{id}/delete', [StaffChatController::class, 'deleteGroupMessage']);
@@ -385,21 +467,28 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
         Route::post('/api/frontend/lms/staff/chats/group/read', [StaffChatController::class, 'markGroupRead']);
         Route::post('/api/frontend/lms/staff/chats/dm/read', [StaffChatController::class, 'markDmRead']);
     });
+    // The unread COUNTER is deliberately outside both gates: the sidebar polls it
+    // on every page, and a 403 here would be indistinguishable from a slow
+    // network to the badge logic.
     Route::get('/api/frontend/lms/staff/chats/unread', [StaffChatController::class, 'unreadCount']);
 
     // Staff Classroom
-    Route::get('/api/frontend/lms/staff/classrooms', [StaffClassroomController::class, 'index']);
-    Route::get('/api/frontend/lms/staff/classrooms/{id}', [StaffClassroomController::class, 'show']);
-    Route::post('/api/frontend/lms/staff/classrooms', [StaffClassroomController::class, 'createClassroom']);
-    Route::put('/api/frontend/lms/staff/classrooms/{id}', [StaffClassroomController::class, 'updateClassroom']);
-    Route::delete('/api/frontend/lms/staff/classrooms/{id}', [StaffClassroomController::class, 'deleteClassroom']);
-    // Moderator token so the instructor can host the live Jitsi room (both live-class
-    // models via ?class_type=scheduled|classroom).
-    Route::post('/api/frontend/lms/staff/classrooms/{id}/meeting-token', [StaffClassroomController::class, 'meetingToken']);
+    Route::middleware('staff.can:classroom')->group(function () {
+        Route::get('/api/frontend/lms/staff/classrooms', [StaffClassroomController::class, 'index']);
+        Route::get('/api/frontend/lms/staff/classrooms/{id}', [StaffClassroomController::class, 'show']);
+        Route::post('/api/frontend/lms/staff/classrooms', [StaffClassroomController::class, 'createClassroom']);
+        Route::put('/api/frontend/lms/staff/classrooms/{id}', [StaffClassroomController::class, 'updateClassroom']);
+        Route::delete('/api/frontend/lms/staff/classrooms/{id}', [StaffClassroomController::class, 'deleteClassroom']);
+        // Moderator token so the instructor can host the live Jitsi room (both live-class
+        // models via ?class_type=scheduled|classroom).
+        Route::post('/api/frontend/lms/staff/classrooms/{id}/meeting-token', [StaffClassroomController::class, 'meetingToken']);
+    });
 
     // Staff Tasks (list)
-    Route::get('/api/frontend/lms/staff/tasks', [StaffPortalController::class, 'listTasks']);
-    Route::get('/api/frontend/lms/staff/tasks/{id}', [StaffPortalController::class, 'showTask']);
+    Route::middleware('staff.can:tasks')->group(function () {
+        Route::get('/api/frontend/lms/staff/tasks', [StaffPortalController::class, 'listTasks']);
+        Route::get('/api/frontend/lms/staff/tasks/{id}', [StaffPortalController::class, 'showTask']);
+    });
 
     // Staff Profile
     Route::get('/api/frontend/lms/staff/profile', [StaffProfileController::class, 'show']);
@@ -408,36 +497,49 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::post('/api/frontend/lms/staff/profile/photo', [StaffProfileController::class, 'uploadPhoto']);
 
     // Staff Materials
-    Route::get('/api/frontend/lms/staff/materials', [StaffPortalController::class, 'materials']);
-    Route::post('/api/frontend/lms/staff/materials', [StaffPortalController::class, 'storeMaterial']);
-    // Non-video file upload (PDF/document/…) onto the platform's public disk;
-    // videos go straight to Bunny via /staff/videos/upload instead.
-    Route::post('/api/frontend/lms/staff/materials/upload', [StaffPortalController::class, 'uploadMaterialFile']);
-    Route::delete('/api/frontend/lms/staff/materials/{id}', [StaffPortalController::class, 'deleteMaterial']);
+    Route::middleware('staff.can:materials')->group(function () {
+        Route::get('/api/frontend/lms/staff/materials', [StaffPortalController::class, 'materials']);
+        Route::post('/api/frontend/lms/staff/materials', [StaffPortalController::class, 'storeMaterial']);
+        // Non-video file upload (PDF/document/…) onto the platform's public disk;
+        // videos go straight to Bunny via /staff/videos/upload instead.
+        Route::post('/api/frontend/lms/staff/materials/upload', [StaffPortalController::class, 'uploadMaterialFile']);
+        Route::delete('/api/frontend/lms/staff/materials/{id}', [StaffPortalController::class, 'deleteMaterial']);
+    });
 
     // Staff Modules
-    Route::get('/api/frontend/lms/staff/modules', [StaffModuleController::class, 'index']);
-    Route::post('/api/frontend/lms/staff/modules', [StaffModuleController::class, 'store']);
-    Route::get('/api/frontend/lms/staff/modules/{id}', [StaffModuleController::class, 'show']);
-    // One-click module zip for staffers (same archive as the students' button).
-    Route::get('/api/frontend/lms/staff/modules/{id}/download', [StaffModuleController::class, 'download']);
-    Route::put('/api/frontend/lms/staff/modules/{id}', [StaffModuleController::class, 'update']);
-    Route::delete('/api/frontend/lms/staff/modules/{id}', [StaffModuleController::class, 'destroy']);
-    Route::post('/api/frontend/lms/staff/modules/{moduleId}/contents', [StaffModuleController::class, 'addContent']);
-    Route::put('/api/frontend/lms/staff/modules/{moduleId}/contents/{contentId}', [StaffModuleController::class, 'updateContent']);
-    Route::delete('/api/frontend/lms/staff/modules/{moduleId}/contents/{contentId}', [StaffModuleController::class, 'removeContent']);
-    Route::post('/api/frontend/lms/staff/modules/{moduleId}/contents/upload', [StaffModuleController::class, 'uploadContentFile']);
-    Route::put('/api/frontend/lms/staff/modules/{moduleId}/contents/reorder', [StaffModuleController::class, 'reorderContents']);
-    Route::post('/api/frontend/lms/staff/modules/{moduleId}/schedule', [StaffModuleController::class, 'scheduleClass']);
-    Route::get('/api/frontend/lms/staff/scheduled-classes', [StaffModuleController::class, 'classes']);
-    Route::put('/api/frontend/lms/staff/scheduled-classes/{classId}', [StaffModuleController::class, 'updateClass']);
-    Route::delete('/api/frontend/lms/staff/scheduled-classes/{classId}', [StaffModuleController::class, 'destroyClass']);
+    Route::middleware('staff.can:modules')->group(function () {
+        Route::get('/api/frontend/lms/staff/modules', [StaffModuleController::class, 'index']);
+        Route::post('/api/frontend/lms/staff/modules', [StaffModuleController::class, 'store']);
+        Route::get('/api/frontend/lms/staff/modules/{id}', [StaffModuleController::class, 'show']);
+        // One-click module zip for staffers (same archive as the students' button).
+        Route::get('/api/frontend/lms/staff/modules/{id}/download', [StaffModuleController::class, 'download']);
+        Route::put('/api/frontend/lms/staff/modules/{id}', [StaffModuleController::class, 'update']);
+        Route::delete('/api/frontend/lms/staff/modules/{id}', [StaffModuleController::class, 'destroy']);
+        Route::post('/api/frontend/lms/staff/modules/{moduleId}/contents', [StaffModuleController::class, 'addContent']);
+        Route::put('/api/frontend/lms/staff/modules/{moduleId}/contents/{contentId}', [StaffModuleController::class, 'updateContent']);
+        Route::delete('/api/frontend/lms/staff/modules/{moduleId}/contents/{contentId}', [StaffModuleController::class, 'removeContent']);
+        Route::post('/api/frontend/lms/staff/modules/{moduleId}/contents/upload', [StaffModuleController::class, 'uploadContentFile']);
+        Route::put('/api/frontend/lms/staff/modules/{moduleId}/contents/reorder', [StaffModuleController::class, 'reorderContents']);
+        Route::post('/api/frontend/lms/staff/modules/{moduleId}/schedule', [StaffModuleController::class, 'scheduleClass']);
 
-    // Staff pre-recorded video (Bunny Stream) — mint a signed direct-upload
-    // envelope (the browser uploads the bytes straight to Bunny) + poll status.
-    // Plan-gated on `pre_recorded_video` (Basic+) inside the controller.
-    Route::post('/api/frontend/lms/staff/videos/upload', [StaffVideoController::class, 'createUpload']);
-    Route::get('/api/frontend/lms/staff/videos/{videoId}/status', [StaffVideoController::class, 'videoStatus']);
+        // Staff pre-recorded video (Bunny Stream) — mint a signed direct-upload
+        // envelope (the browser uploads the bytes straight to Bunny) + poll status.
+        // Plan-gated on `pre_recorded_video` (Basic+) inside the controller.
+        //
+        // Gated as Modules, not Materials: the only caller is the module-content
+        // editor (src/lib/bunny-upload.ts), which adds video to a module.
+        Route::post('/api/frontend/lms/staff/videos/upload', [StaffVideoController::class, 'createUpload']);
+        Route::get('/api/frontend/lms/staff/videos/{videoId}/status', [StaffVideoController::class, 'videoStatus']);
+    });
+
+    // Scheduled classes are the Timetable section, wherever they are edited from:
+    // the Timetable page reads them AND reschedules them, and the Modules page's
+    // "schedule a class" action is the POST under /modules/{id}/schedule above.
+    Route::middleware('staff.can:timetable')->group(function () {
+        Route::get('/api/frontend/lms/staff/scheduled-classes', [StaffModuleController::class, 'classes']);
+        Route::put('/api/frontend/lms/staff/scheduled-classes/{classId}', [StaffModuleController::class, 'updateClass']);
+        Route::delete('/api/frontend/lms/staff/scheduled-classes/{classId}', [StaffModuleController::class, 'destroyClass']);
+    });
 
     // Student Modules & Timetable
     Route::get('/api/frontend/lms/modules', [StudentModuleController::class, 'index']);
@@ -449,27 +551,41 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::get('/api/frontend/lms/timetable', [StudentModuleController::class, 'timetable']);
 
     // Staff Attendance
-    Route::get('/api/frontend/lms/staff/attendance', [StaffPortalController::class, 'attendance']);
+    Route::middleware('staff.can:attendance')->group(function () {
+        Route::get('/api/frontend/lms/staff/attendance', [StaffPortalController::class, 'attendance']);
+    });
 
     // Staff Leaderboard: students ranked by average graded-task score.
-    Route::get('/api/frontend/lms/staff/leaderboard', [StaffPortalController::class, 'leaderboard']);
+    Route::middleware('staff.can:leaderboard')->group(function () {
+        Route::get('/api/frontend/lms/staff/leaderboard', [StaffPortalController::class, 'leaderboard']);
+    });
 
-    // Staff Certificates
+    // Staff Certificates — NOT section-gated: certificates are issued from the
+    // Students page, which every role has, and the owner's certificate tools are
+    // the ones that live behind a section of their own.
     Route::get('/api/frontend/lms/staff/certificates', [StaffPortalController::class, 'certificates']);
     Route::post('/api/frontend/lms/staff/certificates', [StaffPortalController::class, 'issueCertificate']);
 
     // Staff Announcements
-    Route::get('/api/frontend/lms/staff/announcements', [StaffPortalController::class, 'announcements']);
-    Route::post('/api/frontend/lms/staff/announcements', [StaffPortalController::class, 'createAnnouncement']);
-    Route::delete('/api/frontend/lms/staff/announcements/{id}', [StaffPortalController::class, 'deleteAnnouncement']);
+    Route::middleware('staff.can:announcements')->group(function () {
+        Route::get('/api/frontend/lms/staff/announcements', [StaffPortalController::class, 'announcements']);
+        Route::post('/api/frontend/lms/staff/announcements', [StaffPortalController::class, 'createAnnouncement']);
+        Route::delete('/api/frontend/lms/staff/announcements/{id}', [StaffPortalController::class, 'deleteAnnouncement']);
+    });
 
-    // Staff Reports
-    Route::get('/api/frontend/lms/staff/reports', [StaffPortalController::class, 'reports']);
+    // Staff Reports — the one section an instructor does NOT get: it is the
+    // academy's revenue and enrolment picture.
+    Route::middleware('staff.can:reports')->group(function () {
+        Route::get('/api/frontend/lms/staff/reports', [StaffPortalController::class, 'reports']);
+    });
 
     // Staff Students
-    Route::get('/api/frontend/lms/staff/students', [StaffPortalController::class, 'students']);
+    Route::middleware('staff.can:students')->group(function () {
+        Route::get('/api/frontend/lms/staff/students', [StaffPortalController::class, 'students']);
+    });
 
-    // Staff Assigned Courses & Tracks
+    // Staff Assigned Courses & Tracks — ungated on purpose; see the note at the
+    // top of the staff block. The teacher's own assignments only.
     Route::get('/api/frontend/lms/staff/courses', [StaffPortalController::class, 'assignedCourses']);
     Route::get('/api/frontend/lms/staff/tracks', [StaffPortalController::class, 'assignedTracks']);
 
@@ -479,20 +595,24 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     // inherited on every action; the staff page shows an "ask your academy
     // owner to upgrade" note (staff cannot upgrade the plan themselves).
     // Generate is throttled — each call spends Gamma credits.
-    Route::post('/api/frontend/lms/staff/ai/materials/generate', [StaffGammaController::class, 'generate'])->middleware('throttle:20,1');
-    Route::get('/api/frontend/lms/staff/ai/materials/{id}', [StaffGammaController::class, 'status']);
-    Route::post('/api/frontend/lms/staff/ai/materials/save', [StaffGammaController::class, 'save']);
-    // Word (.docx) one-off download, inherited from OwnerGammaController.
-    Route::post('/api/frontend/lms/staff/ai/materials/docx', [StaffGammaController::class, 'downloadDocx']);
-    // Modules of one assigned course — populates the staff AI-materials
-    // "save into module" picker (assigned-course-scoped inside the controller).
-    Route::get('/api/frontend/lms/staff/courses/{course}/modules', [StaffGammaController::class, 'courseModules']);
+    Route::middleware('staff.can:ai_materials')->group(function () {
+        Route::post('/api/frontend/lms/staff/ai/materials/generate', [StaffGammaController::class, 'generate'])->middleware('throttle:20,1');
+        Route::get('/api/frontend/lms/staff/ai/materials/{id}', [StaffGammaController::class, 'status']);
+        Route::post('/api/frontend/lms/staff/ai/materials/save', [StaffGammaController::class, 'save']);
+        // Word (.docx) one-off download, inherited from OwnerGammaController.
+        Route::post('/api/frontend/lms/staff/ai/materials/docx', [StaffGammaController::class, 'downloadDocx']);
+        // Modules of one assigned course — populates the staff AI-materials
+        // "save into module" picker (assigned-course-scoped inside the controller).
+        Route::get('/api/frontend/lms/staff/courses/{course}/modules', [StaffGammaController::class, 'courseModules']);
+    });
 
     // Staff Notifications
-    Route::get('/api/frontend/lms/staff/notifications', [StaffNotificationController::class, 'index']);
-    Route::get('/api/frontend/lms/staff/notifications/unread', [StaffNotificationController::class, 'unreadCount']);
-    Route::post('/api/frontend/lms/staff/notifications/{id}/read', [StaffNotificationController::class, 'markRead']);
-    Route::post('/api/frontend/lms/staff/notifications/read-all', [StaffNotificationController::class, 'markAllRead']);
+    Route::middleware('staff.can:notifications')->group(function () {
+        Route::get('/api/frontend/lms/staff/notifications', [StaffNotificationController::class, 'index']);
+        Route::get('/api/frontend/lms/staff/notifications/unread', [StaffNotificationController::class, 'unreadCount']);
+        Route::post('/api/frontend/lms/staff/notifications/{id}/read', [StaffNotificationController::class, 'markRead']);
+        Route::post('/api/frontend/lms/staff/notifications/read-all', [StaffNotificationController::class, 'markAllRead']);
+    });
 
     // Agent (authenticated) routes
     Route::get('/api/frontend/lms/agents/me', [AgentController::class, 'me']);

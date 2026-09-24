@@ -61,6 +61,25 @@ abstract class BaseLmsController extends Controller
     {
         $token = $this->bearerToken($request);
 
+        // ResolveTenantFromSession already found this request's session (and
+        // EnsureAccountActive inspected it), so reuse that row instead of running
+        // the identical lookup again on every authenticated call.
+        //
+        // The token is re-checked against the request rather than trusted: the
+        // binding lives in the container, which outlives a single request under a
+        // long-running worker, so a binding set by an earlier request must never
+        // be able to authenticate a later one. Both the role filter and the token
+        // have to match, exactly as the query below would require.
+        if (app()->bound('lmsResolvedSession') && $token) {
+            $resolved = app('lmsResolvedSession');
+
+            if ($resolved instanceof LmsSession
+                && $resolved->role === $role
+                && hash_equals((string) $resolved->token, $token)) {
+                return $resolved;
+            }
+        }
+
         if (! $token) {
             return null;
         }
@@ -88,6 +107,44 @@ abstract class BaseLmsController extends Controller
             if ($tenant) {
                 app()->instance('currentTenant', $tenant);
             }
+        }
+    }
+
+    /**
+     * Tell a person their account was deactivated, restored, deleted or
+     * un-deleted. Shared by the self-service endpoints (the person acting on
+     * themselves) and the owner's (an academy acting on a student or staffer), so
+     * one event never reads two different ways depending on who triggered it.
+     *
+     * Failures are swallowed on purpose: mail is synchronous here, so a dead SMTP
+     * host would otherwise turn "remove this student" into a 500 and leave the
+     * owner unsure whether it took effect. The state change is the operation; the
+     * email is a courtesy.
+     */
+    protected function notifyAccountLifecycle($account, string $role, string $kind): void
+    {
+        if (trim((string) $account->email) === '') {
+            return;
+        }
+
+        $tenant = $account->tenant_id ? \App\Models\Tenant::find($account->tenant_id) : null;
+
+        try {
+            \Illuminate\Support\Facades\Mail::to($account->email)->send(
+                \App\Mail\AccountLifecycleMail::make($kind, [
+                    'name' => $role === 'student'
+                        ? trim($account->first_name . ' ' . $account->last_name)
+                        : $account->name,
+                    'academy' => $tenant?->name ?: 'your academy',
+                    'tenant_id' => $account->tenant_id,
+                    'purge_after' => $account->purge_after
+                        ? \Illuminate\Support\Carbon::parse($account->purge_after)->format('j F Y')
+                        : null,
+                    'url' => \App\Support\NotificationLinks::profileUrl($role, $tenant?->slug),
+                ])
+            );
+        } catch (\Throwable $e) {
+            report($e);
         }
     }
 
@@ -1238,17 +1295,75 @@ abstract class BaseLmsController extends Controller
         return $viewerPayload;
     }
 
+    /**
+     * A model query as the HOST back office sees it: every academy, not just the
+     * primary one.
+     *
+     * `BindPrimaryTenant` binds Jorsas Tech on every back-office route (see its own
+     * docblock — it exists because TenantAware would otherwise fail closed there),
+     * and `TenantScope` then quietly narrows each query to Jorsas Tech's own rows.
+     * That is wrong for anything the host reads: the back office is above tenancy.
+     * Before this helper, the host's Students/Courses/Classrooms/Tracks/Teachers/
+     * Agents pages, their row actions, and the sidebar counts in adminShellData()
+     * all silently showed Jorsas Tech alone.
+     *
+     * Deliberately NOT a global bypass. TenantScope fails closed under enforcement
+     * (`whereRaw('1 = 0')` with no tenant bound), so "no tenant bound" is not a
+     * state the host can rely on. Every host query opts out here instead —
+     * explicitly, greppably, and only where a human wrote it.
+     */
+    protected function hostQuery(string $model): \Illuminate\Database\Eloquent\Builder
+    {
+        return $model::query()->withoutGlobalScope(TenantScope::class);
+    }
+
+    /** Every academy, for the "which academy" columns, filters and create pickers. */
+    protected function academies(): \Illuminate\Support\Collection
+    {
+        return \App\Models\Tenant::query()->orderBy('name')->get(['id', 'name', 'slug']);
+    }
+
+    /** tenant_id => academy name, for labelling a row in a host list. */
+    protected function academyNames(): \Illuminate\Support\Collection
+    {
+        return \App\Models\Tenant::query()->pluck('name', 'id');
+    }
+
     protected function adminShellData(): array
     {
         return [
-            'adminDir' => env('ADMIN_DIR', 'admin'),
-            'pendingRegistrations' => \App\Models\TrainingRegistration::query()->where('status', 'pending')->count(),
-            'studentCount' => \App\Models\LmsStudent::query()->count(),
-            'tracks' => LmsTrack::query()->count(),
-            'courses' => \App\Models\LmsCourse::query()->count(),
+            // config(), not env(): under config:cache env() returns null outside a
+            // config file, which silently collapses every admin URL to /{path}
+            // without the admin prefix. The value is already bound in
+            // config/saas.php under the same key.
+            'adminDir' => config('saas.admin_dir', 'admin'),
+            // Platform-wide counts. Every one of these is a HOST number, so every
+            // one drops the TenantScope — see hostQuery(). Left scoped, the sidebar
+            // disagreed with the page it sat next to.
+            'pendingRegistrations' => $this->hostQuery(\App\Models\TrainingRegistration::class)->where('status', 'pending')->count(),
+            'studentCount' => $this->hostQuery(\App\Models\LmsStudent::class)->count(),
+            'tracks' => $this->hostQuery(LmsTrack::class)->count(),
+            'courses' => $this->hostQuery(\App\Models\LmsCourse::class)->count(),
             // staffOnly(): the owner's mirror row is an actor, not a staff member.
-            'teachers' => \App\Models\LmsTeacher::query()->staffOnly()->count(),
-            'classrooms' => LmsClassroom::query()->count(),
+            'teachers' => $this->hostQuery(\App\Models\LmsTeacher::class)->staffOnly()->count(),
+            'classrooms' => $this->hostQuery(LmsClassroom::class)->count(),
+            // The academy list every host list needs, so no page method has to pass
+            // it. `academies` for a <select>, `academyNames` for labelling a row.
+            'academies' => $this->academies(),
+            'academyNames' => $this->academyNames(),
+            // Outstanding safety queues, shown as sidebar badges on every host
+            // page so a report or rights request cannot sit unnoticed behind a
+            // nav link nobody clicked. Scoped to PENDING: a count that included
+            // resolved items would only ever grow, which is a badge people learn
+            // to ignore. Tenant scope dropped — these are platform-wide queues.
+            'openReportCount' => \App\Models\AcademyReport::query()
+                ->withoutGlobalScope(\App\Scopes\TenantScope::class)
+                ->open()
+                ->count(),
+            'openRightsCount' => \App\Models\RightsRequest::query()
+                ->withoutGlobalScope(\App\Scopes\TenantScope::class)
+                ->open()
+                ->count(),
         ];
     }
 }

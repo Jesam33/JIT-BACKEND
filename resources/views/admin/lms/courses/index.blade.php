@@ -134,6 +134,15 @@
                 <form method="POST" action="{{ route('lms.courses.store') }}" class="panel-body">
                     @csrf
                     <div class="row">
+                        <label for="tenant_id">Academy</label>
+                        <select id="tenant_id" name="tenant_id" required>
+                            <option value="">Select academy</option>
+                            @foreach ($academies as $academy)
+                                <option value="{{ $academy->id }}" @selected(old('tenant_id') == $academy->id)>{{ $academy->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="row">
                         <label for="title">Course title</label>
                         <input id="title" name="title" type="text" required>
                     </div>
@@ -178,6 +187,7 @@
                             <thead>
                                 <tr>
                                     <th>Course</th>
+                                    <th>Academy</th>
                                     <th class="num">Price</th>
                                     <th class="num">Slots</th>
                                     <th class="num">Students</th>
@@ -193,6 +203,13 @@
                                         <td>
                                             <strong>{{ $course['title'] }}</strong>
                                             <div class="row-sub">{{ $course['description'] ?: 'No description yet.' }}</div>
+                                        </td>
+                                        <td>
+                                            @if ($course['academy'] ?? null)
+                                                <span class="row-sub">{{ $course['academy'] }}</span>
+                                            @else
+                                                <span class="row-sub">Unknown academy</span>
+                                            @endif
                                         </td>
                                         <td class="num">₦{{ number_format($course['price'], 0) }}</td>
                                         <td class="num">{{ $course['registered_count'] }}{{ $course['max_students'] > 0 ? '/' . $course['max_students'] : '/∞' }}</td>

@@ -4,11 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\HasAccountLifecycle;
 use App\Traits\TenantAware;
 
 class LmsTeacher extends Model
 {
     use HasFactory;
+    use HasAccountLifecycle;
     use TenantAware;
 
     protected $fillable = [
@@ -23,6 +25,10 @@ class LmsTeacher extends Model
         // The owner's stand-in row for this academy (see the migration). Never set
         // from request input — only ownerMirror() creates one.
         'is_academy_owner',
+        // RBAC preset key: owner|admin|instructor|assistant. Assigned by the owner
+        // from the Staff Accounts page; the sections it grants live in
+        // App\Support\StaffPermissions, never here.
+        'staff_role',
         'zoom_user_id',
         'group_chat_read_at',
         'dm_chat_read_at',
@@ -37,7 +43,43 @@ class LmsTeacher extends Model
         'is_academy_owner' => 'boolean',
         'group_chat_read_at' => 'datetime',
         'dm_chat_read_at' => 'datetime',
+        'deactivated_at' => 'datetime',
+        'purge_after' => 'datetime',
+        'purged_at' => 'datetime',
     ];
+
+    /**
+     * Remove this staff member, unless doing so would take a cohort with them.
+     *
+     * `lms_tracks.instructor_id` is NOT NULL with cascadeOnDelete, so deleting a
+     * teacher who still leads a cohort silently destroys that cohort and, through
+     * it, its enrolments, DM threads and group chat. The owner's Remove button
+     * refuses in that case and tells them to reassign first; this refuses the same
+     * way, but returns false instead of erroring, because the caller here is a
+     * scheduled sweep with nobody to show a message to.
+     *
+     * Refusing is the whole point: the row stays scheduled and intact, so a human
+     * reassigns the cohort and the next run completes the deletion. Cascade-
+     * deleting a cohort because a deletion fell due would be unrecoverable.
+     */
+    public function purge(): bool
+    {
+        if (\App\Models\LmsTrack::query()->where('instructor_id', $this->id)->exists()) {
+            return false;
+        }
+
+        \App\Models\LmsSession::query()
+            ->withoutGlobalScope(\App\Scopes\TenantScope::class)
+            ->whereIn('role', ['staff', 'teacher'])
+            ->where('user_id', $this->id)
+            ->delete();
+
+        // Their own DM threads and notifications cascade harmlessly; every other
+        // reference (tasks, modules, classrooms, graded-by) is nullOnDelete.
+        $this->delete();
+
+        return true;
+    }
 
     /**
      * Whether this row is an academy owner's stand-in teacher. Such an actor is
@@ -48,6 +90,42 @@ class LmsTeacher extends Model
     public function isAcademyOwner(): bool
     {
         return (bool) $this->is_academy_owner;
+    }
+
+    /**
+     * The RBAC preset this staff member holds.
+     *
+     * The owner is resolved FIRST and never read from the column: there is exactly
+     * one owner account per academy, they are identified by is_academy_owner, and
+     * `staff_role` has no value that could express "the account holder". Reading
+     * the column for an owner would let a stray value in it downgrade the person
+     * who owns the academy.
+     *
+     * Anything unrecognised falls back to `instructor`, which is the column's own
+     * default and a genuinely restricted role — so a bad value narrows access
+     * rather than widening it.
+     */
+    public function staffRole(): string
+    {
+        if ($this->isAcademyOwner()) {
+            return 'owner';
+        }
+
+        $role = (string) ($this->staff_role ?: 'instructor');
+
+        return \App\Support\StaffPermissions::isValidRole($role) ? $role : 'instructor';
+    }
+
+    /** Whether this staff member may reach a staff-portal section. */
+    public function allows(string $section): bool
+    {
+        return \App\Support\StaffPermissions::allows($this->staffRole(), $section);
+    }
+
+    /** The sections this staff member may reach — handed to the client by /staff/me. */
+    public function allowedSections(): array
+    {
+        return \App\Support\StaffPermissions::sectionsFor($this->staffRole());
     }
 
     /** Query scope for REAL staff: excludes every academy-owner mirror row. */
