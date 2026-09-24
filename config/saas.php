@@ -90,6 +90,21 @@ return [
     // Same config-not-env rule so it survives config:cache. Opt-in (default off).
     'frontend_api_enabled' => filter_var(env('FRONTEND_API_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 
+    // On/off for the public QA testing pass (iungo and any later event): the
+    // registration endpoint, the join-link exchange, and the host back office page.
+    // Every QA endpoint is gated by ensureQaEnabled(); when false they 404.
+    //
+    // OPT-IN, default OFF, and that matters more here than anywhere else on the
+    // platform: this is the only public endpoint that mints a video-room
+    // credential for an anonymous visitor, so it ships dark and is switched on
+    // deliberately for an event window. The event's own starts_at/ends_at close it
+    // again on the day, so a forgotten flag is not an open door.
+    //
+    // Resolved HERE via config — NOT env() at the call site — so it survives
+    // `php artisan config:cache` in production (the config:cache trap that has
+    // silently blanked LMS_FEATURE_ENABLED and TRAINING_FEATURE_ENABLED before).
+    'qa_events_enabled' => filter_var(env('QA_EVENTS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
     // Public URL of the Next.js frontend, used to build links in outgoing emails
     // (staff/student invites, password resets, payment callbacks, owner setup).
     // Resolved here — via config, NOT env() at the call sites — so the value

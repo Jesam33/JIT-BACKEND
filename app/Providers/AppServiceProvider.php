@@ -71,6 +71,30 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(10)->by('ip:' . $request->ip()),
             ];
         });
+
+        // QA testing-pass registration. This is an anonymous, unauthenticated
+        // endpoint that both writes a row and sends an email, so it gets the same
+        // two-key treatment as the credential endpoints: a tight per-EMAIL cap
+        // (the thing an attacker would abuse is someone else's inbox, and one
+        // person retrying their own signup is the normal case) over a looser
+        // per-IP one. The per-IP allowance is deliberately not tiny, because a
+        // testing day means a room full of people who may well share one office
+        // or campus address; the per-email key is what actually bounds the abuse.
+        RateLimiter::for('qa-register', function (Request $request) {
+            return [
+                Limit::perMinute(3)->by($this->credentialKey($request)),
+                Limit::perMinute(20)->by('ip:' . $request->ip()),
+            ];
+        });
+
+        // Exchanging a join link for a room token. Cheap and idempotent, but it
+        // mints a video credential, so a leaked-token brute force should still be
+        // slowed to a crawl rather than run at full speed.
+        RateLimiter::for('qa-join', function (Request $request) {
+            return [
+                Limit::perMinute(30)->by('ip:' . $request->ip()),
+            ];
+        });
     }
 
     /**

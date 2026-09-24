@@ -82,6 +82,14 @@ Route::middleware(['auth', 'tenant.primary'])->prefix(env('ADMIN_DIR', 'admin'))
 	Route::get('/lms/rights-requests', [AdminController::class, 'rightsRequestsPage'])->name('admin.lms.rights.index');
 	Route::post('/lms/rights-requests/{id}', [AdminController::class, 'updateRightsRequest'])->name('admin.lms.rights.update');
 
+	// QA testing passes (iungo and any later event). The tester-facing half is
+	// public and lives in routes/lms-api.php; these are the host controls.
+	Route::get('/lms/qa-events', [AdminController::class, 'qaEventsPage'])->name('admin.lms.qa.index');
+	Route::post('/lms/qa-events/testers/{id}/resend', [AdminController::class, 'resendQaInvite'])->name('admin.lms.qa.resend');
+	Route::post('/lms/qa-events/testers/{id}/remove', [AdminController::class, 'removeQaTester'])->name('admin.lms.qa.remove');
+	// Removing is a one-click guess under time pressure, so it has to be undoable.
+	Route::post('/lms/qa-events/testers/{id}/restore', [AdminController::class, 'restoreQaTester'])->name('admin.lms.qa.restore');
+
 	// CEO's Forum (host schedules live meetings for every institute owner)
 	Route::get('/lms/forums', [AdminController::class, 'ceoForumsPage'])->name('admin.lms.forums.index');
 	Route::post('/lms/forums', [AdminController::class, 'createCeoForum'])->name('admin.lms.forums.store');

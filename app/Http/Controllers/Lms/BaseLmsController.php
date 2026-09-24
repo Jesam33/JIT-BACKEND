@@ -1364,6 +1364,18 @@ abstract class BaseLmsController extends Controller
                 ->withoutGlobalScope(\App\Scopes\TenantScope::class)
                 ->open()
                 ->count(),
+            // Whether to show the QA events nav item at all. Driven by the DATA
+            // rather than by `saas.qa_events_enabled`, because the flag is switched
+            // off again the moment an event ends and the host would then lose the
+            // only route back to the tester list. No scope to drop: QaEvent sits
+            // outside the TenantAware trait (see App\Models\QaEvent).
+            //
+            // hasTable is not defensive noise: this runs on EVERY host page, so a
+            // deploy that ships the code before `php artisan migrate` would take the
+            // whole admin panel down over a sidebar link. Everything else here reads
+            // tables that have existed for months.
+            'hasQaEvents' => \Illuminate\Support\Facades\Schema::hasTable('qa_events')
+                && \App\Models\QaEvent::query()->exists(),
         ];
     }
 }

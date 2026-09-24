@@ -113,6 +113,18 @@ class PublicInstituteController extends Controller
             ->orderBy('name')
             ->get();
 
+        // A QA event's academy is not a customer academy. It exists to carry an
+        // event's tenant_id, and qa:setup-event creates it on Pro with a comped
+        // subscription, so it satisfies every condition above and would otherwise
+        // be showcased as a campus that sells nothing. Filtered in PHP rather than
+        // as a subquery so the hasTable guard can cover a deploy that ships the
+        // code before `php artisan migrate`: this is a public page, and a missing
+        // qa_events table must not 500 the directory.
+        if (\Illuminate\Support\Facades\Schema::hasTable('qa_events')) {
+            $eventTenantIds = \App\Models\QaEvent::query()->pluck('tenant_id')->unique()->all();
+            $tenants = $tenants->reject(fn (Tenant $tenant) => in_array($tenant->id, $eventTenantIds, true))->values();
+        }
+
         $campuses = $tenants->map(function (Tenant $tenant) {
             $branding = $tenant->brandingArray();
             $profile = $tenant->profileArray();

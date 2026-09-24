@@ -9,6 +9,7 @@ use App\Http\Controllers\Lms\AccountSafetyController;
 use App\Http\Controllers\Lms\OwnerAdminController;
 use App\Http\Controllers\Lms\OwnerAgentController;
 use App\Http\Controllers\Lms\OwnerGammaController;
+use App\Http\Controllers\Lms\QaEventController;
 use App\Http\Controllers\Lms\StudentAuthController;
 use App\Http\Controllers\Lms\StudentProfileController;
 use App\Http\Controllers\Lms\StudentDashboardController;
@@ -70,12 +71,31 @@ Route::get('/api/onboarding-status', [\App\Http\Controllers\PublicPagesControlle
 Route::get('/api/frontend/lms/owner-summary', [\App\Http\Controllers\PublicPagesController::class, 'ownerSummary']);
 
 // Registration + payment flow
-Route::post('/api/frontend/training/register', [LmsIntakeController::class, 'register'])->middleware('throttle:10,1');
-Route::post('/api/frontend/paystack/initialize', [LmsIntakeController::class, 'initializePayment']);
+Route::post('/api/frontend/training/register', [LmsIntakeController::class, 'register'])->middleware('throttle:10,1');Route::post('/api/frontend/paystack/initialize', [LmsIntakeController::class, 'initializePayment']);
 Route::get('/api/frontend/paystack/verify', [LmsIntakeController::class, 'verifyPayment']);
 Route::post('/api/frontend/paystack/webhook', [LmsIntakeController::class, 'webhook']);
 // Generic Paystack webhook endpoint for subscriptions and transactions
 Route::post('/api/paystack/webhook', [\App\Http\Controllers\PaystackWebhookController::class, 'handle']);
+
+// ─── QA testing pass (public) ───────────────────────────────────────────────
+// The tester-facing half of a one-off testing event. Anonymous by design: the
+// emailed join link IS the credential, so none of these read a session or a
+// tenant header (the academy comes from the event row itself).
+//
+// Every one of them 404s while `saas.qa_events_enabled` is false.
+//
+// ORDER MATTERS: the two token routes are registered BEFORE the {slug} catch-all,
+// or `/qa/join/abc` would be matched as an event with the slug "join". `active`
+// is here for the same reason: it is a word, not a slug, so it must be declared
+// before the catch-all or it would look up an event called "active".
+Route::get('/api/frontend/qa/join/{token}', [QaEventController::class, 'join'])->middleware('throttle:qa-join');
+Route::get('/api/frontend/qa/host/{token}', [QaEventController::class, 'host'])->middleware('throttle:qa-join');
+Route::post('/api/frontend/qa/register', [QaEventController::class, 'register'])->middleware('throttle:qa-register');
+// Which event, if any, is running right now. Drives the signup popup on the
+// marketing site, which is why it takes no slug: the visitor landed on
+// jorsastech.com, not on an event URL, so the server decides what is live.
+Route::get('/api/frontend/qa/active', [QaEventController::class, 'active'])->middleware('throttle:60,1');
+Route::get('/api/frontend/qa/{slug}', [QaEventController::class, 'show'])->middleware('throttle:60,1');
 
 // Note: signup route moved to web.php to avoid tenant resolution middleware
 
@@ -85,8 +105,7 @@ Route::post('/api/signup', [\App\Http\Controllers\TenantSignupController::class,
 Route::get('/api/signup/verify', [\App\Http\Controllers\TenantSignupController::class, 'verify'])->middleware('throttle:30,1');
 
 // Student Auth (public bootstrap: invite, public course list, signup, password flows)
-Route::get('/api/frontend/lms/invite', [StudentAuthController::class, 'invite']);
-Route::get('/api/frontend/lms/courses', [StudentAuthController::class, 'courses']);
+Route::get('/api/frontend/lms/invite', [StudentAuthController::class, 'invite']);Route::get('/api/frontend/lms/courses', [StudentAuthController::class, 'courses']);
 Route::post('/api/frontend/lms/signup', [StudentAuthController::class, 'signup'])->middleware('throttle:10,1');
 Route::post('/api/frontend/lms/setup-password', [StudentAuthController::class, 'setupPassword'])->middleware('throttle:10,1');
 Route::post('/api/frontend/lms/forgot-password', [StudentAuthController::class, 'forgotPassword'])->middleware('throttle:lms-password-reset');

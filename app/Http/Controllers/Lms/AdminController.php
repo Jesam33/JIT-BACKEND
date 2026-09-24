@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Lms;
 
 use App\Mail\LmsTeacherCredentialsMail;
+use App\Mail\QaInviteMail;
 use App\Models\AcademyReport;
 use App\Models\Batch;
 use App\Models\LmsClassroom;
@@ -16,12 +17,16 @@ use App\Models\LmsTeacher;
 use App\Models\LmsTrack;
 use App\Models\Payment;
 use App\Models\PlatformAnnouncement;
+use App\Models\QaEvent;
+use App\Models\QaSlot;
+use App\Models\QaTester;
 use App\Models\RightsRequest;
 use App\Models\CeoForum;
 use App\Models\TrainingRegistration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use App\Models\Tenant;
@@ -977,6 +982,179 @@ class AdminController extends BaseLmsController
             'groups' => $groups,
             'showResolved' => $showResolved,
         ]));
+    }
+
+    /* ---------------------------------------------------------------------
+     | QA testing passes
+     |
+     | Not tenant-scoped at all, deliberately: QaEvent/QaSlot/QaTester sit outside
+     | the TenantAware trait, because the public register and join endpoints run
+     | with nothing bound and a scoped lookup would fail closed on them. So there
+     | is no TenantScope to drop here, unlike every other host page. See the class
+     | docblock on App\Models\QaEvent.
+     --------------------------------------------------------------------- */
+
+    /**
+     * Every QA testing event, its rooms, and who signed up for each.
+     *
+     * This is the sheet the team running the session works from: per room, who is
+     * expected, how many actually opened the room, and the two things that go wrong
+     * on the day, which are a link that never arrived (re-send) and someone who
+     * should not be in the room (remove).
+     */
+    public function qaEventsPage(Request $request)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $events = QaEvent::query()->orderByDesc('id')->get();
+
+        $slots = QaSlot::query()
+            ->whereIn('qa_event_id', $events->pluck('id'))
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        // Testers are fetched once for every event and grouped in memory rather
+        // than per-slot: a slot list is short but the tester list is not, and one
+        // query per slot is exactly the N+1 that makes a 250-row page crawl.
+        $testers = QaTester::query()
+            ->whereIn('qa_event_id', $events->pluck('id'))
+            ->orderBy('name')
+            ->get()
+            ->groupBy('qa_slot_id');
+
+        // Per-event totals counted once, not per event inside the map below.
+        $testerTotals = $testers->flatten(1)->groupBy('qa_event_id')->map->count();
+
+        // The academy behind each event, resolved from the one id => name map the
+        // host shell already builds. Worth showing: the page lists every event on
+        // the platform, and "iungo x Jorsas Tech QA Testing" is not the name a
+        // second academy's event will have.
+        $academyNames = $this->academyNames();
+
+        $payload = $events->map(function (QaEvent $event) use ($slots, $testers, $testerTotals, $academyNames) {
+            $eventSlots = $slots->where('qa_event_id', $event->id)->values();
+
+            return [
+                'id' => $event->id,
+                'name' => $event->name,
+                'slug' => $event->slug,
+                'academy' => $academyNames[$event->tenant_id] ?? null,
+                'is_open' => $event->isOpen(),
+                'is_active' => (bool) $event->is_active,
+                'starts_at' => $event->starts_at?->format('d M Y, H:i'),
+                'ends_at' => $event->ends_at?->format('d M Y, H:i'),
+                'register_url' => $event->registerUrl(),
+                'host_url' => $event->hostUrl(),
+                'total_testers' => (int) ($testerTotals[$event->id] ?? 0),
+                'slots' => $eventSlots->map(function (QaSlot $slot) use ($testers) {
+                    $rows = $testers->get($slot->id, collect());
+
+                    return [
+                        'id' => $slot->id,
+                        'label' => $slot->label,
+                        'window' => $slot->windowLabel(),
+                        'is_open' => $slot->isOpen(),
+                        'capacity' => $slot->capacity,
+                        'signed_up' => $rows->whereNull('removed_at')->count(),
+                        // The number that actually matters on the day: how many of
+                        // the people who signed up ever opened the room.
+                        'attended' => $rows->whereNotNull('joined_at')->whereNull('removed_at')->count(),
+                        'testers' => $rows->map(fn (QaTester $t) => [
+                            'id' => $t->id,
+                            'name' => $t->name,
+                            'email' => $t->email,
+                            'phone' => $t->phone,
+                            'join_url' => $t->joinUrl(),
+                            'joined_at' => $t->joined_at?->format('d M H:i'),
+                            'emailed_at' => $t->last_emailed_at?->diffForHumans(),
+                            'removed' => (bool) $t->removed_at,
+                        ])->values(),
+                    ];
+                })->values(),
+            ];
+        });
+
+        return view('admin.lms.qa-events', array_merge($this->adminShellData(), [
+            'activeLmsPage' => 'qa-events',
+            'events' => $payload,
+            'qaEnabled' => (bool) config('saas.qa_events_enabled'),
+        ]));
+    }
+
+    /** Re-send one tester's join link. The most common support request on the day. */
+    public function resendQaInvite(Request $request, int $id)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $tester = QaTester::query()->with(['event', 'slot'])->findOrFail($id);
+
+        if ($tester->removed_at) {
+            // Says what to actually do rather than just refusing: a cancelled pass
+            // has to be restored before its link means anything again, and the
+            // button to do that is on the same row.
+            return $this->instituteRedirect($request, 'That testing pass is cancelled. Restore it first, then resend.', 'error');
+        }
+
+        try {
+            Mail::to($tester->email)->send(new QaInviteMail(
+                $tester,
+                $tester->event->testerJoinUrl($tester->token),
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('QA invite resend failed', ['qa_tester_id' => $tester->id, 'err' => $e->getMessage()]);
+
+            return $this->instituteRedirect($request, 'The email could not be sent. Check the mail configuration.', 'error');
+        }
+
+        $tester->forceFill(['last_emailed_at' => now()])->save();
+
+        // A host-triggered resend deliberately ignores the public endpoint's
+        // cooldown: the host is looking at the person who is standing there without
+        // a link, and "try again in two minutes" is not an answer they can use.
+        return $this->instituteRedirect($request, "Join link sent to {$tester->email}.", 'status');
+    }
+
+    /**
+     * Revoke a tester's link without deleting the row.
+     *
+     * Removal is a flag, not a delete, so the record of who registered survives
+     * and the person cannot undo it by submitting the signup form again (the
+     * register endpoint refuses a removed tester). Re-instating is a manual
+     * decision, which is the point.
+     */
+    public function removeQaTester(Request $request, int $id)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $tester = QaTester::query()->findOrFail($id);
+
+        $tester->forceFill(['removed_at' => now()])->save();
+
+        return $this->instituteRedirect($request, "{$tester->name}'s testing pass has been cancelled.", 'status');
+    }
+
+    /**
+     * Undo a removal.
+     *
+     * This exists because removing is a one-click guess made under time pressure,
+     * and without it the only way back from removing the wrong person is a database
+     * edit. The tester's own token was never rotated, so restoring is a single
+     * field write and their existing link works again immediately.
+     */
+    public function restoreQaTester(Request $request, int $id)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $tester = QaTester::query()->findOrFail($id);
+
+        $tester->forceFill(['removed_at' => null])->save();
+
+        return $this->instituteRedirect($request, "{$tester->name} is on the list again. Resend their link if they need it.", 'status');
     }
 
     /** Record a decision on one report. Does not email the student — see below. */

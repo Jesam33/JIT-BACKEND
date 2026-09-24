@@ -668,6 +668,20 @@
                     </div>
                 </a>
 
+                {{-- Shown only once a QA event exists. Deliberately not gated on
+                     saas.qa_events_enabled: that flag goes off when an event ends,
+                     and the host still needs the route back to the tester list. --}}
+                @if ($hasQaEvents ?? false)
+                <a href="{{ route('admin.lms.qa.index') }}" class="nav-item {{ ($activeLmsPage ?? '') === 'qa-events' ? 'active' : '' }}">
+                    <div class="nav-left">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 24 24"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                        </div>
+                        <span>QA Testing</span>
+                    </div>
+                </a>
+                @endif
+
                 <a href="{{ route('admin.lms.transactions.index') }}" class="nav-item {{ ($activeLmsPage ?? '') === 'transactions' ? 'active' : '' }}">
                     <div class="nav-left">
                         <div class="nav-icon">
