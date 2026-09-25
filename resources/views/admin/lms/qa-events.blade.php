@@ -159,7 +159,14 @@
                                     @endif
 
                                     <div class="slot-counts">
-                                        <span class="chip"><strong>{{ $slot['signed_up'] }}</strong> signed up@if($slot['capacity']) of {{ $slot['capacity'] }}@endif</span>
+                                        {{-- Keep the space before the directive on the next line.
+                                             Removing it is a fatal error, not a cosmetic one: Blade
+                                             only compiles a directive when the at-sign is NOT preceded
+                                             by a word character, so gluing one onto the end of a word
+                                             leaves the opening tag as literal text while its closing
+                                             tag still compiles. That leaves an orphaned end tag, which
+                                             is a PHP parse error that blanks the entire page. --}}
+                                        <span class="chip"><strong>{{ $slot['signed_up'] }}</strong> signed up @if($slot['capacity']) of {{ $slot['capacity'] }}@endif</span>
                                         {{-- Attended, not signed up, is the number to watch during
                                              the session: it is the only one that says whether the
                                              room is actually filling. --}}
