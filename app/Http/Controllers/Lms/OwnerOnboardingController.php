@@ -13,6 +13,7 @@ use App\Mail\LmsPasswordResetMail;
 use App\Models\LmsStudent;
 use App\Models\LmsTeacher;
 use App\Models\Tenant;
+use App\Support\Notify;
 use App\Support\PlanGate;
 use Illuminate\Support\Facades\Schema;
 
@@ -134,7 +135,7 @@ class OwnerOnboardingController extends BaseLmsController
             try {
                 $token = $this->createPasswordResetToken('student', $email);
                 $link = $this->buildResetLink('student', $email, $token);
-                Mail::to($email)->send(new LmsPasswordResetMail($student->first_name ?: 'there', 'Student Portal', $link, $brand['name'], $brand['color'], $brand['reply_to'], (bool) ($brand['is_platform'] ?? false)));
+                Mail::to($email)->send(new LmsPasswordResetMail($student->first_name ?: 'there', 'Student Portal', $link, $brand['name'], $brand['color'], $brand['reply_to'], $brand['logo'] ?? null, (bool) ($brand['is_platform'] ?? false)));
                 $invited++;
             } catch (\Throwable $e) {
                 // The account was created; only delivery failed. Surface it so the
@@ -153,6 +154,17 @@ class OwnerOnboardingController extends BaseLmsController
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        // One notification for the batch (the same rule the course-invite path
+        // follows): importing 200 students is one act by the owner, and 200 rows
+        // would drown the bell. Skipped when nothing was actually created.
+        if ($created > 0) {
+            Notify::studentAdmin(
+                'imported',
+                $created === 1 ? '1 student' : $created . ' students',
+                'They have been emailed sign-up links.'
+            );
+        }
 
         return response()->json([
             'imported' => $created,
@@ -247,7 +259,7 @@ class OwnerOnboardingController extends BaseLmsController
             // access and they set their own password here.
             $link = $this->buildSetupLink('staff', $email, $token);
             $brand = $this->mailBranding($tenant);
-            Mail::to($email)->send(new LmsPasswordResetMail($teacher->name ?: 'there', 'Staff Portal', $link, $brand['name'], $brand['color'], $brand['reply_to'], (bool) ($brand['is_platform'] ?? false)));
+            Mail::to($email)->send(new LmsPasswordResetMail($teacher->name ?: 'there', 'Staff Portal', $link, $brand['name'], $brand['color'], $brand['reply_to'], $brand['logo'] ?? null, (bool) ($brand['is_platform'] ?? false)));
             $emailSent = true;
         } catch (\Throwable $e) {
             Log::warning('Failed sending staff invite', ['email' => $email, 'err' => $e->getMessage()]);

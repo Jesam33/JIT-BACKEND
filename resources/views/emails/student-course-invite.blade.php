@@ -1,6 +1,7 @@
 @extends('emails.layout', [
     'brandName' => $brand['name'],
     'brandColor' => $brand['color'],
+    'brandLogo' => $brand['logo'] ?? null,
     'preheader' => ($requiresPayment ? 'Complete your enrolment in ' : 'Set up your account to join ') . $registration->course_name,
     'platformMail' => (bool) ($brand['is_platform'] ?? false),
 ])

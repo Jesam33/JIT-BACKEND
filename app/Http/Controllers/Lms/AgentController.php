@@ -17,6 +17,8 @@ use App\Models\LmsStudent;
 use App\Models\LmsTrack;
 use App\Models\TrainingRegistration;
 use App\Scopes\TenantScope;
+use App\Support\NotificationLinks;
+use App\Support\Notify;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -131,15 +133,22 @@ class AgentController extends BaseLmsController
         // the browser as a misleading CORS/network error). Each send is guarded
         // and logged on its own so one failing recipient can't drop the other.
         if (config('saas.training_email_enabled')) {
-            $adminEmail = config('saas.training_admin_email');
-            if ($adminEmail) {
-                $adminUrl = rtrim((string) config('app.url'), '/')
-                    . '/' . trim((string) config('saas.admin_dir', 'admin'), '/')
-                    . '/agents';
+            // The person who can act on this is the ACADEMY OWNER, not the
+            // platform: an agent belongs to one academy and only that owner can
+            // approve them. The platform inbox stays as the fallback for an
+            // academy whose owner row is not linked yet, so a submission is never
+            // silently unreported. Sending it to the platform inbox unconditionally
+            // was why an academy owner never heard they had an application.
+            $ownerEmail = ($tenant ? $tenant->ownerEmail() : null)
+                ?: config('saas.training_admin_email');
+            if ($ownerEmail) {
+                // Into the OWNER's own portal (the frontend), tenant-pinned so the
+                // link lands on the right academy, not the host back office.
+                $reviewUrl = NotificationLinks::tenantPinned('/lms/admin/agents', $tenant?->slug);
                 try {
-                    Mail::to($adminEmail)->send(new AgentApplicationSubmittedMail($agent, $adminUrl));
+                    Mail::to($ownerEmail)->send(new AgentApplicationSubmittedMail($agent, $reviewUrl));
                 } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::warning('Agent application: admin notice email failed', ['agent_id' => $agent->id, 'error' => $e->getMessage()]);
+                    \Illuminate\Support\Facades\Log::warning('Agent application: owner notice email failed', ['agent_id' => $agent->id, 'error' => $e->getMessage()]);
                 }
             }
             try {
@@ -148,6 +157,12 @@ class AgentController extends BaseLmsController
                 \Illuminate\Support\Facades\Log::warning('Agent application: acknowledgement email failed', ['agent_id' => $agent->id, 'error' => $e->getMessage()]);
             }
         }
+
+        // In-portal half of the same notice the owner just got by email: the
+        // synthesised bell already lists pending applications, but this is the
+        // owner's own notification row, so it survives the application being
+        // reviewed and can be cleared like any other.
+        Notify::agentApplied($agent);
 
         return response()->json(['message' => 'Application submitted successfully. You will receive an email once reviewed.']);
     }
@@ -233,7 +248,9 @@ class AgentController extends BaseLmsController
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json($this->agentOrFail($request));
+        // append() (not the model's $appends) so the referral link is computed for
+        // the agent's own portal only, never for the owner-side agent lists.
+        return response()->json($this->agentOrFail($request)->append('referral_link'));
     }
 
     public function updateProfile(Request $request): JsonResponse
@@ -332,6 +349,9 @@ class AgentController extends BaseLmsController
             'paid_commission' => (float) $paidCommission,
             'balance' => (float) ($totalEarned - abs($pendingWithdrawalAmount) - $paidCommission),
             'referral_code' => $agent->referral_code,
+            // The same code as a ready-to-share link, built from the agent's own
+            // academy (see Agent::getReferralLinkAttribute).
+            'referral_link' => $agent->referral_link,
             'has_bank_details' => !empty($agent->bank_name) && !empty($agent->account_number) && !empty($agent->account_name),
             'recent_referrals' => $recentReferrals,
             'recent_transactions' => $recentTransactions,
@@ -373,6 +393,31 @@ class AgentController extends BaseLmsController
             return response()->json(['message' => 'This course is full.', 'is_full' => true], 422);
         }
 
+        // Pre-recorded video is a Pro+ entitlement (see the public intake for the
+        // full note): the per-course toggle is only forced off when the course is
+        // saved, so a Pro→Basic downgrade leaves it on. Re-check the tier here so
+        // an agent cannot sell a mode the academy's plan no longer covers.
+        if ($validated['learning_mode'] === 'pre_recorded'
+            && $tenant !== null
+            && ! $tenant->planFeature('pre_recorded_video')) {
+            return response()->json([
+                'message' => 'Pre-recorded lessons aren’t offered by this academy right now.',
+                'prerecorded_unavailable' => true,
+            ], 422);
+        }
+
+        // Same pre-recorded gate as the public intake: an agent can only put a
+        // student into the on-demand mode when the course has a lesson to deliver
+        // (and offers the mode at all). Stops an agent's form from selling an
+        // empty mode that the storefront already hides.
+        if ($validated['learning_mode'] === 'pre_recorded'
+            && (! $course->is_prerecorded_available || ! $course->hasPrerecordedContent())) {
+            return response()->json([
+                'message' => 'Pre-recorded lessons for this course aren’t available yet.',
+                'prerecorded_unavailable' => true,
+            ], 422);
+        }
+
         // Pre-recorded (on-demand) is cheaper when the course sets a distinct
         // prerecorded_price; otherwise both modes charge the live price. This is
         // the amount frozen into the registration (feeds Paystack + commissions).
@@ -396,14 +441,15 @@ class AgentController extends BaseLmsController
             'registered_by_agent_id' => $agent->id,
         ]);
 
-        AgentNotification::create([
-            'agent_id' => $agent->id,
-            'type' => 'student_registered',
-            'title' => 'Student Registered',
-            'body' => "Registration created for {$registration->first_name} {$registration->last_name}, {$course->title}.",
-            'reference_type' => 'registration',
-            'reference_id' => $registration->id,
-        ]);
+        // Both bells for one event: the agent gets their own activity record
+        // (this replaces the inline AgentNotification::create that used to live
+        // here), and the academy owner learns that a name landed on their roster.
+        Notify::agentRegistered(
+            $agent,
+            trim($registration->first_name . ' ' . $registration->last_name) ?: $registration->email,
+            $course->title,
+            $registration->id
+        );
 
         return response()->json([
             'message' => 'Registration created. Proceed to payment.',
@@ -590,6 +636,31 @@ class AgentController extends BaseLmsController
         return response()->json(['message' => 'All marked as read.']);
     }
 
+    /**
+     * Dismiss one notification for good (a DELETE, not a tombstone flag nothing
+     * reads). Scoped to the caller's own agent_id.
+     */
+    public function dismissNotification(Request $request, int $id): JsonResponse
+    {
+        $agent = $this->agentOrFail($request);
+
+        AgentNotification::where('agent_id', $agent->id)
+            ->where('id', $id)
+            ->delete();
+
+        return response()->json(['message' => 'Notification cleared.']);
+    }
+
+    /** Clear the agent's whole bell. */
+    public function clearNotifications(Request $request): JsonResponse
+    {
+        $agent = $this->agentOrFail($request);
+
+        AgentNotification::where('agent_id', $agent->id)->delete();
+
+        return response()->json(['message' => 'Notifications cleared.']);
+    }
+
     // --- Admin: List pending agents ---
 
     public function adminPending(): JsonResponse
@@ -639,6 +710,13 @@ class AgentController extends BaseLmsController
             }
         }
 
+        // In-portal twin of that email, and only on a real state change: an
+        // owner re-approving an already-approved agent would otherwise push the
+        // same "approved" row again every time they hit the button.
+        if ($password !== null) {
+            Notify::agentReviewed($agent->fresh(), 'approved');
+        }
+
         return response()->json(['message' => 'Agent approved.', 'agent' => $agent]);
     }
 
@@ -646,6 +724,8 @@ class AgentController extends BaseLmsController
     {
         $agent = Agent::findOrFail($id);
         $agent->update(['status' => 'rejected']);
+
+        Notify::agentReviewed($agent->fresh(), 'rejected');
 
         return response()->json(['message' => 'Agent rejected.']);
     }
@@ -687,7 +767,7 @@ class AgentController extends BaseLmsController
         $link = $this->buildResetLink('agent', $agent->email, $token);
 
         $brand = $this->mailBranding();
-        \Illuminate\Support\Facades\Mail::to($agent->email)->send(new LmsPasswordResetMail($agent->name, 'Agent Portal', $link, $brand['name'], $brand['color'], $brand['reply_to'], (bool) ($brand['is_platform'] ?? false)));
+        \Illuminate\Support\Facades\Mail::to($agent->email)->send(new LmsPasswordResetMail($agent->name, 'Agent Portal', $link, $brand['name'], $brand['color'], $brand['reply_to'], $brand['logo'] ?? null, (bool) ($brand['is_platform'] ?? false)));
 
         return response()->json(['message' => 'If that email exists, a reset link has been sent.']);
     }

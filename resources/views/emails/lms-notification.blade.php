@@ -4,6 +4,9 @@
 @extends('emails.layout', [
     'brandName' => $instituteName,
     'brandColor' => $accent,
+    // The academy's own mark when it has one, so a student's course notification
+    // does not arrive wearing our logo. Null on platform mail.
+    'brandLogo' => $instituteLogo ?? null,
     'preheader' => $notifTitle,
     'platformMail' => $isPlatformMail ?? false,
 ])

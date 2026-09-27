@@ -25,7 +25,7 @@ class PaymentConfirmationMail extends Mailable
 
     public function envelope(): Envelope
     {
-        return $this->brandedEnvelope('Registration Accepted, Set Up Your LMS Account');
+        return $this->brandedEnvelope('Registration Accepted, Set Up Your Academic Portal Account');
     }
 
     public function content(): Content

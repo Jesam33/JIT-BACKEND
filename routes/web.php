@@ -82,6 +82,12 @@ Route::middleware(['auth', 'tenant.primary'])->prefix(env('ADMIN_DIR', 'admin'))
 	Route::get('/lms/rights-requests', [AdminController::class, 'rightsRequestsPage'])->name('admin.lms.rights.index');
 	Route::post('/lms/rights-requests/{id}', [AdminController::class, 'updateRightsRequest'])->name('admin.lms.rights.update');
 
+	// Feedback from the people using the academies' portals ("help us make the
+	// app better"). The portal-side half is the single public route
+	// /api/frontend/lms/feedback; this is the triage queue.
+	Route::get('/lms/feedback', [AdminController::class, 'feedbackPage'])->name('admin.lms.feedback.index');
+	Route::post('/lms/feedback/{id}', [AdminController::class, 'updateFeedback'])->name('admin.lms.feedback.update');
+
 	// QA testing passes (iungo and any later event). The tester-facing half is
 	// public and lives in routes/lms-api.php; these are the host controls.
 	Route::get('/lms/qa-events', [AdminController::class, 'qaEventsPage'])->name('admin.lms.qa.index');

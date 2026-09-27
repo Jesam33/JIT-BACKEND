@@ -1,18 +1,24 @@
 @extends('emails.layout', [
-    'brandName' => 'Jorsas Institute of Technology',
-    'brandColor' => '#ed180d',
-    'preheader' => 'A new agent application is waiting for review.',
-    // An internal alert to the platform's own admin address.
-    'platformMail' => true,
+    'brandName' => $brand['name'],
+    'brandColor' => $brand['color'],
+    'brandLogo' => $brand['logo'] ?? null,
+    'preheader' => 'A new Admission Marketer application is waiting for your review.',
+    'platformMail' => (bool) ($brand['is_platform'] ?? false),
 ])
 
 @section('content')
   @include('emails.partials.heading', [
-    'title' => 'New agent application',
-    'subtitle' => 'An application is waiting for review',
+    'title' => 'New Admission Marketer application',
+    'subtitle' => 'Someone applied to promote your academy',
   ])
 
-  <div style="height:26px;font-size:0;line-height:0;">&nbsp;</div>
+  <p style="margin:28px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#374151;">
+    An application to join the Admission Marketer Network at {{ $brand['name'] }} is waiting for
+    your review. Approve it and they get their own referral code and portal, so they can start
+    bringing students in.
+  </p>
+
+  <div style="height:24px;font-size:0;line-height:0;">&nbsp;</div>
 
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0;background:#f7f7f8;border-radius:8px;">
     <tr>
@@ -26,6 +32,18 @@
     </tr>
   </table>
 
-  @include('emails.partials.button', ['url' => $adminUrl, 'label' => 'Review in admin'])
-  @include('emails.partials.fallback-link', ['url' => $adminUrl])
+  @include('emails.partials.button', ['url' => $reviewUrl, 'label' => 'Review the application', 'color' => $brand['color']])
+  @include('emails.partials.fallback-link', ['url' => $reviewUrl, 'color' => $brand['color']])
+
+  <div style="height:26px;font-size:0;line-height:0;">&nbsp;</div>
+
+  @include('emails.partials.notice', [
+    'icon' => 'info',
+    'title' => 'Nothing happens until you decide',
+    'body' => 'Applicants cannot refer anyone or earn anything until you approve them, so nobody is added to your academy by applying. You can approve or decline this application from the Agents page in your portal.',
+  ])
+@endsection
+
+@section('footer')
+  <p style="margin:0;">{{ $brand['name'] }}</p>
 @endsection

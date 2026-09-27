@@ -22,7 +22,7 @@ use Illuminate\Support\Carbon;
  *
  * Usage:
  *   php artisan qa:setup-event iungo \
- *     --name="iungo x Jorsas Tech QA Testing" \
+ *     --name="iungo QA Testing" \
  *     --starts-at="2026-10-05 09:00" --ends-at="2026-10-05 17:00" \
  *     --slot="10:00-11:30" --slot="12:00-13:30" --slot="14:00-15:30"
  */

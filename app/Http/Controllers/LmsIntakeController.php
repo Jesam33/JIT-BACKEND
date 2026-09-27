@@ -19,6 +19,7 @@ use App\Models\TrainingRegistration;
 use App\Scopes\TenantScope;
 use App\Services\CurrencyService;
 use App\Services\PaystackService;
+use App\Support\Notify;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -81,6 +82,7 @@ class LmsIntakeController extends BaseLmsController
 
         $courses = LmsCourse::query()
             ->where('is_active', true)
+            ->withPrerecordedCounts()
             ->orderBy('title')
             ->get()
             ->map(fn (LmsCourse $course) => [
@@ -94,7 +96,9 @@ class LmsIntakeController extends BaseLmsController
                 'slots_remaining' => $course->slotsRemaining(),
                 'is_full' => $course->isFull(),
                 'is_live_available' => $course->is_live_available,
-                'is_prerecorded_available' => $course->is_prerecorded_available,
+                // Content-gated like the storefront: the toggle alone is not
+                // enough, the course must have a pre-recorded lesson behind it.
+                'is_prerecorded_available' => $course->is_prerecorded_available && $course->hasPrerecordedContent(),
                 'registration_open' => $course->registrationOpen(),
                 'registration_closes_at' => $course->openCohort()?->registrationClosesAt(),
                 'next_cohort_starts_at' => $course->tracks()->whereNotNull('start_date')->orderBy('start_date')->value('start_date'),
@@ -109,6 +113,7 @@ class LmsIntakeController extends BaseLmsController
         $this->ensureIntakeEnabled();
 
         $course = LmsCourse::query()
+            ->withPrerecordedCounts()
             ->where('slug', $slug)
             ->where('is_active', true)
             ->first();
@@ -129,7 +134,8 @@ class LmsIntakeController extends BaseLmsController
             'slots_remaining' => $course->slotsRemaining(),
             'is_full' => $course->isFull(),
             'is_live_available' => $course->is_live_available,
-            'is_prerecorded_available' => $course->is_prerecorded_available,
+            // Content-gated like the storefront (see LmsCourse::hasPrerecordedContent).
+            'is_prerecorded_available' => $course->is_prerecorded_available && $course->hasPrerecordedContent(),
             'registration_open' => $course->registrationOpen(),
             'registration_closes_at' => $course->openCohort()?->registrationClosesAt(),
             'next_cohort_starts_at' => $course->tracks()->whereNotNull('start_date')->orderBy('start_date')->value('start_date'),
@@ -203,6 +209,35 @@ class LmsIntakeController extends BaseLmsController
             return response()->json([
                 'message' => 'Registration for this course has closed. Please check back for the next cohort.',
                 'registration_closed' => true,
+            ], 422);
+        }
+
+        // Pre-recorded video is a Pro+ entitlement, and the per-course toggle is
+        // only forced off when the course is SAVED on a plan without it. A course
+        // switched on while the academy was on Pro therefore keeps the flag after
+        // a downgrade to Basic, so the tier is re-checked here on every sale
+        // instead of trusted from a row that may predate the plan.
+        if ($validated['learning_mode'] === 'pre_recorded'
+            && $tenant !== null
+            && ! $tenant->planFeature('pre_recorded_video')) {
+            return response()->json([
+                'message' => 'Pre-recorded lessons aren’t offered by this academy right now. Please choose the live option or check back soon.',
+                'prerecorded_unavailable' => true,
+            ], 422);
+        }
+
+        // Pre-recorded is a real delivery mode only when the course actually has
+        // a pre-recorded lesson behind it. The storefront hides the option in
+        // that state, but that is only the shopfront: a replayed form, a stale
+        // page, or a course whose last video was just deleted all reach here, and
+        // selling a mode with nothing to deliver takes the student's money for an
+        // empty materials page. Also enforces the per-course toggle itself, which
+        // this path previously trusted the client about.
+        if ($validated['learning_mode'] === 'pre_recorded'
+            && (! $course->is_prerecorded_available || ! $course->hasPrerecordedContent())) {
+            return response()->json([
+                'message' => 'Pre-recorded lessons for this course aren’t available yet. Please choose the live option or check back soon.',
+                'prerecorded_unavailable' => true,
             ], 422);
         }
 
@@ -578,6 +613,19 @@ class LmsIntakeController extends BaseLmsController
 
         $this->sendSetupEmail($registration, $setupToken);
 
+        // The free sibling of the paid branch in completePayment(): same bell,
+        // same reason. Notify::enrolment tolerates a null course (it says "a
+        // course"), so a deleted course row degrades the wording rather than
+        // breaking the registration that just succeeded.
+        Notify::enrolment(
+            LmsCourse::query()->find($registration->course_id),
+            trim($registration->first_name . ' ' . $registration->last_name) ?: $registration->email,
+            'Free enrolment.',
+            null,
+            'registration',
+            $registration->id
+        );
+
         return response()->json([
             'message' => 'Registration complete! Check your email for setup instructions.',
             'status' => 'success',
@@ -708,8 +756,23 @@ class LmsIntakeController extends BaseLmsController
 
         $this->sendSetupEmail($registration, $setupToken);
 
+        // The academy's own bell: a paid enrolment is the one event an owner
+        // checks the portal for. The tenant is bound above (bindTenantFromModel),
+        // because verify/webhook arrive with no tenant header.
+        Notify::enrolment(
+            LmsCourse::query()->find($registration->course_id),
+            trim($registration->first_name . ' ' . $registration->last_name) ?: $registration->email,
+            // Currency code + amount rather than a ₦ symbol: the charge currency
+            // is geo-resolved and is not always NGN (see the CurrencyService
+            // freeze above), so a hardcoded symbol would misreport the amount.
+            'Paid ' . strtoupper((string) ($payment->currency ?: 'NGN')) . ' ' . number_format((float) $payment->amount, 2) . '.',
+            null,
+            'registration',
+            $registration->id
+        );
+
         return response()->json([
-            'message' => 'Payment confirmed! Check your email for LMS setup instructions.',
+            'message' => 'Payment confirmed! Check your email for academic portal setup instructions.',
             'status' => 'success',
         ]);
     }

@@ -83,6 +83,18 @@ class NotificationLinks
                 'registration' => '/lms/agent/registrations',
                 default => '/lms/agent/notifications',
             },
+            // The owner portal has no notifications PAGE — its bell is a topbar
+            // dropdown — so every owner link lands on the page where the thing
+            // that raised it can actually be acted on.
+            'owner' => match ($refType) {
+                'course' => '/lms/admin/courses',
+                'cohort' => '/lms/admin/tracks',
+                'staff' => '/lms/admin/staff',
+                'student' => '/lms/admin/students',
+                'payment' => '/lms/admin/payments',
+                'agent', 'registration' => '/lms/admin/agents',
+                default => '/lms/admin',
+            },
             // student (default audience)
             default => match ($refType) {
                 'task' => $id ? '/lms/tasks/' . $id : '/lms/app/tasks',

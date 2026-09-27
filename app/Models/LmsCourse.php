@@ -13,6 +13,18 @@ class LmsCourse extends Model
     use HasFactory;
     use TenantAware;
 
+    /**
+     * Ceiling on the requirements text, enforced by every path that writes a
+     * course (owner portal create/update, host back office create).
+     *
+     * Requirements is one prerequisite per line, so it grows faster than a normal
+     * field; the ceiling keeps it a list rather than an essay on the public course
+     * page. The owner form carries the same number (MAX_REQUIREMENTS in
+     * app/lms/admin/courses/page.tsx) so the field can never let an owner write
+     * something this rule rejects at save time, after they have written it.
+     */
+    public const MAX_REQUIREMENTS = 2000;
+
     protected $fillable = [
         'title',
         'slug',
@@ -127,6 +139,64 @@ class LmsCourse extends Model
     public function reviews(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(LmsCourseReview::class, 'course_id');
+    }
+
+    public function materials(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(LmsMaterial::class, 'course_id');
+    }
+
+    public function modules(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(LmsModule::class, 'course_id');
+    }
+
+    /**
+     * Whether this course has any pre-recorded VIDEO lesson to actually deliver.
+     *
+     * The "Pre-recorded available" toggle is per-course and independent of the
+     * content, so a course could be switched on before a single video was
+     * uploaded: a visitor would pick the cheaper pre-recorded mode, pay, and land
+     * on an empty materials page. Every path that offers or accepts the mode
+     * must therefore ask this, not the toggle alone.
+     *
+     * Pre-recorded lessons live in TWO stores, and both gate their video type on
+     * the same `pre_recorded_video` plan feature, so either one counts:
+     *   - course materials   (`lms_materials`, what the student dashboard's
+     *     next-lesson lookup and the materials page read)
+     *   - module lessons     (`lms_module_contents`)
+     *
+     * `status` is deliberately NOT checked: it is stamped "processing" when a
+     * Bunny upload starts and never updated afterwards (the status endpoint only
+     * proxies Bunny), so filtering on it would hide every real video.
+     */
+    public function hasPrerecordedContent(): bool
+    {
+        // List endpoints batch these two counts once (scopeWithPrerecordedCounts)
+        // instead of letting this run up to two queries per course.
+        if (array_key_exists('video_material_count', $this->attributes)
+            || array_key_exists('video_module_count', $this->attributes)) {
+            return ((int) ($this->attributes['video_material_count'] ?? 0)) > 0
+                || ((int) ($this->attributes['video_module_count'] ?? 0)) > 0;
+        }
+
+        return $this->materials()->where('type', 'video')->exists()
+            || $this->modules()
+                ->whereHas('contents', fn ($q) => $q->where('type', 'video'))
+                ->exists();
+    }
+
+    /**
+     * Eager-load the two counts hasPrerecordedContent() reads, as one subquery
+     * each for the whole result set. Every LIST endpoint that serializes courses
+     * must apply this, or the check degrades to two queries per course.
+     */
+    public function scopeWithPrerecordedCounts($query)
+    {
+        return $query->withCount([
+            'materials as video_material_count' => fn ($q) => $q->where('type', 'video'),
+            'modules as video_module_count' => fn ($q) => $q->whereHas('contents', fn ($c) => $c->where('type', 'video')),
+        ]);
     }
 
     /**

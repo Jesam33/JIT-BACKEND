@@ -53,6 +53,11 @@ class StaffTaskController extends BaseLmsController
     // (StaffPortalController::uploadMaterialFile); here we only validate the
     // pointers. Normalized to exactly these keys so junk fields never land in
     // the JSON column.
+    //
+    // `name` is the teacher's own label for the file, not necessarily the
+    // uploaded filename, and `description` is their line on what it is for.
+    // Both are free text the teacher edits in the task form; `url` and `path`
+    // are what actually resolve the file, so renaming never breaks a download.
     private function validateAttachments(Request $request): ?array
     {
         $validated = $request->validate([
@@ -61,6 +66,8 @@ class StaffTaskController extends BaseLmsController
             'attachments.*.url' => ['required', 'string', 'max:2048'],
             'attachments.*.path' => ['nullable', 'string', 'max:255'],
             'attachments.*.size' => ['nullable', 'integer'],
+            // 500 matches MAX_ATTACHMENT_DESCRIPTION in the staff task form.
+            'attachments.*.description' => ['nullable', 'string', 'max:500'],
         ]);
 
         if (! array_key_exists('attachments', $validated)) {
@@ -72,6 +79,10 @@ class StaffTaskController extends BaseLmsController
             'url' => $a['url'],
             'path' => $a['path'] ?? null,
             'size' => $a['size'] ?? null,
+            // Null rather than '' so an attachment with no note carries no key
+            // worth rendering, and the readers' `if (description)` guard works
+            // for old and new rows alike.
+            'description' => filled($a['description'] ?? null) ? $a['description'] : null,
         ], $validated['attachments']);
     }
 

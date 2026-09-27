@@ -1,6 +1,7 @@
 @extends('emails.layout', [
     'brandName' => $brand['name'],
     'brandColor' => $brand['color'],
+    'brandLogo' => $brand['logo'] ?? null,
     'preheader' => 'Your agent application is approved. Here is your referral code.',
     'platformMail' => (bool) ($brand['is_platform'] ?? false),
 ])
@@ -14,8 +15,8 @@
   <p style="margin:28px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111827;">Congratulations {{ $agent->name }},</p>
 
   <p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#374151;">
-    You're now an approved agent. Share your referral code with students and start earning
-    commission on every enrolment.
+    You're now an approved agent. Share your referral code or your referral link with students and
+    start earning commission on every enrolment.
   </p>
 
   <div style="height:24px;font-size:0;line-height:0;">&nbsp;</div>
@@ -25,6 +26,15 @@
       <td style="padding:20px 22px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#111827;">
         <span style="color:#6b7280;">Your referral code</span><br>
         <strong style="font-size:20px;letter-spacing:2px;color:#111827;">{{ $agent->referral_code }}</strong>
+        @if ($agent->referral_link)
+          <div style="height:16px;line-height:16px;">&nbsp;</div>
+          {{-- The same code as a link: a student who opens it lands on the academy
+               with the code already applied, so nothing has to be typed at
+               registration. Only absent for an agent whose academy cannot be
+               resolved, in which case the code above still stands alone. --}}
+          <span style="color:#6b7280;">Your referral link</span><br>
+          <a href="{{ $agent->referral_link }}" style="color:{{ $brand['color'] }};text-decoration:underline;word-break:break-all;font-size:14px;">{{ $agent->referral_link }}</a>
+        @endif
         <div style="height:14px;line-height:14px;">&nbsp;</div>
         <span style="color:#6b7280;">Temporary password</span><br>
         <strong style="font-size:16px;letter-spacing:1px;color:#111827;">{{ $password }}</strong>

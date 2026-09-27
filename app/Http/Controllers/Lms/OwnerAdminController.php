@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Lms;
 use App\Mail\AccountLifecycleMail;
 use App\Mail\LmsPasswordResetMail;
 use App\Mail\StudentCourseInviteMail;
+use App\Models\Agent;
 use App\Models\CeoForum;
 use App\Models\LmsCourse;
 use App\Models\LmsCertificate;
 use App\Models\LmsEnrollment;
 use App\Models\LmsGroupChat;
 use App\Models\LmsNotification;
+use App\Models\LmsOwnerNotification;
 use App\Models\LmsStudent;
 use App\Models\LmsTeacher;
 use App\Models\LmsTrack;
@@ -23,6 +25,7 @@ use App\Services\PaystackService;
 use App\Support\CohortCompletion;
 use App\Support\CourseCards;
 use App\Support\NotificationLinks;
+use App\Support\Notify;
 use App\Support\PlanGate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -355,6 +358,7 @@ class OwnerAdminController extends BaseLmsController
         $student->schedulePurge();
         $student = $student->fresh();
         $this->notifyAccountLifecycle($student, 'student', 'deletion_scheduled');
+        Notify::studentAdmin('deleted', trim("{$student->first_name} {$student->last_name}") ?: 'A student', 'Deletion scheduled for ' . $student->purge_after->format('j F Y') . '.');
 
         return response()->json([
             'message' => 'Deletion scheduled. '
@@ -393,6 +397,7 @@ class OwnerAdminController extends BaseLmsController
         $student->cancelPurge();
         $student = $student->fresh();
         $this->notifyAccountLifecycle($student, 'student', 'deletion_cancelled');
+        Notify::studentAdmin('restored', trim("{$student->first_name} {$student->last_name}") ?: 'A student', 'Scheduled deletion cancelled.');
 
         return response()->json([
             'message' => $student->canAccessAccount()
@@ -434,10 +439,12 @@ class OwnerAdminController extends BaseLmsController
             $student->reactivate();
             $this->notifyAccountLifecycle($student, 'student', 'reactivated');
             $message = "Re-enabled {$name}.";
+            Notify::studentAdmin('reactivated', $name);
         } else {
             $student->deactivate();
             $this->notifyAccountLifecycle($student, 'student', 'deactivated');
             $message = "Suspended {$name}. Their records and enrolments are untouched and you can restore them at any time.";
+            Notify::studentAdmin('suspended', $name, 'Their records and enrolments are untouched.');
         }
 
         $student = $student->fresh();
@@ -477,7 +484,7 @@ class OwnerAdminController extends BaseLmsController
             $token = $this->createPasswordResetToken('student', $student->email);
             $link = $this->buildResetLink('student', $student->email, $token);
             $brand = $this->mailBranding($tenant);
-            Mail::to($student->email)->send(new LmsPasswordResetMail($student->first_name ?: 'there', 'Student Portal', $link, $brand['name'], $brand['color'], $brand['reply_to'], (bool) ($brand['is_platform'] ?? false)));
+            Mail::to($student->email)->send(new LmsPasswordResetMail($student->first_name ?: 'there', 'Student Portal', $link, $brand['name'], $brand['color'], $brand['reply_to'], $brand['logo'] ?? null, (bool) ($brand['is_platform'] ?? false)));
             $sent = true;
         } catch (\Throwable $e) {
             Log::warning('Failed to resend student invite', ['student_id' => $student->id, 'err' => $e->getMessage()]);
@@ -554,10 +561,16 @@ class OwnerAdminController extends BaseLmsController
         }
 
         // Learning mode falls back to live when the course doesn't offer
-        // pre-recorded, so the price/mode we store always stays coherent.
+        // pre-recorded, so the price/mode we store always stays coherent — which
+        // now includes a course toggled on with no video uploaded (see
+        // LmsCourse::hasPrerecordedContent). The owner is told below rather than
+        // silently getting a different mode than the one they picked.
         $mode = $validated['learning_mode'] ?? 'live';
-        if ($mode === 'pre_recorded' && ! $course->is_prerecorded_available) {
+        $modeFellBack = false;
+        if ($mode === 'pre_recorded'
+            && (! $course->is_prerecorded_available || ! $course->hasPrerecordedContent())) {
             $mode = 'live';
+            $modeFellBack = true;
         }
 
         // Base fee for the chosen mode (pre-recorded may be cheaper). A 0 base is
@@ -713,11 +726,26 @@ class OwnerAdminController extends BaseLmsController
                 'limited' => $limited,
                 'course_full' => $courseFull,
                 'failed' => count($failed),
+                'mode_fallback' => $modeFellBack,
             ]),
             'status' => 'students_invited_to_course',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        // One notification for the batch, not one per address: inviting 50
+        // students is a single act by the owner, and 50 rows would bury every
+        // other item in the bell. Skipped entirely when every address failed, so
+        // the bell never claims an invite that reached nobody.
+        if ($invited > 0) {
+            Notify::enrolment(
+                $course,
+                $invited === 1 ? '1 student' : $invited . ' students',
+                $mustPay
+                    ? 'They have been emailed a payment link.'
+                    : 'They have been enrolled and emailed a sign-up link.'
+            );
+        }
 
         return response()->json([
             'invited' => $invited,
@@ -729,7 +757,11 @@ class OwnerAdminController extends BaseLmsController
             'requires_payment' => $mustPay,
             'course' => $course->title,
             'price_display' => $priceDisplay,
-            'message' => $this->summariseCourseInvite($invited, $mustPay, $course->title, $limited, $courseFull, $failed),
+            // True when the owner asked for pre-recorded but the course has no
+            // pre-recorded lesson to deliver, so everyone was invited to live.
+            'mode_fallback' => $modeFellBack,
+            'message' => $this->summariseCourseInvite($invited, $mustPay, $course->title, $limited, $courseFull, $failed)
+                . ($modeFellBack ? ' Pre-recorded isn’t set up for this course yet, so they were invited to the live mode.' : ''),
         ]);
     }
 
@@ -856,6 +888,8 @@ class OwnerAdminController extends BaseLmsController
 
         $teacher->forceFill(['staff_role' => $role])->save();
 
+        Notify::staffAdmin('role changed', $teacher->name, 'Now ' . \App\Support\StaffPermissions::label($role) . '.');
+
         return response()->json([
             'message' => $teacher->name . ' is now ' . \App\Support\StaffPermissions::label($role) . '.',
             'staff' => [
@@ -902,6 +936,7 @@ class OwnerAdminController extends BaseLmsController
         $teacher->schedulePurge();
         $teacher = $teacher->fresh();
         $this->notifyAccountLifecycle($teacher, 'staff', 'deletion_scheduled');
+        Notify::staffAdmin('deleted', $teacher->name, 'Deletion scheduled for ' . $teacher->purge_after->format('j F Y') . '.');
 
         return response()->json([
             'message' => "Deletion scheduled for {$teacher->name}. They can be restored until "
@@ -942,7 +977,7 @@ class OwnerAdminController extends BaseLmsController
             $token = $this->createPasswordResetToken('staff', $teacher->email);
             $link = $this->buildSetupLink('staff', $teacher->email, $token);
             $brand = $this->mailBranding($tenant);
-            Mail::to($teacher->email)->send(new LmsPasswordResetMail($teacher->name ?: 'there', 'Staff Portal', $link, $brand['name'], $brand['color'], $brand['reply_to'], (bool) ($brand['is_platform'] ?? false)));
+            Mail::to($teacher->email)->send(new LmsPasswordResetMail($teacher->name ?: 'there', 'Staff Portal', $link, $brand['name'], $brand['color'], $brand['reply_to'], $brand['logo'] ?? null, (bool) ($brand['is_platform'] ?? false)));
             $sent = true;
         } catch (\Throwable $e) {
             Log::warning('Failed to resend staff invite', ['teacher_id' => $teacher->id, 'err' => $e->getMessage()]);
@@ -985,9 +1020,11 @@ class OwnerAdminController extends BaseLmsController
         if ($validated['is_active']) {
             $teacher->reactivate();
             $this->notifyAccountLifecycle($teacher->fresh(), 'staff', 'reactivated');
+            Notify::staffAdmin('reactivated', $teacher->name);
         } else {
             $teacher->deactivate();
             $this->notifyAccountLifecycle($teacher->fresh(), 'staff', 'deactivated');
+            Notify::staffAdmin('suspended', $teacher->name, 'Their portal access is blocked and can be restored at any time.');
         }
 
         $teacher = $teacher->fresh();
@@ -1019,6 +1056,7 @@ class OwnerAdminController extends BaseLmsController
         $teacher->cancelPurge();
         $teacher = $teacher->fresh();
         $this->notifyAccountLifecycle($teacher, 'staff', 'deletion_cancelled');
+        Notify::staffAdmin('restored', $teacher->name, 'Scheduled deletion cancelled.');
 
         return response()->json([
             'message' => $teacher->canAccessAccount()
@@ -1135,6 +1173,7 @@ class OwnerAdminController extends BaseLmsController
 
         $courses = LmsCourse::query()
             ->withCount(['students', 'tracks'])
+            ->withPrerecordedCounts()
             ->latest('id')
             ->get(['id', 'title', 'slug', 'description', 'requirements', 'price', 'original_price', 'cover_image_path', 'max_students', 'registered_count', 'is_live_available', 'is_prerecorded_available', 'is_active']);
 
@@ -1205,9 +1244,15 @@ class OwnerAdminController extends BaseLmsController
     }
 
     /**
-     * Recent institute activity for the topbar notifications bell. Synthesised
-     * from existing tables (newest students + staff) so there's no separate
-     * notifications table to maintain; the frontend tracks "seen" locally.
+     * Recent institute activity for the topbar notifications bell.
+     *
+     * Two kinds of item in one list. SYNTHESISED items are derived on every read
+     * from existing tables (ended cohorts, newest students and staff, pending
+     * agent applications) and have no row of their own, so they cannot be marked
+     * read or cleared; the frontend keeps a local "seen" marker for those.
+     * REAL items come from lms_owner_notifications, written by App\Support\Notify
+     * when something consequential happens, and carry their own is_read flag and
+     * a Clear action. `notification_id` distinguishes the two.
      */
     public function notifications(Request $request): JsonResponse
     {
@@ -1260,13 +1305,120 @@ class OwnerAdminController extends BaseLmsController
                 'at' => optional($t->created_at)->toIso8601String(),
             ]);
 
-        $items = $endedCohorts->concat($students)->concat($staff)
+        // Admission Marketer applications waiting on a decision. Like the ended
+        // cohorts above, these are actionable rather than activity: only the owner
+        // can approve or decline, and the item clears ITSELF once they do, because
+        // a reviewed applicant is no longer 'pending'. The frontend only keeps a
+        // local "seen" marker, so without this an application submitted overnight
+        // would never surface anywhere in the portal at all.
+        $pendingAgents = Agent::query()
+            ->where('status', 'pending')
+            ->latest('id')
+            ->limit(10)
+            ->get(['id', 'name', 'email', 'created_at'])
+            ->map(fn (Agent $a) => [
+                'id' => 'agent-pending-' . $a->id,
+                'type' => 'agent_applied',
+                'title' => 'New Admission Marketer application',
+                'body' => ($a->name ?: ($a->email ?? 'An applicant')) . ', review to approve or decline.',
+                'at' => optional($a->created_at)->toIso8601String(),
+            ]);
+
+        $items = $endedCohorts->concat($students)->concat($staff)->concat($pendingAgents)
             ->filter(fn ($i) => $i['at'] !== null)
             ->sortByDesc('at')
             ->values()
             ->take(12);
 
-        return response()->json(['notifications' => $items]);
+        // The academy's REAL notification rows, raised by App\Support\Notify when
+        // something consequential happens (an enrolment, a payment, a course or
+        // cohort change, an administrative action, agent activity). These are the
+        // ones that can be marked read and cleared; the synthesised items above
+        // are activity, not messages, and carry on as they always have.
+        //
+        // They are merged into the same list rather than given a second bell, so
+        // the owner has one place to look. `notification_id` is the flag the
+        // frontend switches on: present means dismissible.
+        $rows = LmsOwnerNotification::query()
+            ->orderByDesc('created_at')
+            ->limit(30)
+            ->get()
+            ->map(fn (LmsOwnerNotification $n) => [
+                'id' => 'note-' . $n->id,
+                'notification_id' => $n->id,
+                'type' => $n->type,
+                'title' => $n->title,
+                'body' => $n->body,
+                'is_read' => (bool) $n->is_read,
+                'reference_type' => $n->reference_type,
+                'reference_id' => $n->reference_id,
+                'at' => $n->created_at?->toIso8601String(),
+            ]);
+
+        $items = $items->concat($rows)
+            ->filter(fn ($i) => $i['at'] !== null)
+            ->sortByDesc('at')
+            ->values()
+            ->take(25);
+
+        return response()->json([
+            'notifications' => $items,
+            // Real unread rows only. The synthesised items above keep the
+            // frontend's local "seen" marker, which the client adds on top.
+            'unread' => LmsOwnerNotification::query()->where('is_read', false)->count(),
+        ]);
+    }
+
+    /** Mark one of the academy's own notification rows as read. */
+    public function markNotificationRead(Request $request, int $id): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        // TenantScope is what makes this safe: a row belonging to another
+        // academy is invisible here, so a guessed id 404s rather than reaching
+        // across tenants.
+        LmsOwnerNotification::query()->findOrFail($id)->update(['is_read' => true]);
+
+        return response()->json(['message' => 'Notification marked as read.']);
+    }
+
+    public function markAllNotificationsRead(Request $request): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        LmsOwnerNotification::query()->where('is_read', false)->update(['is_read' => true]);
+
+        return response()->json(['message' => 'All notifications marked as read.']);
+    }
+
+    public function dismissNotification(Request $request, int $id): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        LmsOwnerNotification::query()->where('id', $id)->delete();
+
+        return response()->json(['message' => 'Notification cleared.']);
+    }
+
+    public function clearNotifications(Request $request): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        LmsOwnerNotification::query()->delete();
+
+        return response()->json(['message' => 'Notifications cleared.']);
     }
 
     /**
@@ -2573,11 +2725,11 @@ class OwnerAdminController extends BaseLmsController
     private function capCourseCapacity(Tenant $tenant, int $requested): int
     {
         // A course seats no more than the tightest of the academy-wide student
-        // cap and the per-class cap, either may be null (unlimited). Resulting
-        // per-class ceiling: Free = 1 (dominated by its 1-student academy cap),
-        // Basic = 30, Pro = 250, Enterprise = unlimited.
+        // cap, the per-class cap and the platform-wide ceiling, any of which may
+        // be null (unlimited). Resulting per-class ceiling: Free = 1 (dominated by
+        // its 1-student academy cap), Basic = 30, Pro = 50, Enterprise = 50.
         $limits = array_filter(
-            [$tenant->planLimit('students'), $tenant->planLimit('per_course')],
+            [$tenant->planLimit('students'), $tenant->planLimit('per_course'), \App\Support\PlanGate::maxStudentsPerCourse()],
             fn ($v) => $v !== null
         );
         $max = empty($limits) ? 0 : min($limits);   // 0 = unlimited (both null)
@@ -2605,7 +2757,7 @@ class OwnerAdminController extends BaseLmsController
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'requirements' => ['nullable', 'string'],
+            'requirements' => ['nullable', 'string', 'max:'.LmsCourse::MAX_REQUIREMENTS],
             // Courses can't be free, the platform earns a commission % on each
             // sale, so a ₦0 course would earn nothing and can't be sold.
             'price' => ['required', 'numeric', 'min:0.01'],
@@ -2651,6 +2803,11 @@ class OwnerAdminController extends BaseLmsController
 
         $this->notifyStudentsOfNewCourse($course);
 
+        // The academy's staff hear about every course change; the owner hears it
+        // as a notification they can clear rather than only as activity in the
+        // synthesised bell. App\Support\Notify decides both lists.
+        Notify::courseChanged('created', $course->title, $course);
+
         return response()->json(['course' => $this->coursePayload($course)], 201);
     }
 
@@ -2673,7 +2830,7 @@ class OwnerAdminController extends BaseLmsController
         $validated = $request->validate([
             'title' => ['sometimes', 'required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'requirements' => ['nullable', 'string'],
+            'requirements' => ['nullable', 'string', 'max:'.LmsCourse::MAX_REQUIREMENTS],
             // No free courses, the platform earns a commission % on each sale.
             'price' => ['sometimes', 'required', 'numeric', 'min:0.01'],
             'original_price' => ['nullable', 'numeric', 'min:0'],
@@ -2717,6 +2874,8 @@ class OwnerAdminController extends BaseLmsController
 
         $course->update($data);
 
+        Notify::courseChanged('updated', $course->title, $course->fresh());
+
         return response()->json(['course' => $this->coursePayload($course->fresh())]);
     }
 
@@ -2730,7 +2889,16 @@ class OwnerAdminController extends BaseLmsController
             return response()->json(['message' => 'Not authorized.'], 403);
         }
 
-        LmsCourse::query()->findOrFail($id)->delete();
+        $course = LmsCourse::query()->findOrFail($id);
+
+        // Resolved BEFORE the delete: the staff list comes from the course's
+        // cohorts, which are gone (or orphaned) the moment the course row is.
+        $staffIds = Notify::courseStaffIds($course);
+        $title = $course->title;
+
+        $course->delete();
+
+        Notify::courseChanged('deleted', $title, null, $staffIds);
 
         return response()->json(['message' => 'Course deleted.']);
     }
@@ -2825,6 +2993,8 @@ class OwnerAdminController extends BaseLmsController
             $this->syncTrackEnrollments($track);
         }
 
+        Notify::cohortChanged('created', $track->name, $track);
+
         return response()->json(['track' => $this->trackPayload($track)], 201);
     }
 
@@ -2891,6 +3061,18 @@ class OwnerAdminController extends BaseLmsController
             $this->syncTrackEnrollments($track->fresh());
         }
 
+        // Reassignment matters as much as the edit: the NEW instructor has to
+        // hear that the cohort is theirs, and the previous one that it is not.
+        // Notify::cohortChanged carries the current instructor plus any instructor
+        // dropped by this request, deduped.
+        $reassignedFrom = $track->getOriginal('instructor_id');
+        $staffIds = array_filter(array_unique([
+            $track->fresh()->instructor_id,
+            $reassignedFrom ? (int) $reassignedFrom : null,
+        ]));
+
+        Notify::cohortChanged('updated', $track->name, $track->fresh(), $staffIds);
+
         return response()->json(['track' => $this->trackPayload($track->fresh())]);
     }
 
@@ -2937,6 +3119,11 @@ class OwnerAdminController extends BaseLmsController
             'tracks_count' => $course->tracks_count,
             'is_live_available' => (bool) $course->is_live_available,
             'is_prerecorded_available' => (bool) $course->is_prerecorded_available,
+            // Whether pre-recorded lessons actually exist yet. The toggle above
+            // can be on with nothing behind it, and the storefront then hides the
+            // mode entirely (LmsCourse::hasPrerecordedContent), so the owner form
+            // is told rather than left wondering why students aren't offered it.
+            'has_prerecorded_content' => $course->hasPrerecordedContent(),
             'is_active' => (bool) $course->is_active,
         ];
     }

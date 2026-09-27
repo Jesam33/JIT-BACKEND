@@ -183,6 +183,7 @@ class PublicInstituteController extends Controller
 
         $courses = LmsCourse::query()
             ->where('is_active', true)
+            ->withPrerecordedCounts()
             ->orderBy('title')
             ->get();
 
@@ -351,12 +352,16 @@ class PublicInstituteController extends Controller
         // non-primary institute that hasn't linked a payout account yet.
         $purchasable = ! ($price > 0 && $ctx['block_unlinked']);
 
-        // Pre-recorded is only actually offered when the per-course toggle AND the
-        // plan feature both allow it. A separate (cheaper) pre-recorded price is
-        // surfaced only in that case, and localized through the SAME FX path as the
-        // live price so both sit in one currency. Null ⇒ the frontend charges the
+        // Pre-recorded is only actually offered when the per-course toggle, the
+        // plan feature AND real pre-recorded content all allow it: a course
+        // toggled on before any video was uploaded must not sell a mode it
+        // cannot deliver. A separate (cheaper) pre-recorded price is surfaced
+        // only in that case, and localized through the SAME FX path as the live
+        // price so both sit in one currency. Null ⇒ the frontend charges the
         // live price for the pre-recorded mode too (no cheaper option).
-        $prerecordedAvailable = $course->is_prerecorded_available && ($ctx['plan_prerecorded'] ?? true);
+        $prerecordedAvailable = $course->is_prerecorded_available
+            && ($ctx['plan_prerecorded'] ?? true)
+            && $course->hasPrerecordedContent();
         $prerecordedPrice = ($prerecordedAvailable && $course->prerecorded_price !== null)
             ? (float) $course->prerecorded_price
             : null;

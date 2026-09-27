@@ -33,12 +33,17 @@ class LmsNotificationMail extends Mailable
         // announcement/notification matches its storefront (defaults to red in
         // the layout when null). View-only; the envelope doesn't use it.
         public ?string $instituteColor = null,
+        // The academy's own logo URL for the email header, from
+        // Tenant::brandMailArray()['logo']. Null or empty on platform mail, and
+        // on an academy that has not uploaded one, which the layout renders as
+        // the sender's own wordmark.
+        public ?string $instituteLogo = null,
         // True when the PLATFORM is the sender (a broadcast announcement with no
         // academy behind it), which shows the platform-only "Need Help?" block.
         // False for every academy notification, so an academy's mail never
         // carries the platform's support details.
         public bool $isPlatformMail = false,
-        public string $actionLabel = 'Open in the LMS',
+        public string $actionLabel = 'Open in your academic portal',
     ) {
     }
 

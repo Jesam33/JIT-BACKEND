@@ -101,4 +101,48 @@ class StaffNotificationController extends BaseLmsController
 
         return response()->json(['message' => 'All notifications marked as read.']);
     }
+
+    /**
+     * Dismiss one notification for good.
+     *
+     * A DELETE, not another flag: the bell has no archive view, so an
+     * "is_dismissed" column would only be a tombstone nothing reads. Scoped to
+     * the actor's own teacher_id, so one staff member can never remove another's
+     * row by guessing an id.
+     */
+    public function dismiss(Request $request, int $id): JsonResponse
+    {
+        $this->ensureLmsEnabled();
+
+        $actor = $this->staffActor($request);
+
+        if (! $actor) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        LmsTeacherNotification::query()
+            ->where('id', $id)
+            ->where('teacher_id', $actor->id)
+            ->delete();
+
+        return response()->json(['message' => 'Notification cleared.']);
+    }
+
+    /** Clear the actor's whole bell. */
+    public function clear(Request $request): JsonResponse
+    {
+        $this->ensureLmsEnabled();
+
+        $actor = $this->staffActor($request);
+
+        if (! $actor) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        LmsTeacherNotification::query()
+            ->where('teacher_id', $actor->id)
+            ->delete();
+
+        return response()->json(['message' => 'Notifications cleared.']);
+    }
 }

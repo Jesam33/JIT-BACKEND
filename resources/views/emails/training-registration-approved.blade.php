@@ -1,7 +1,8 @@
 @extends('emails.layout', [
     'brandName' => $brand['name'],
     'brandColor' => $brand['color'],
-    'preheader' => 'Your registration is approved. Continue to the LMS.',
+    'brandLogo' => $brand['logo'] ?? null,
+    'preheader' => 'Your registration is approved. Continue to your academic portal.',
     'platformMail' => (bool) ($brand['is_platform'] ?? false),
 ])
 
@@ -14,8 +15,8 @@
   <p style="margin:28px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111827;">Hello {{ $registration->first_name }},</p>
 
   <p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#374151;">
-    Great news: your registration has been approved. Continue to the LMS to finish setting up your
-    account and start learning.
+    Great news: your registration has been approved. Continue to your academic portal to finish
+    setting up your account and start learning.
   </p>
 
   <div style="height:24px;font-size:0;line-height:0;">&nbsp;</div>
@@ -31,7 +32,7 @@
     </tr>
   </table>
 
-  @include('emails.partials.button', ['url' => $lmsLink, 'label' => 'Go to the LMS', 'color' => $brand['color']])
+  @include('emails.partials.button', ['url' => $lmsLink, 'label' => 'Open your academic portal', 'color' => $brand['color']])
   @include('emails.partials.fallback-link', ['url' => $lmsLink, 'color' => $brand['color']])
 @endsection
 

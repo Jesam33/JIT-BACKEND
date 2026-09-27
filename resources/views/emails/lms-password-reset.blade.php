@@ -7,6 +7,9 @@
 @extends('emails.layout', [
     'brandName' => $brandName ?? null,
     'brandColor' => $accent,
+    // The academy's own mark when it has one, so an academy-branded reset does
+    // not arrive wearing our logo. Null on platform mail.
+    'brandLogo' => $brandLogo ?? null,
     'preheader' => 'Reset your ' . $portalLabel . ' password. The link expires in ' . $expireMinutes . ' minutes.',
     // The platform's own "Need Help?" block only; an academy-branded reset is
     // never stamped with the platform's support details.

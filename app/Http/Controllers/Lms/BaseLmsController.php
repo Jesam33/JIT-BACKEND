@@ -1364,6 +1364,12 @@ abstract class BaseLmsController extends Controller
                 ->withoutGlobalScope(\App\Scopes\TenantScope::class)
                 ->open()
                 ->count(),
+            // The third such queue, counted the same way. `new` only: a piece of
+            // feedback we have planned, done or dismissed is no longer a badge.
+            'openFeedbackCount' => \App\Models\Feedback::query()
+                ->withoutGlobalScope(\App\Scopes\TenantScope::class)
+                ->open()
+                ->count(),
             // Whether to show the QA events nav item at all. Driven by the DATA
             // rather than by `saas.qa_events_enabled`, because the flag is switched
             // off again the moment an event ends and the host would then lose the

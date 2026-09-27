@@ -23,26 +23,44 @@
     $brand = trim($brandName ?? '') !== '' ? $brandName : (config('mail.from.name') ?: 'Jorsas');
     $accent = trim($brandColor ?? '') !== '' ? $brandColor : '#ed180d';
 
-    // The header mark is ALWAYS the platform's own logo, never an academy's
-    // upload, and the wordmark fallback is the platform NAME for the same reason:
-    // an academy's name does not belong in the header at all. The wordmark only
-    // appears when the logo URL is unusable (a dev host), never as a per-academy
-    // identity. $brand stays the per-sender name used for the document title and
-    // the sender line, which is invisible in the message body.
+    // The header mark. Academy mail leads with the ACADEMY's own logo when it has
+    // uploaded one, so a student at Perka Foundation Class sees Perka at the top
+    // of the email rather than us. Platform mail keeps the platform mark.
+    //
+    // This reverses the earlier "the header is always the platform logo" rule,
+    // which is what produced the "why does my academy's email show Jorsas?"
+    // reports. $brandLogo is passed by each template; the templates that carry an
+    // academy pass $brand['logo'] from Tenant::brandMailArray().
     $platformName = (string) config('mail.from.name') ?: 'Jorsas';
-    $logo = trim((string) config('saas.platform_mail_logo'));
+    $brandLogo = trim((string) ($brandLogo ?? ''));
+
+    // Whether the PLATFORM is the sender of this message. It gates
+    // platform-only chrome, currently the "Need Help?" block, and decides whose
+    // mark goes in the header. Defaults to false so an academy email can never
+    // leak our contact details by omission; the cost of forgetting is only a
+    // missing block.
+    $platformMail = (bool) ($platformMail ?? false);
+
+    if ($platformMail) {
+        $logo = trim((string) config('saas.platform_mail_logo'));
+    } else {
+        // An academy with no upload gets NO platform logo, even though we have
+        // one: showing our mark over an academy's email is the exact complaint
+        // this fixes. The wordmark below carries its name instead.
+        $logo = $brandLogo;
+    }
+
     // A logo served from a dev host is worse than no logo: the recipient gets a
     // broken-image icon in the header, so fall back to the wordmark instead.
     if ($logo !== '' && preg_match('#^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(/|$)#i', $logo)) {
         $logo = '';
     }
 
-    // Whether the PLATFORM is the sender of this message. It gates
-    // platform-only chrome, currently the "Need Help?" block: on academy mail
-    // the academy is the sender and its support details are not ours to publish.
-    // Defaults to false so an academy email can never leak our contact details
-    // by omission; the cost of forgetting is only a missing block.
-    $platformMail = (bool) ($platformMail ?? false);
+    // The wordmark shown when there is no usable image, and the img's alt text.
+    // Both follow the same owner as the logo slot above, so a header never shows
+    // the academy's mark labelled with the platform's name or the reverse.
+    $logoLabel = $platformMail ? $platformName : ($brand ?: $platformName);
+    $logoWordmarkColor = $platformMail ? '#ed180d' : $accent;
 
     // Footer icons are hosted PNGs, resolved by App\Support\EmailIcons, which
     // returns '' when the configured base is unreachable from an inbox. Each
@@ -85,17 +103,22 @@
         <tr>
           <td style="padding:40px 40px 36px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#374151;">
 
-            {{-- Header mark: the logo alone, no academy name beside it. --}}
+            {{-- Header mark: the logo alone, no name beside it. --}}
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr>
                 <td align="center" style="padding:0 0 4px;">
                   @if ($logo !== '')
-                    <img src="{{ $logo }}" alt="{{ $platformName }}" width="60" height="64" style="display:block;margin:0 auto;width:60px;height:64px;border:0;outline:none;text-decoration:none;">
+                    {{-- Height is fixed and the width follows it, because an
+                         academy uploads a square or round mark while the platform
+                         logo is 60x64: pinning both dimensions would squash one
+                         of them. The box caps at the card's inner width. --}}
+                    <img src="{{ $logo }}" alt="{{ $logoLabel }}" height="64" style="display:block;margin:0 auto;height:64px;width:auto;max-width:200px;border:0;outline:none;text-decoration:none;">
                   @else
-                    {{-- Platform wordmark, in the platform red rather than the
-                         sender's accent: the header is platform identity now,
-                         while $accent still drives the CTA button and links. --}}
-                    <span style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:700;letter-spacing:0.2px;color:#ed180d;">{{ $platformName }}</span>
+                    {{-- Wordmark, when there is no usable image. The colour is the
+                         platform red on platform mail and the sender's own accent
+                         on an academy's, so the header belongs to whichever of the
+                         two is actually sending. --}}
+                    <span style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:700;letter-spacing:0.2px;color:{{ $logoWordmarkColor }};">{{ $logoLabel }}</span>
                   @endif
                 </td>
               </tr>

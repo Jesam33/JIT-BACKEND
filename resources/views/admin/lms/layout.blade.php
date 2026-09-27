@@ -650,6 +650,20 @@
                     @endif
                 </a>
 
+                {{-- "Help us make the app better" — what the people ON the academies
+                     are telling us, across every portal. --}}
+                <a href="{{ route('admin.lms.feedback.index') }}" class="nav-item {{ ($activeLmsPage ?? '') === 'feedback' ? 'active' : '' }}">
+                    <div class="nav-left">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/><path d="M8 9h8M8 13h5"/></svg>
+                        </div>
+                        <span>Feedback</span>
+                    </div>
+                    @if (($openFeedbackCount ?? 0) > 0)
+                        <span class="nav-count">{{ $openFeedbackCount }}</span>
+                    @endif
+                </a>
+
                 <a href="{{ route('admin.lms.announcements.index') }}" class="nav-item {{ ($activeLmsPage ?? '') === 'announcements' ? 'active' : '' }}">
                     <div class="nav-left">
                         <div class="nav-icon">

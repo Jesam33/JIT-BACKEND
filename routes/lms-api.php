@@ -6,6 +6,7 @@ use App\Http\Controllers\PublicInstituteController;
 use App\Http\Controllers\Lms\TenantBillingController;
 use App\Http\Controllers\Lms\AccountLifecycleController;
 use App\Http\Controllers\Lms\AccountSafetyController;
+use App\Http\Controllers\Lms\FeedbackController;
 use App\Http\Controllers\Lms\OwnerAdminController;
 use App\Http\Controllers\Lms\OwnerAgentController;
 use App\Http\Controllers\Lms\OwnerGammaController;
@@ -201,6 +202,13 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::get('/api/frontend/lms/owner/courses', [OwnerAdminController::class, 'courses']);
     Route::get('/api/frontend/lms/owner/tracks', [OwnerAdminController::class, 'tracks']);
     Route::get('/api/frontend/lms/owner/notifications', [OwnerAdminController::class, 'notifications']);
+    // The owner's real notification rows (lms_owner_notifications) — the list
+    // above merges them with the synthesised activity items. Read + dismiss +
+    // clear, mirroring the student/staff/agent bell contract.
+    Route::post('/api/frontend/lms/owner/notifications/{id}/read', [OwnerAdminController::class, 'markNotificationRead']);
+    Route::post('/api/frontend/lms/owner/notifications/read-all', [OwnerAdminController::class, 'markAllNotificationsRead']);
+    Route::delete('/api/frontend/lms/owner/notifications/{id}', [OwnerAdminController::class, 'dismissNotification']);
+    Route::post('/api/frontend/lms/owner/notifications/clear', [OwnerAdminController::class, 'clearNotifications']);
 
     // CEO's Forum (platform-hosted live meetings for institute owners): list the
     // upcoming/past sessions, and mint a participant token to join in-portal.
@@ -366,6 +374,13 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::post('/api/frontend/lms/account/devices/sign-out', [AccountSafetyController::class, 'signOutDevice']);
     Route::post('/api/frontend/lms/account/devices/sign-out-everywhere', [AccountSafetyController::class, 'signOutEverywhere']);
 
+    // "Help us make the app better". One route for all four portals: the
+    // controller resolves the author from whichever bearer session the request
+    // carries, so a portal cannot file feedback as another role, and the tenant
+    // comes from that session rather than the body. Mounted once, like the
+    // devices routes above. Throttled only to stop a runaway client loop.
+    Route::post('/api/frontend/lms/feedback', [FeedbackController::class, 'submit'])->middleware('throttle:lms-feedback');
+
     // Student Dashboard
     Route::get('/api/frontend/lms/dashboard', [StudentDashboardController::class, 'dashboard']);
     Route::get('/api/frontend/lms/tasks', [StudentDashboardController::class, 'tasks']);
@@ -375,6 +390,8 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::get('/api/frontend/lms/notifications/unread', [StudentDashboardController::class, 'notificationUnreadCount']);
     Route::post('/api/frontend/lms/notifications/{id}/read', [StudentDashboardController::class, 'markNotificationRead']);
     Route::post('/api/frontend/lms/notifications/read-all', [StudentDashboardController::class, 'markAllNotificationsRead']);
+    Route::delete('/api/frontend/lms/notifications/{id}', [StudentDashboardController::class, 'dismissNotification']);
+    Route::post('/api/frontend/lms/notifications/clear', [StudentDashboardController::class, 'clearNotifications']);
     Route::get('/api/frontend/lms/attendance', [StudentDashboardController::class, 'attendance']);
 
     // Student course rating (Udemy-style ★). Enrolled-only gate lives in the
@@ -631,6 +648,8 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
         Route::get('/api/frontend/lms/staff/notifications/unread', [StaffNotificationController::class, 'unreadCount']);
         Route::post('/api/frontend/lms/staff/notifications/{id}/read', [StaffNotificationController::class, 'markRead']);
         Route::post('/api/frontend/lms/staff/notifications/read-all', [StaffNotificationController::class, 'markAllRead']);
+        Route::delete('/api/frontend/lms/staff/notifications/{id}', [StaffNotificationController::class, 'dismiss']);
+        Route::post('/api/frontend/lms/staff/notifications/clear', [StaffNotificationController::class, 'clear']);
     });
 
     // Agent (authenticated) routes
@@ -647,4 +666,6 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::get('/api/frontend/lms/agents/notifications/unread', [AgentController::class, 'unreadCount']);
     Route::post('/api/frontend/lms/agents/notifications/{id}/read', [AgentController::class, 'markNotificationRead']);
     Route::post('/api/frontend/lms/agents/notifications/read-all', [AgentController::class, 'markAllNotificationsRead']);
+    Route::delete('/api/frontend/lms/agents/notifications/{id}', [AgentController::class, 'dismissNotification']);
+    Route::post('/api/frontend/lms/agents/notifications/clear', [AgentController::class, 'clearNotifications']);
 });

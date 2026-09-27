@@ -331,7 +331,8 @@ class StudentDashboardController extends BaseLmsController
 
     // Files the teacher attached to a task, as students see them: the
     // public URL is all they need to download — the internal storage path is
-    // stripped.
+    // stripped. The whitelist is deliberate, so any new key the task form
+    // starts sending has to be added here too or students never see it.
     private function taskAttachments(LmsTask $task): array
     {
         return collect($task->attachments ?? [])
@@ -339,6 +340,7 @@ class StudentDashboardController extends BaseLmsController
                 'name' => $a['name'] ?? 'Attachment',
                 'url' => $a['url'] ?? null,
                 'size' => $a['size'] ?? null,
+                'description' => $a['description'] ?? null,
             ])
             ->filter(fn ($a) => ! empty($a['url']))
             ->values()
@@ -599,6 +601,47 @@ class StudentDashboardController extends BaseLmsController
             ->update(['is_read' => true]);
 
         return response()->json(['message' => 'All notifications marked as read.']);
+    }
+
+    /**
+     * Dismiss one notification for good. A DELETE, not another flag: nothing
+     * reads a dismissed-but-present row, so a tombstone column would be dead
+     * weight. Scoped to the session's own student_id.
+     */
+    public function dismissNotification(Request $request, int $id): JsonResponse
+    {
+        $this->ensureLmsEnabled();
+
+        $session = $this->sessionFromRequest($request, 'student');
+
+        if (! $session) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        LmsNotification::query()
+            ->where('id', $id)
+            ->where('student_id', $session->user_id)
+            ->delete();
+
+        return response()->json(['message' => 'Notification cleared.']);
+    }
+
+    /** Clear the student's whole bell. */
+    public function clearNotifications(Request $request): JsonResponse
+    {
+        $this->ensureLmsEnabled();
+
+        $session = $this->sessionFromRequest($request, 'student');
+
+        if (! $session) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        LmsNotification::query()
+            ->where('student_id', $session->user_id)
+            ->delete();
+
+        return response()->json(['message' => 'Notifications cleared.']);
     }
 
     public function attendance(Request $request): JsonResponse

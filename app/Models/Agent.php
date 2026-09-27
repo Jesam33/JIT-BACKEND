@@ -38,6 +38,29 @@ class Agent extends Model
         $this->attributes['avatar'] = \App\Support\MediaUrl::toStorage($value);
     }
 
+    /**
+     * The link this agent shares: their referral code baked into their academy's
+     * public address, so a student who arrives through it is attributed to them
+     * without typing anything. Resolved from the agent's OWN tenant_id, so the
+     * link always opens the academy the agent actually belongs to, never another.
+     *
+     * NOT in $appends on purpose: this costs a tenant lookup, and the owner-side
+     * agent lists serialize Agent models just to read a few columns (an appended
+     * accessor would run that lookup once per row). Callers ask for it explicitly
+     * with $agent->referral_link, which is why the owner lists are unaffected.
+     */
+    public function getReferralLinkAttribute(): ?string
+    {
+        $code = trim((string) $this->referral_code);
+        if ($code === '' || ! $this->tenant_id) {
+            return null;
+        }
+
+        $tenant = Tenant::find($this->tenant_id);
+
+        return $tenant ? $tenant->storefrontUrl() . '?ref=' . urlencode($code) : null;
+    }
+
     public function sessions()
     {
         return $this->hasMany(AgentSession::class);

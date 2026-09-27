@@ -1,6 +1,7 @@
 @extends('emails.layout', [
     'brandName' => $brand['name'],
     'brandColor' => $brand['color'],
+    'brandLogo' => $brand['logo'] ?? null,
     'preheader' => $paragraphs[0] ?? $heading,
     'platformMail' => (bool) ($brand['is_platform'] ?? false),
 ])

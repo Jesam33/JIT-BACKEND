@@ -1,6 +1,7 @@
 @extends('emails.layout', [
     'brandName' => $brand['name'],
     'brandColor' => $brand['color'],
+    'brandLogo' => $brand['logo'] ?? null,
     'preheader' => 'Your ' . ($tester->event?->name ?? 'QA testing') . ' join link',
     'platformMail' => (bool) ($brand['is_platform'] ?? false),
 ])
@@ -55,5 +56,10 @@
 @endsection
 
 @section('footer')
-  <p style="margin:0;">{{ $brand['name'] }} and Jorsas Tech</p>
+  {{-- The brand stands alone here for the same reason it does on the page: the
+       "X and Jorsas Tech" pairing read as two companies the tester has to deal
+       with. iungo is our own product and says so. An academy's session is a
+       service we run for them, which is a different claim and would be false in
+       those words, so it gets its own. --}}
+  <p style="margin:0;">{{ strtolower(trim((string) ($brand['name'] ?? ''))) === 'iungo' ? 'iungo is a product of Jorsas Tech' : 'A Jorsas Tech testing session' }}</p>
 @endsection

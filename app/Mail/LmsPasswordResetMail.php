@@ -33,6 +33,11 @@ class LmsPasswordResetMail extends Mailable
         public ?string $brandName = null,
         public ?string $brandColor = null,
         public ?string $brandReplyTo = null,
+        // The academy's own logo URL for the email header, from
+        // Tenant::brandMailArray()['logo']. Null or empty on platform mail, and
+        // on an academy that has not uploaded one, which the layout renders as
+        // the sender's own wordmark.
+        public ?string $brandLogo = null,
         // True when the PLATFORM is the sender (no academy behind the message),
         // which shows the platform-only "Need Help?" block. Comes from
         // Tenant::brandMailArray()['is_platform'], so it is false for every

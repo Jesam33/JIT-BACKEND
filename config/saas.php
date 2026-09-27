@@ -291,6 +291,18 @@ return [
     //
     // The primary institute (config('saas.primary_slug')) is always treated as
     // the top (Enterprise) plan regardless of what's stored — see Tenant::planConfig().
+
+    // The platform-wide ceiling on how many students one course may seat, on
+    // EVERY plan. This is a product rule, not a plan entitlement: it exists so no
+    // academy (and no host back-office edit) can put 300 people in one live
+    // classroom, which is a quality problem no tier upgrade should be able to buy.
+    //
+    // It clamps from above, so a plan's own `limits.per_course` still applies when
+    // it is TIGHTER (Basic seats 30, and stays 30). Read through
+    // App\Support\PlanGate::maxStudentsPerCourse(), never directly at a call site,
+    // so the owner portal and the host back office cannot drift apart.
+    'max_students_per_course' => (int) env('MAX_STUDENTS_PER_COURSE', 50),
+
     'plans' => [
         'free' => [
             'name' => 'Free',
@@ -363,8 +375,10 @@ return [
                 // Unlimited platform students (null); the per-class cap bites.
                 'students' => null,
                 'staff' => (int) env('PLAN_PRO_MAX_STAFF', 25),
-                // Max students per class (per course) on Pro.
-                'per_course' => (int) env('PLAN_PRO_MAX_PER_COURSE', 250),
+                // Max students per class (per course) on Pro. Clamped from above
+                // by saas.max_students_per_course (50), so this can only ever ask
+                // for less than the platform ceiling, never more.
+                'per_course' => (int) env('PLAN_PRO_MAX_PER_COURSE', 50),
             ],
             'features' => [
                 'live_classes' => true,

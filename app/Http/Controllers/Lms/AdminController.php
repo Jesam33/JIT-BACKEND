@@ -6,6 +6,7 @@ use App\Mail\LmsTeacherCredentialsMail;
 use App\Mail\QaInviteMail;
 use App\Models\AcademyReport;
 use App\Models\Batch;
+use App\Models\Feedback;
 use App\Models\LmsClassroom;
 use App\Models\LmsCourse;
 use App\Models\LmsDmThread;
@@ -450,7 +451,9 @@ class AdminController extends BaseLmsController
             'tenant_id' => ['required', 'integer', 'exists:tenants,id'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'requirements' => ['nullable', 'string'],
+            // Same ceiling the owner portal enforces, read from the model so the
+            // two paths can't drift (see LmsCourse::MAX_REQUIREMENTS).
+            'requirements' => ['nullable', 'string', 'max:'.LmsCourse::MAX_REQUIREMENTS],
             'price' => ['nullable', 'numeric', 'min:0'],
             'max_students' => ['nullable', 'integer', 'min:0'],
             'is_live_available' => ['nullable', 'boolean'],
@@ -466,7 +469,11 @@ class AdminController extends BaseLmsController
             'description' => $validated['description'] ?? null,
             'requirements' => $validated['requirements'] ?? null,
             'price' => $validated['price'] ?? 0,
-            'max_students' => (int) ($validated['max_students'] ?? 0),
+            // Clamped to the platform ceiling: this path is not plan-gated (the
+            // host back office may legitimately exceed an academy's own tier), but
+            // it is still bound by the product rule that one course seats no more
+            // than saas.max_students_per_course. 0 stays 0 = unlimited.
+            'max_students' => \App\Support\PlanGate::clampCourseSeats((int) ($validated['max_students'] ?? 0)),
             'is_live_available' => $validated['is_live_available'] ?? true,
             'is_prerecorded_available' => $validated['is_prerecorded_available'] ?? true,
             'is_active' => true,
@@ -1328,6 +1335,103 @@ class AdminController extends BaseLmsController
         }
 
         return $this->instituteRedirect($request, $message, 'status');
+    }
+
+    /**
+     * The feedback queue: what the people on the academies are telling us.
+     *
+     * Read across ALL academies (the TenantScope is dropped explicitly, the same
+     * way the reports and rights queues do it), because the platform is who acts
+     * on this. Never exposed to an academy's own portal — feedback about an
+     * academy is not shown back to that academy.
+     *
+     * Newest first, capped, and grouped only by the academy name column: a
+     * triage queue, not a reporting tool.
+     */
+    public function feedbackPage(Request $request)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $showSettled = $request->boolean('settled');
+
+        $query = Feedback::query()
+            ->withoutGlobalScope(\App\Scopes\TenantScope::class)
+            ->orderByDesc('id');
+
+        if (! $showSettled) {
+            $query->open();
+        }
+
+        $rows = $query->limit(300)->get();
+
+        $tenants = Tenant::query()
+            ->whereIn('id', $rows->pluck('tenant_id')->filter()->unique())
+            ->get()
+            ->keyBy('id');
+
+        return view('admin.lms.feedback', array_merge($this->adminShellData(), [
+            'activeLmsPage' => 'feedback',
+            'showSettled' => $showSettled,
+            'feedback' => $rows->map(fn (Feedback $f) => [
+                'id' => $f->id,
+                'category_label' => Feedback::CATEGORIES[$f->category] ?? $f->category,
+                'message' => $f->message,
+                'status' => $f->status,
+                'status_class' => match ($f->status) {
+                    'done' => 'active',
+                    'dismissed' => 'danger',
+                    'planned' => 'warning',
+                    default => '',
+                },
+                'resolution_note' => $f->resolution_note,
+                'author_role' => Feedback::ROLES[$f->author_role] ?? ucfirst($f->author_role),
+                // Snapshot columns — see the model. Shown, never looked up.
+                'author_name' => $f->author_name,
+                'author_email' => $f->author_email,
+                'page' => $f->page,
+                'academy' => $tenants[$f->tenant_id]?->name ?? null,
+                'age' => $f->created_at?->diffForHumans(),
+                'settled' => in_array($f->status, ['done', 'dismissed'], true),
+            ]),
+        ]));
+    }
+
+    /**
+     * Move a piece of feedback on. Records what we decided, and NOTHING is
+     * emailed: the sender asked us to make the app better, not to start a
+     * correspondence, and a reply per triage step would be noise.
+     */
+    public function updateFeedback(Request $request, int $id)
+    {
+        $this->ensureLmsEnabled();
+        $this->ensureSuperAdmin($request);
+
+        $validated = $request->validate([
+            'status' => ['required', 'string', 'in:' . implode(',', Feedback::STATUSES)],
+            'resolution_note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $feedback = Feedback::query()
+            ->withoutGlobalScope(\App\Scopes\TenantScope::class)
+            ->findOrFail($id);
+
+        if ($validated['status'] === 'new') {
+            return $this->instituteRedirect($request, 'Choose planned, done or dismissed.', 'error');
+        }
+
+        $feedback->forceFill([
+            'status' => $validated['status'],
+            'resolution_note' => $validated['resolution_note'] ?: $feedback->resolution_note,
+            'handled_by' => $request->user()?->getKey(),
+            'handled_at' => now(),
+        ])->save();
+
+        return $this->instituteRedirect(
+            $request,
+            'Feedback marked ' . $validated['status'] . '.',
+            'status'
+        );
     }
 
     public function resendInstituteOnboarding(Request $request, int $id)

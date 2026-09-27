@@ -1,10 +1,16 @@
 @extends('emails.layout', [
-    'brandName' => 'Jorsas Tech',
-    'brandColor' => '#ed180d',
+    // The academy that created the account, not the platform: a teacher hired by
+    // Perka Foundation Class must not be told they have a Jorsas account. The
+    // mailable resolves this from the teacher's own tenant_id.
+    'brandName' => $brand['name'],
+    'brandColor' => $brand['color'],
+    'brandLogo' => $brand['logo'] ?? null,
     'preheader' => 'Your staff account is ready. Sign in and set a new password.',
     // An academy admin creates the staff account, so this is not platform mail
-    // and carries no Jorsas support block.
-    'platformMail' => false,
+    // and carries no Jorsas support block. Resolved rather than hardcoded false,
+    // so a staff account created by the platform itself still gets our support
+    // details while an academy's never does.
+    'platformMail' => (bool) ($brand['is_platform'] ?? false),
 ])
 
 @section('content')

@@ -817,12 +817,54 @@ class Tenant extends Model
     }
 
     /**
+     * The academy's public front door: its own subdomain when wildcard DNS is
+     * live (saas.app_domain set), else its path-based storefront /i/{slug}. This
+     * is the address an academy (or its Admission Marketers) SHARES, which is why
+     * it is not the bare frontend homepage with a pinned cookie.
+     *
+     * Read through config, not env(), so it survives `config:cache` (see the
+     * config-cache trap: env() returns null once the config is cached, which
+     * would silently downgrade every shared link to the /i/{slug} form).
+     * Mirrors the frontend's tenantStorefrontUrl().
+     */
+    public function storefrontUrl(): string
+    {
+        $domain = trim((string) config('saas.app_domain'));
+
+        return $domain !== ''
+            ? 'https://' . $this->slug . '.' . $domain
+            : rtrim((string) config('saas.frontend_url'), '/') . '/i/' . $this->slug;
+    }
+
+    /**
+     * The academy owner's own login email (tenant_admins.role = owner), or null
+     * when no owner row is linked to this tenant yet.
+     *
+     * This is the person who ADMINISTERS the academy, which is not the same
+     * question as "where does a stranger's reply go": an alert that only the owner
+     * can act on (a new Admission Marketer application waiting for review) must
+     * reach whoever runs the portal, so this deliberately ignores the published
+     * public contact address. {@see brandMailReplyTo()} prefers that public
+     * address and falls back here.
+     */
+    public function ownerEmail(): ?string
+    {
+        $email = \Illuminate\Support\Facades\DB::table('tenant_admins')
+            ->join('users', 'users.id', '=', 'tenant_admins.user_id')
+            ->where('tenant_admins.tenant_id', $this->id)
+            ->where('tenant_admins.role', 'owner')
+            ->value('users.email');
+
+        return (is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) ? $email : null;
+    }
+
+    /**
      * Where replies to this tenant's transactional mail should land. The
      * from-ADDRESS stays on the platform's verified domain (deliverability), but a
      * reply belongs to the INSTITUTE: its published public contact email
      * (settings.profile.contact.email) when set + valid, else the owner's own
-     * login email (tenant_admins.role = owner). Null when neither is known, the
-     * mailable then simply omits Reply-To. Mirrors the per-run map built in
+     * login email. Null when neither is known, the mailable then simply omits
+     * Reply-To. Mirrors the per-run map built in
      * SendNotificationEmails::replyToMap(), for the single-send invite/forgot paths.
      */
     public function brandMailReplyTo(): ?string
@@ -832,21 +874,13 @@ class Tenant extends Model
             return $contact;
         }
 
-        $ownerEmail = \Illuminate\Support\Facades\DB::table('tenant_admins')
-            ->join('users', 'users.id', '=', 'tenant_admins.user_id')
-            ->where('tenant_admins.tenant_id', $this->id)
-            ->where('tenant_admins.role', 'owner')
-            ->value('users.email');
-
-        return (is_string($ownerEmail) && filter_var($ownerEmail, FILTER_VALIDATE_EMAIL))
-            ? $ownerEmail
-            : null;
+        return $this->ownerEmail();
     }
 
     /**
-     * The full per-institute mail identity, sender NAME, accent COLOUR and
-     * REPLY-TO, as one array, with a platform fallback when no tenant resolves.
-     * The single source for both {@see \App\Http\Controllers\Lms\BaseLmsController::mailBranding()}
+     * The full per-institute mail identity, sender NAME, accent COLOUR, REPLY-TO
+     * and header LOGO, as one array, with a platform fallback when no tenant
+     * resolves. The single source for both {@see \App\Http\Controllers\Lms\BaseLmsController::mailBranding()}
      * (callers that bind the recipient's tenant) and the model-carrying mailables
      * ({@see \App\Mail\Concerns\BrandedMailable}), which resolve their brand from
      * the row's tenant_id, so a paying academy's payment/approval emails are
@@ -857,10 +891,12 @@ class Tenant extends Model
      * is true exactly when no academy is behind the message: either no tenant at
      * all, or the primary tenant, which is Jorsas itself.
      *
-     * Note there is deliberately no logo here: the header mark is always the
-     * platform's own, never an academy's upload.
+     * `logo` is the academy's own upload, and empty whenever `is_platform` is
+     * true or the academy has no logo: the layout falls back to the platform mark
+     * in that case, so a logo-less academy still gets a headered email rather
+     * than a blank space where one belongs.
      *
-     * @return array{name: string, color: string, is_platform: bool, reply_to: ?string}
+     * @return array{name: string, color: string, is_platform: bool, reply_to: ?string, logo: string}
      */
     public static function brandMailArray(?self $tenant): array
     {
@@ -870,6 +906,7 @@ class Tenant extends Model
                 'color' => '#ed180d',
                 'is_platform' => true,
                 'reply_to' => null,
+                'logo' => '',
             ];
         }
 
@@ -882,7 +919,29 @@ class Tenant extends Model
             // our support block.
             'is_platform' => $tenant->isPrimary(),
             'reply_to' => $tenant->brandMailReplyTo(),
+            // '' when the academy has uploaded no logo, which the email layout
+            // reads as "use the platform mark".
+            'logo' => $tenant->brandMailLogo(),
         ];
+    }
+
+    /**
+     * The academy's own logo, for the header of the mail it sends. Empty when it
+     * has not uploaded one, and empty for the primary/platform tenant, whose mail
+     * is the platform's anyway.
+     *
+     * Read through brandingArray() rather than the raw setting so the URL is
+     * rebuilt against the current host: a logo stored as http://localhost/... at
+     * upload time would otherwise ship a broken image to every recipient (see
+     * App\Support\MediaUrl).
+     */
+    public function brandMailLogo(): string
+    {
+        if ($this->isPrimary()) {
+            return '';
+        }
+
+        return trim((string) ($this->brandingArray()['logo_url'] ?? ''));
     }
 
     /**

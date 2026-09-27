@@ -21,6 +21,34 @@ use App\Models\Tenant;
  */
 class PlanGate
 {
+    /**
+     * The platform-wide ceiling on one course's seat count, on every plan.
+     *
+     * A product rule rather than a plan entitlement: no academy, on any tier, may
+     * put more than this many students in a single course. It CLAMPS from above,
+     * so a plan whose own `limits.per_course` is tighter (Basic seats 30) keeps
+     * its tighter number — the ceiling only ever lowers a request, never raises
+     * one.
+     *
+     * Configured as saas.max_students_per_course and read from here so the owner
+     * portal and the host back office cannot drift apart.
+     */
+    public static function maxStudentsPerCourse(): int
+    {
+        // max(1, ...) so a mistyped 0 or a negative in env cannot be read as
+        // "unlimited" and silently remove the ceiling.
+        return max(1, (int) config('saas.max_students_per_course', 50));
+    }
+
+    /**
+     * Clamp a requested seat count to the platform ceiling. 0 means "unlimited"
+     * on a course (LmsCourse::slotsRemaining() reads 0 that way), and is left
+     * alone: what it resolves to is the academy's plan caps, not this ceiling.
+     */
+    public static function clampCourseSeats(int $requested): int
+    {
+        return $requested <= 0 ? $requested : min($requested, static::maxStudentsPerCourse());
+    }
     /** Throw a 402 PlanLimitException if the tenant is at/over its course cap. */
     public static function ensureCanAddCourse(Tenant $tenant): void
     {

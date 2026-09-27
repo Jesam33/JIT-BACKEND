@@ -411,15 +411,15 @@ class TenantSignupController extends Controller
      */
     private function frontDoor(Tenant $tenant): string
     {
-        $appDomain = env('APP_DOMAIN');
-
-        // The academy's public address: its subdomain when custom domains are
-        // live, else its public storefront /i/{slug} (the same URL
-        // tenantStorefrontUrl builds on the frontend). NOT the bare frontend
-        // homepage + ?tenant=, which is the marketing site with a pinned
-        // cookie, not a shareable address for the academy.
-        return $appDomain
-            ? 'https://' . $tenant->slug . '.' . $appDomain
-            : rtrim(config('saas.frontend_url'), '/') . '/i/' . $tenant->slug;
+        // One source for this address, on the model, so the signup email and every
+        // shareable referral link the agents hand out can never disagree. It reads
+        // saas.app_domain through config, which is also what fixes this method's
+        // old env('APP_DOMAIN') call: under config:cache that returned null, so
+        // live signup emails quietly used the /i/{slug} form.
+        //
+        // Either way the address is the academy's OWN public page, never the bare
+        // frontend homepage + ?tenant=, which is the marketing site with a pinned
+        // cookie rather than something worth sharing.
+        return $tenant->storefrontUrl();
     }
 }

@@ -95,6 +95,22 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(30)->by('ip:' . $request->ip()),
             ];
         });
+
+        // Feedback submission. Authenticated, cheap and non-destructive, so these
+        // caps exist to stop a runaway client loop rather than abuse: someone with
+        // a real complaint writes one message, and nobody writes twenty. Keyed on
+        // the BEARER TOKEN rather than a typed identifier, because there is no
+        // identifier in the body — the author is whoever the session says they
+        // are (that is the point of the endpoint). Hashing the token keeps a
+        // credential out of the limiter's cache keys.
+        RateLimiter::for('lms-feedback', function (Request $request) {
+            $token = (string) $request->bearerToken();
+
+            return [
+                Limit::perMinute(5)->by('feedback:' . sha1($token)),
+                Limit::perMinute(20)->by('ip:' . $request->ip()),
+            ];
+        });
     }
 
     /**
