@@ -17,6 +17,7 @@ use App\Models\Payment;
 use App\Models\Tenant;
 use App\Models\TrainingRegistration;
 use App\Scopes\TenantScope;
+use App\Services\CourseBilling;
 use App\Services\CurrencyService;
 use App\Services\PaystackService;
 use App\Support\Notify;
@@ -91,6 +92,7 @@ class LmsIntakeController extends BaseLmsController
                 'title' => $course->title,
                 'description' => $course->description,
                 'price' => (float) $course->price,
+                'billing_type' => $course->billing_type ?: LmsCourse::BILLING_ONE_TIME,
                 'max_students' => $course->max_students,
                 'registered_count' => $course->registered_count,
                 'slots_remaining' => $course->slotsRemaining(),
@@ -129,6 +131,7 @@ class LmsIntakeController extends BaseLmsController
             'description' => $course->description,
             'requirements' => $course->requirements,
             'price' => (float) $course->price,
+            'billing_type' => $course->billing_type ?: LmsCourse::BILLING_ONE_TIME,
             'max_students' => $course->max_students,
             'registered_count' => $course->registered_count,
             'slots_remaining' => $course->slotsRemaining(),
@@ -314,6 +317,7 @@ class LmsIntakeController extends BaseLmsController
                 'title' => $course->title,
                 'price' => $chargeAmount,
                 'charge_currency' => $chargeCurrency,
+                'billing_type' => $registration->billing_type,
             ],
         ], 201);
     }
@@ -396,6 +400,11 @@ class LmsIntakeController extends BaseLmsController
             // USD charging is enabled and the buyer registered from outside Nigeria).
             $chargeCurrency = strtoupper((string) ($registration->charge_currency ?: 'NGN'));
 
+            // The platform service charge on this payment (null when the money
+            // settles to the platform account anyway, i.e. no subaccount).
+            $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
+            $charge = CourseBilling::serviceCharge($tenant, (float) $registration->course_price);
+
             $response = $paystack->initializeTransaction(
                 $registration->email,
                 (float) $registration->course_price,
@@ -409,7 +418,8 @@ class LmsIntakeController extends BaseLmsController
                 // (its bank) when it has configured one; primary/unconfigured
                 // institutes fall back to the platform account, as before.
                 $this->tenantSubaccountCode(),
-                $chargeCurrency
+                $chargeCurrency,
+                $charge['fee']
             );
 
             Payment::query()->create([
@@ -419,6 +429,10 @@ class LmsIntakeController extends BaseLmsController
                 'currency' => $chargeCurrency,
                 'status' => 'pending',
                 'gateway' => 'paystack',
+                'kind' => Payment::KIND_INITIAL,
+                // 0 when unsplit (settles to the platform account): nothing held back.
+                'platform_fee' => $charge['fee'] ?? 0,
+                'academy_amount' => $charge['academy'],
             ]);
 
             return response()->json([
@@ -504,6 +518,20 @@ class LmsIntakeController extends BaseLmsController
         }
 
         return response()->json(['message' => 'Webhook received.']);
+    }
+
+    /**
+     * Confirm a course payment reported by the platform's generic Paystack
+     * webhook (PaystackWebhookController). Paystack delivers every event to ONE
+     * webhook URL per account, so if that URL is the generic endpoint, this is
+     * how a course payment still confirms when the student's browser never
+     * comes back (and how a monthly renewal paid from a link confirms at all).
+     */
+    public function confirmFromWebhook(Payment $payment, array $gatewayData): void
+    {
+        if ($payment->status !== 'success') {
+            $this->completePayment($payment, $gatewayData);
+        }
     }
 
     /**
@@ -639,6 +667,20 @@ class LmsIntakeController extends BaseLmsController
         // bind it before touching any TenantAware relation or create below.
         $this->bindTenantFromModel($payment);
 
+        // A monthly course's later payments only extend access: no account to
+        // provision, no setup email, no agent commission (agents earn on the
+        // first month only). CourseBilling owns that path.
+        if ($payment->kind === Payment::KIND_RENEWAL) {
+            $status = CourseBilling::completeRenewal($payment, $gatewayData);
+
+            return $status === 'review'
+                ? response()->json([
+                    'message' => 'Payment received but needs manual confirmation. Our team will verify it shortly.',
+                    'status' => 'review',
+                ])
+                : response()->json(['message' => 'Payment confirmed. Thank you!', 'status' => 'success', 'renewal' => true]);
+        }
+
         $registration = $payment->registration;
 
         if (! $registration) {
@@ -689,6 +731,19 @@ class LmsIntakeController extends BaseLmsController
             'status' => 'approved',
             'approved_at' => now(),
         ]);
+
+        // Monthly course: this payment buys the first month (and, paid by card,
+        // saves the card for automatic renewals). Best-effort like everything
+        // after the money is captured: a failure leaves no paid_until, which
+        // never locks the student out.
+        try {
+            CourseBilling::startFirstPeriod($registration, $payment, $gatewayData);
+        } catch (\Throwable $e) {
+            Log::warning('Monthly first period could not be started; continuing', [
+                'registration_id' => $registration->id,
+                'err' => $e->getMessage(),
+            ]);
+        }
 
         LmsStudent::query()->updateOrCreate(
             ['email' => $registration->email],
@@ -765,7 +820,12 @@ class LmsIntakeController extends BaseLmsController
             // Currency code + amount rather than a ₦ symbol: the charge currency
             // is geo-resolved and is not always NGN (see the CurrencyService
             // freeze above), so a hardcoded symbol would misreport the amount.
-            'Paid ' . strtoupper((string) ($payment->currency ?: 'NGN')) . ' ' . number_format((float) $payment->amount, 2) . '.',
+            // The owner is told the service-charge breakdown on EVERY payment;
+            // for a first payment it rides on this enrolment bell (renewals
+            // get their own, see CourseBilling::notifyOwnerOfRenewal).
+            trim('Paid ' . CourseBilling::money($payment->currency, (float) $payment->amount)
+                . ($registration->isMonthly() ? ' (first month of a monthly course)' : '') . '. '
+                . CourseBilling::breakdownLine($payment, app()->bound('currentTenant') ? app('currentTenant') : null)),
             null,
             'registration',
             $registration->id
@@ -806,7 +866,7 @@ class LmsIntakeController extends BaseLmsController
 
         return view('admin.lms.intake.index', [
             'items' => $items,
-            'adminDir' => env('ADMIN_DIR', 'admin'),
+            'adminDir' => config('saas.admin_dir', 'admin'),
             'pendingRegistrations' => $pendingRegistrations,
             'studentCount' => LmsStudent::query()->count(),
             'tracks' => LmsTrack::query()->count(),

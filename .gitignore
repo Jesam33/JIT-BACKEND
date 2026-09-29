@@ -59,3 +59,11 @@ storage/framework/maintenance.php
 # Frontend lives in its own repo
 /jorsas-tech-v2
 jorsas.zip
+
+# Local logs, dumps and exports (never deploy these)
+*.log
+*.tar.gz
+all_routes.txt
+content_export_*.json
+content_runtime_extract.json
+.phpunit.result.cache

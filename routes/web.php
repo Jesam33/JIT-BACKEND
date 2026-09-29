@@ -25,8 +25,8 @@ if (config('saas.lms_feature_enabled')) {
 // ─── Admin Web (auth required) ────────────────────────────────────
 // tenant.primary binds JIT for the admin panel's TenantAware reads/writes,
 // which live outside the tenant-resolving lms-api group.
-Route::middleware(['auth', 'tenant.primary'])->prefix(env('ADMIN_DIR', 'admin'))->group(function (): void {
-	Route::redirect('/training/registrations', '/' . trim(env('ADMIN_DIR', 'admin'), '/') . '/lms/intake');
+Route::middleware(['auth', 'tenant.primary'])->prefix(config('saas.admin_dir', 'admin'))->group(function (): void {
+	Route::redirect('/training/registrations', '/' . trim(config('saas.admin_dir', 'admin'), '/') . '/lms/intake');
 	Route::get('/training/registrations/pending', [LmsIntakeController::class, 'pending']);
 	Route::post('/training/registrations/{id}/approve', [LmsIntakeController::class, 'approve']);
 	Route::post('/training/registrations/{id}/decline', [LmsIntakeController::class, 'decline']);

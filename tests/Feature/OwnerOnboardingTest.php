@@ -69,7 +69,11 @@ class OwnerOnboardingTest extends TestCase
 
     public function test_import_students_creates_tenant_stamped_rows_and_invites(): void
     {
-        $tenant = Tenant::create(['name' => 'Acme', 'slug' => 'acme']);
+        // Basic plan (unlimited students); Free is capped at 1, tested below.
+        $tenant = Tenant::create([
+            'name' => 'Acme', 'slug' => 'acme', 'plan' => 'basic',
+            'subscription_status' => 'active', 'current_period_end' => now()->addMonth(),
+        ]);
         $token = $this->ownerToken($tenant);
 
         $response = $this->withHeader('Authorization', 'Bearer ' . $token)
@@ -92,6 +96,22 @@ class OwnerOnboardingTest extends TestCase
         ]);
 
         Mail::assertSent(LmsPasswordResetMail::class);
+    }
+
+    public function test_free_plan_import_stops_at_the_student_cap(): void
+    {
+        $tenant = Tenant::create(['name' => 'Acme', 'slug' => 'acme']);
+        $token = $this->ownerToken($tenant);
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/frontend/lms/onboarding/import-students', [
+                'tenant' => $tenant->id,
+                'emails' => ['ada@acme.test', 'grace@acme.test'],
+            ])
+            ->assertOk()
+            ->assertJsonPath('imported', 1);
+
+        $this->assertDatabaseMissing('lms_students', ['email' => 'grace@acme.test']);
     }
 
     public function test_import_students_skips_invalid_emails(): void

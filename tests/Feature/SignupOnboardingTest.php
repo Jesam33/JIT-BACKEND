@@ -35,6 +35,8 @@ class SignupOnboardingTest extends TestCase
             // No password at signup — the owner sets it later via the emailed
             // setup link. Signup must succeed without one.
             'plan' => 'basic',
+            // Required since the Campuses niche filter shipped.
+            'niche' => 'Technology',
         ], $overrides);
     }
 
@@ -137,14 +139,38 @@ class SignupOnboardingTest extends TestCase
         Notification::assertSentToTimes($owner, OwnerSetupInvitation::class, 1);
     }
 
-    public function test_free_plan_is_rejected_at_signup(): void
+    public function test_free_plan_activates_without_payment(): void
     {
+        // The Free plan is self-serve: it provisions straight away, never opens a
+        // checkout, and works even with no payment gateway configured.
+        Notification::fake();
+
+        $this->mock(PaystackService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(false);
+            $mock->shouldReceive('initializeTransaction')->never();
+        });
+
+        $resp = $this->postJson('/api/signup', $this->payload(['plan' => 'free']));
+
+        $resp->assertStatus(201)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('free', true);
+
+        $tenant = Tenant::where('slug', 'test-academy')->first();
+        $this->assertSame('active', $tenant->status);
+        $this->assertDatabaseHas('tenant_onboarding_audits', ['tenant_id' => $tenant->id]);
+    }
+
+    public function test_enterprise_plan_is_rejected_at_signup(): void
+    {
+        // Enterprise is contact-sales (null price): it must never be provisioned
+        // through self-serve signup, or it would read as a free unlimited academy.
         $this->mock(PaystackService::class, function ($mock) {
             $mock->shouldReceive('isConfigured')->andReturn(true);
             $mock->shouldReceive('initializeTransaction')->never();
         });
 
-        $resp = $this->postJson('/api/signup', $this->payload(['plan' => 'free']));
+        $resp = $this->postJson('/api/signup', $this->payload(['plan' => 'enterprise']));
 
         $resp->assertStatus(422)->assertJsonValidationErrors(['plan']);
         $this->assertDatabaseMissing('tenants', ['slug' => 'test-academy']);

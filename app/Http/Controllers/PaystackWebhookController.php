@@ -67,6 +67,22 @@ class PaystackWebhookController extends Controller
                 $tenantId = $metadata['tenant_id'] ?? null;
                 $reference = data_get($data, 'reference');
                 $customerCode = data_get($data, 'customer.customer_code') ?: data_get($data, 'customer.customer_code');
+
+                // A STUDENT course payment (first purchase or a monthly
+                // renewal): those carry no tenant_id metadata, and their
+                // reference is a row in `payments`. Hand it to the intake flow,
+                // which is idempotent on the payment's status.
+                if (! $tenantId && $reference) {
+                    $coursePayment = \App\Models\Payment::query()
+                        ->withoutGlobalScope(\App\Scopes\TenantScope::class)
+                        ->where('reference', (string) $reference)
+                        ->first();
+
+                    if ($coursePayment && $coursePayment->status !== 'success') {
+                        app(LmsIntakeController::class)->confirmFromWebhook($coursePayment, (array) $data);
+                    }
+                }
+
                 if ($tenantId) {
                     $tenant = Tenant::find($tenantId);
                     if ($tenant) {

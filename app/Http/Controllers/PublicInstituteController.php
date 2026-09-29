@@ -411,6 +411,9 @@ class PublicInstituteController extends Controller
             // when there's no distinct pre-recorded price (falls back to `price`).
             'prerecorded_price' => $prerecordedPrice,
             'prerecorded_price_display' => $prerecordedPriceDisplay,
+            // 'monthly' → every price above is per month (the storefront says
+            // "/month" and the student pays again each month).
+            'billing_type' => $course->billing_type ?: LmsCourse::BILLING_ONE_TIME,
         ];
 
         if ($detail) {

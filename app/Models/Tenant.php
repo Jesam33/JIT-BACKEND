@@ -378,7 +378,7 @@ class Tenant extends Model
         return (float) data_get(
             $this->planConfig(),
             'commission_percent',
-            config('saas.platform_commission_percent', 2)
+            config('saas.platform_commission_percent', 5)
         );
     }
 

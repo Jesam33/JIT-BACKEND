@@ -39,7 +39,14 @@ class PaystackService
         return $client;
     }
 
-    public function initializeTransaction(string $email, float $amount, string $reference, array $metadata = [], ?string $callbackUrl = null, ?string $subaccount = null, ?string $currency = null): array
+    /**
+     * `$serviceCharge` (major units, e.g. naira) is the platform's service charge
+     * for THIS payment. With a subaccount it is sent as Paystack's
+     * `transaction_charge`, which overrides the subaccount's own percentage split
+     * for this one transaction: exactly that amount stays with the platform and
+     * the rest settles to the institute. Null keeps the subaccount's split.
+     */
+    public function initializeTransaction(string $email, float $amount, string $reference, array $metadata = [], ?string $callbackUrl = null, ?string $subaccount = null, ?string $currency = null, ?float $serviceCharge = null): array
     {
         $client = $this->client();
 
@@ -69,20 +76,78 @@ class PaystackService
         }
 
         // Route the money to the institute's own Paystack subaccount (its bank),
-        // so course fees settle to the institute, not the platform. The split
-        // (platform commission + who bears the Paystack fee) is defined on the
-        // subaccount at creation. The fee bearer is a platform config knob
-        // (`saas.paystack_fee_bearer`, default `subaccount` → the institute bears
-        // the gateway fee, unchanged). Absent a subaccount, funds settle to the
-        // platform account as before (unchanged for the primary institute).
-        if ($subaccount) {
-            $payload['subaccount'] = $subaccount;
-            $payload['bearer'] = (string) config('saas.paystack_fee_bearer', 'subaccount');
-        }
+        // so course fees settle to the institute, not the platform.
+        $this->applySplit($payload, $subaccount, $serviceCharge);
 
         $response = $client->post($this->baseUrl . '/transaction/initialize', $payload);
 
         return $response->json();
+    }
+
+    /**
+     * Charge a saved, reusable card authorization with no student present: how a
+     * monthly course renews automatically. Same split rules as a checkout. The
+     * email MUST be the one the authorization was created with (Paystack rejects
+     * a mismatch).
+     *
+     * Never throws: returns the raw Paystack body, or a `status:false` shape on a
+     * transport/4xx error, so a declined card is an outcome the caller handles,
+     * not an exception that aborts a whole renewal sweep. A `data.status` of
+     * `success` means the money was taken.
+     */
+    public function chargeAuthorization(string $email, float $amount, string $authorizationCode, string $reference, array $metadata = [], ?string $subaccount = null, ?string $currency = null, ?float $serviceCharge = null): array
+    {
+        $client = $this->client();
+
+        if (! $client) {
+            return ['status' => false, 'message' => 'Payment gateway not configured.'];
+        }
+
+        $payload = [
+            'email' => $email,
+            'amount' => (int) round($amount * 100),
+            'authorization_code' => $authorizationCode,
+            'reference' => $reference,
+            'metadata' => $metadata,
+        ];
+
+        if ($currency) {
+            $payload['currency'] = strtoupper($currency);
+        }
+
+        $this->applySplit($payload, $subaccount, $serviceCharge);
+
+        try {
+            return $client->post($this->baseUrl . '/transaction/charge_authorization', $payload)->json();
+        } catch (\Illuminate\Http\Client\RequestException $e) {
+            return (array) ($e->response?->json() ?? []) + ['status' => false, 'message' => $e->getMessage()];
+        } catch (\Throwable $e) {
+            return ['status' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Route a charge to the institute's subaccount (its bank) with the
+     * platform's service charge held back.
+     *
+     * Absent a subaccount, funds settle to the platform account as before (the
+     * primary institute), and no charge is sent. The fee bearer is a platform
+     * knob (`saas.paystack_fee_bearer`, default `subaccount`: the institute bears
+     * Paystack's own gateway fee, unchanged).
+     */
+    private function applySplit(array &$payload, ?string $subaccount, ?float $serviceCharge): void
+    {
+        if (! $subaccount) {
+            return;
+        }
+
+        $payload['subaccount'] = $subaccount;
+        $payload['bearer'] = (string) config('saas.paystack_fee_bearer', 'subaccount');
+
+        if ($serviceCharge !== null && $serviceCharge >= 0) {
+            // Minor units (kobo/cents), same convention as `amount`.
+            $payload['transaction_charge'] = (int) round($serviceCharge * 100);
+        }
     }
 
     /**

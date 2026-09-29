@@ -29,7 +29,8 @@ class OwnerSetupInvitation extends Notification
     {
         $token = urlencode($this->invitation->token);
         $slug = $this->tenant->slug ?? null;
-        $appDomain = env('APP_DOMAIN');
+        // config(), not env(): env() is null under `config:cache` on live.
+        $appDomain = config('saas.app_domain');
         // What this org calls itself in customer-facing copy, "Institute" for the
         // primary (Jorsas), "Online Academy" (or the owner's override) otherwise.
         $label = $this->tenant ? $this->tenant->entityLabelArray()['singular'] : 'Online Academy';

@@ -6,6 +6,7 @@ use App\Models\LmsSession;
 use App\Models\LmsStudent;
 use App\Models\LmsTeacher;
 use App\Scopes\TenantScope;
+use App\Services\CourseBilling;
 use Closure;
 
 /**
@@ -52,8 +53,13 @@ class EnsureAccountActive
         'api/frontend/lms/staff/account/cancel-deletion',
     ];
 
+    /** The account row deniedPayload() loaded for this request, reused by the billing check. */
+    private LmsStudent|LmsTeacher|null $account = null;
+
     public function handle($request, Closure $next)
     {
+        $this->account = null;
+
         // A purged or purge-scheduled academy is closed to everyone, owner and
         // agent included: only the platform can reverse it, so letting anyone in
         // would offer buttons that cannot work.
@@ -91,7 +97,66 @@ class EnsureAccountActive
 
         $denied = $this->deniedPayload($session);
 
-        return $denied ? $this->refuse($denied) : $next($request);
+        if ($denied) {
+            return $this->refuse($denied);
+        }
+
+        // Monthly course, unpaid past the grace window: the student portal
+        // pauses (402) until they pay. Their records are untouched. The identity,
+        // branding, billing and account routes stay open so the shell can render
+        // the "pay to continue" screen and the payment can go through.
+        if ($session->role === 'student' && ! $this->billingExempt($request->path())) {
+            $billing = $this->lockedBilling($session);
+            if ($billing) {
+                return response()->json([
+                    'payment_required' => true,
+                    'billing' => $billing,
+                    'message' => 'Your monthly payment for ' . ($billing['course_name'] ?? 'your course') . ' is overdue. Pay to continue.',
+                ], 402);
+            }
+        }
+
+        return $next($request);
+    }
+
+    /**
+     * Student routes a paused (unpaid monthly) student may still reach.
+     */
+    private const BILLING_EXEMPT_PREFIXES = [
+        'api/frontend/lms/me',
+        'api/frontend/lms/branding',
+        'api/frontend/lms/course-billing',
+        'api/frontend/lms/account',
+        'api/frontend/lms/profile',
+        'api/frontend/lms/notifications',
+        'api/frontend/lms/feedback',
+    ];
+
+    private function billingExempt(string $path): bool
+    {
+        foreach (self::BILLING_EXEMPT_PREFIXES as $prefix) {
+            if ($path === $prefix || str_starts_with($path, $prefix . '/')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** The billing summary when this student's access is paused, else null. */
+    private function lockedBilling(LmsSession $session): ?array
+    {
+        // Reuse the row deniedPayload() just read for this same session.
+        $student = $this->account instanceof LmsStudent && (int) $this->account->id === (int) $session->user_id
+            ? $this->account
+            : LmsStudent::query()->withoutGlobalScope(TenantScope::class)->find($session->user_id);
+        if (! $student) {
+            return null;
+        }
+
+        $registration = CourseBilling::currentRegistration($student);
+
+        return CourseBilling::isLocked($registration) ? CourseBilling::summary($registration) : null;
     }
 
     /**
@@ -108,6 +173,8 @@ class EnsureAccountActive
             'staff', 'teacher' => LmsTeacher::query()->withoutGlobalScope(TenantScope::class)->find($session->user_id),
             default => null,
         };
+
+        $this->account = $account;
 
         if (! $account) {
             // The row is gone entirely. Let the controller answer "Unauthorized"

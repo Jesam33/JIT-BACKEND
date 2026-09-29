@@ -18,12 +18,24 @@ class Payment extends Model
         'status',
         'gateway',
         'gateway_response',
+        'kind',
+        'platform_fee',
+        'academy_amount',
+        'period_end',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
         'gateway_response' => 'array',
+        'platform_fee' => 'decimal:2',
+        'academy_amount' => 'decimal:2',
+        'period_end' => 'datetime',
     ];
+
+    public const KIND_INITIAL = 'initial';
+
+    /** A monthly course's second-or-later payment (see App\Services\CourseBilling). */
+    public const KIND_RENEWAL = 'renewal';
 
     public function registration(): BelongsTo
     {

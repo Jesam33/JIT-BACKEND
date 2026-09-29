@@ -80,7 +80,7 @@ class TrainingRegistrationController extends Controller
         ]);
 
         if (config('saas.training_email_enabled')) {
-            $adminEmail = env('TRAINING_ADMIN_EMAIL');
+            $adminEmail = config('saas.training_admin_email');
 
             if ($adminEmail) {
                 Mail::to($adminEmail)->send(new TrainingRegistrationSubmittedMail($registration));
@@ -119,7 +119,7 @@ class TrainingRegistrationController extends Controller
 
         return view('admin.training.registrations', [
             'items' => $items,
-            'adminDir' => env('ADMIN_DIR', 'admin'),
+            'adminDir' => config('saas.admin_dir', 'admin'),
             'pendingRegistrations' => $pendingRegistrations,
             'studentCount' => LmsStudent::query()->count(),
             'tracks' => LmsTrack::query()->count(),
@@ -234,7 +234,7 @@ class TrainingRegistrationController extends Controller
 
     private function buildLmsSignupLink(string $email, string $token): string
     {
-        $signupUrl = trim((string) env('LMS_SIGNUP_URL', ''));
+        $signupUrl = trim((string) config('saas.lms_signup_url', ''));
 
         if (! $signupUrl) {
             $baseUrl = config('saas.frontend_url');

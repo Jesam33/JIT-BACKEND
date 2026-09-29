@@ -108,6 +108,8 @@ class NotificationLinks
                 'module' => $id ? '/lms/app/modules/' . $id : '/lms/app/modules',
                 'course' => '/lms/app/modules',
                 'certificate' => '/lms/app/certificates',
+                // Monthly-course reminders, receipts and "access paused".
+                'billing' => '/lms/app/billing',
                 default => '/lms/app/notifications',
             },
         };

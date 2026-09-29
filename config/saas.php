@@ -79,6 +79,10 @@ return [
     'training_admin_email' => env('TRAINING_ADMIN_EMAIL'),
     'admin_dir' => env('ADMIN_DIR', 'admin'),
 
+    // Optional override for the "set up your student account" link in the
+    // training approval email. Blank = the LMS signup page on frontend_url.
+    'lms_signup_url' => env('LMS_SIGNUP_URL', ''),
+
     // The platform's own inbox: where a student's report about an academy and a
     // data-rights request are sent. Falls back to mail.from.address when unset
     // (see AccountSafetyController::platformInbox), so a missing key means "send
@@ -186,11 +190,21 @@ return [
     'notification_email_max_attempts' => (int) env('NOTIFICATION_EMAIL_MAX_ATTEMPTS', 3),
 
 
-    // Platform's commission (percent) retained on every course-fee payment that
-    // settles to an institute's own Paystack subaccount. The remainder settles to
-    // the institute's bank. Set to 0 to take no cut. Applied at subaccount
-    // creation time (Paystack `percentage_charge`).
-    'platform_commission_percent' => (float) env('PLATFORM_COMMISSION_PERCENT', 2),
+    // Platform's service charge (percent) retained on every course-fee payment
+    // that settles to an institute's own Paystack subaccount. The remainder
+    // settles to the institute's bank. This is only the fallback for a plan with
+    // no `commission_percent` of its own; the per-plan values below are what
+    // apply (a flat 5% on all of them).
+    'platform_commission_percent' => (float) env('PLATFORM_COMMISSION_PERCENT', 5),
+
+    // ─── Monthly courses (student pays every month) ────────────────────
+    // Days after a monthly student's paid period ends before their portal access
+    // pauses. Access comes back the moment they pay. Agreed rule: 3 days.
+    'monthly_grace_days' => (int) env('MONTHLY_GRACE_DAYS', 3),
+
+    // How many days before the next monthly payment is due the student gets a
+    // "payment due soon" reminder (once per period).
+    'monthly_reminder_days' => (int) env('MONTHLY_REMINDER_DAYS', 3),
 
     // Default commission (percent of the course price) an admission agent earns on
     // a sale they refer or register. This is the platform-wide DEFAULT; each
@@ -273,11 +287,15 @@ return [
     // (planConfig/planLimit/planFeature/commissionPercent) — never hardcoded at
     // a call site — so the whole pricing model can be retuned here alone:
     //
-    //   • commission_percent — the platform's cut of every course-fee sale that
-    //     settles to the institute's own Paystack subaccount (the split's
-    //     `percentage_charge`). Steps down 5% → 3% → 0% as a self-upgrade nudge
-    //     (Enterprise is 0% too). Applied at subaccount-creation time (Paystack
-    //     freezes the split there).
+    //   • commission_percent — the platform's service charge on every course-fee
+    //     payment that settles to the institute's own Paystack subaccount,
+    //     deducted from what the academy receives. A flat 5% on every plan since
+    //     2026-09-29 (it used to step down 5% → 3% → 0%). Taken per payment: once
+    //     for a one-time course, every month for a monthly course. Sent to
+    //     Paystack as a per-transaction `transaction_charge` (App\Services\
+    //     CourseBilling::serviceCharge), so it applies even to a subaccount whose
+    //     own split was set elsewhere; the subaccount's `percentage_charge` is
+    //     kept in step as a fallback.
     //   • limits{courses,students,staff} — hard caps enforced on create
     //     (App\Support\PlanGate). null = unlimited. Never breaks existing rows;
     //     only blocks going OVER the cap.
@@ -341,7 +359,7 @@ return [
             'name' => 'Basic',
             'label' => 'Grow',
             'price' => (float) env('PLAN_BASIC_PRICE', 5000),
-            'commission_percent' => (float) env('PLAN_BASIC_COMMISSION', 3),
+            'commission_percent' => (float) env('PLAN_BASIC_COMMISSION', 5),
             'limits' => [
                 'courses' => (int) env('PLAN_BASIC_MAX_COURSES', 10),
                 // Unlimited platform students from Basic up (null = unlimited);
@@ -369,7 +387,7 @@ return [
             'name' => 'Pro',
             'label' => 'Scale',
             'price' => (float) env('PLAN_PRO_PRICE', 15000),
-            'commission_percent' => (float) env('PLAN_PRO_COMMISSION', 0),
+            'commission_percent' => (float) env('PLAN_PRO_COMMISSION', 5),
             'limits' => [
                 'courses' => (int) env('PLAN_PRO_MAX_COURSES', 50),
                 // Unlimited platform students (null); the per-class cap bites.
@@ -401,7 +419,7 @@ return [
             // (TenantSignupController only provisions free/basic/pro).
             'price' => null,
             'contact_sales' => true,
-            'commission_percent' => (float) env('PLAN_ENTERPRISE_COMMISSION', 0),
+            'commission_percent' => (float) env('PLAN_ENTERPRISE_COMMISSION', 5),
             'limits' => [
                 // null = unlimited / custom capacity.
                 'courses' => null,

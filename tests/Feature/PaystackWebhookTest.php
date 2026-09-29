@@ -10,10 +10,21 @@ class PaystackWebhookTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** Post a webhook payload with the (optional) HMAC signature header. */
+    private const SECRET = 'sk_test_webhook_secret';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // The webhook fails closed (503) with no secret configured, so the test
+        // environment has to supply one to exercise the signed happy path.
+        config(['services.paystack.secret_key' => self::SECRET]);
+    }
+
+    /** Post a webhook payload signed with the configured secret. */
     private function postWebhook(array $payload)
     {
-        $signature = hash_hmac('sha512', json_encode($payload), env('PAYSTACK_SECRET_KEY', ''));
+        $signature = hash_hmac('sha512', json_encode($payload), self::SECRET);
 
         return $this->withHeaders(['x-paystack-signature' => $signature])
             ->postJson('/api/paystack/webhook', $payload);
@@ -117,5 +128,14 @@ class PaystackWebhookTest extends TestCase
 
         // The unique (event, event_key) index means the duplicate is not recorded twice.
         $this->assertDatabaseCount('paystack_events', 1);
+    }
+
+    public function test_bad_signature_is_rejected(): void
+    {
+        $this->withHeaders(['x-paystack-signature' => 'not-a-real-signature'])
+            ->postJson('/api/paystack/webhook', ['event' => 'transaction.success', 'data' => ['reference' => 'x']])
+            ->assertStatus(401);
+
+        $this->assertDatabaseCount('paystack_events', 0);
     }
 }

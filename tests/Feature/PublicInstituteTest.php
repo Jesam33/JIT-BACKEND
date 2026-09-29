@@ -23,9 +23,18 @@ class PublicInstituteTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function makeTenant(string $slug): Tenant
+    /**
+     * An institute that has linked its payout bank (a Paystack subaccount), as
+     * every non-primary academy must before it can take paid registrations.
+     * Pass $linkedBank=false for the "hasn't finished payment setup" case.
+     */
+    private function makeTenant(string $slug, bool $linkedBank = true): Tenant
     {
-        return Tenant::create(['name' => ucfirst($slug), 'slug' => $slug]);
+        return Tenant::create([
+            'name' => ucfirst($slug),
+            'slug' => $slug,
+            'settings' => $linkedBank ? ['paystack' => ['subaccount_code' => 'ACCT_' . $slug]] : [],
+        ]);
     }
 
     /** Run $fn with $tenant bound, mimicking a resolved request, then unbind. */
@@ -216,6 +225,67 @@ class PublicInstituteTest extends TestCase
 
         $this->assertSame($alpha->id, $payment->tenant_id);
         $this->assertSame('pending', $payment->status);
+
+        // The flat 5% service charge is recorded on the payment (₦50,000 course).
+        $this->assertEquals(2500.00, (float) $payment->platform_fee);
+        $this->assertEquals(47500.00, (float) $payment->academy_amount);
+    }
+
+    public function test_service_charge_is_sent_to_paystack_with_the_subaccount(): void
+    {
+        $this->makeTenant('gamma');
+        $tenant = Tenant::query()->where('slug', 'gamma')->firstOrFail();
+        $course = $this->asTenant($tenant, fn () => LmsCourse::create([
+            'title' => 'Split Course', 'slug' => 'split-course', 'price' => 30000, 'is_active' => true,
+        ]));
+
+        $register = $this->postJson('/api/frontend/training/register', [
+            'first_name' => 'Sam', 'last_name' => 'Learner', 'date_of_birth' => '2000-01-01',
+            'qualification_level' => 'SSCE', 'phone_number' => '08000000000', 'email' => 'split@learner.test',
+            'whatsapp' => '08000000000', 'course_id' => $course->id, 'learning_mode' => 'live', 'institute_slug' => 'gamma',
+        ])->assertCreated();
+
+        $sent = [];
+        $this->mock(PaystackService::class, function ($mock) use (&$sent) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('initializeTransaction')->andReturnUsing(
+                function ($email, $amount, $reference, $metadata = [], $callbackUrl = null, $subaccount = null, $currency = null, $serviceCharge = null) use (&$sent) {
+                    $sent = compact('amount', 'subaccount', 'serviceCharge');
+
+                    return ['data' => ['authorization_url' => 'https://paystack.test/pay/split']];
+                }
+            );
+        });
+
+        $this->postJson('/api/frontend/paystack/initialize', ['registration_id' => $register->json('registration_id')])->assertOk();
+
+        $this->assertSame('ACCT_gamma', $sent['subaccount']);
+        $this->assertEquals(30000.0, (float) $sent['amount']);
+        $this->assertEquals(1500.0, (float) $sent['serviceCharge']);
+    }
+
+    public function test_institute_without_a_linked_bank_cannot_take_payment(): void
+    {
+        // Money safety: fees must never settle into the platform account because
+        // an academy hasn't linked its own bank yet.
+        $tenant = $this->makeTenant('nobank', linkedBank: false);
+        $course = $this->asTenant($tenant, fn () => LmsCourse::create([
+            'title' => 'Unlinked', 'slug' => 'unlinked', 'price' => 20000, 'is_active' => true,
+        ]));
+
+        $register = $this->postJson('/api/frontend/training/register', [
+            'first_name' => 'Sam', 'last_name' => 'Learner', 'date_of_birth' => '2000-01-01',
+            'qualification_level' => 'SSCE', 'phone_number' => '08000000000', 'email' => 'nobank@learner.test',
+            'whatsapp' => '08000000000', 'course_id' => $course->id, 'learning_mode' => 'live', 'institute_slug' => 'nobank',
+        ])->assertCreated();
+
+        $this->mock(PaystackService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('initializeTransaction')->never();
+        });
+
+        $this->postJson('/api/frontend/paystack/initialize', ['registration_id' => $register->json('registration_id')])
+            ->assertStatus(409);
     }
 
     /**

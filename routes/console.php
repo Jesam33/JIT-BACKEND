@@ -54,6 +54,14 @@ Schedule::command('lms:notify-ended-cohorts')
 // from the day the paid period ends until the portal freezes. Daily, not
 // per-minute — it is one reminder per tenant per calendar day, and the tenant's
 // `subscription_reminder_on` stamp keeps a re-run from double-sending.
+// Monthly courses: remind students before their month is due, auto-charge saved
+// cards on the due date (at most once a day), and pause access after the 3-day
+// grace window. Hourly so a due date is acted on the same morning; every step is
+// stamped on the registration, so re-runs never double-charge or double-notify.
+Schedule::command('lms:process-course-renewals')
+    ->hourly()
+    ->withoutOverlapping();
+
 Schedule::command('lms:send-subscription-reminders')
     ->dailyAt('08:00')
     ->withoutOverlapping();

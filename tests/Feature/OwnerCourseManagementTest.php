@@ -84,7 +84,9 @@ class OwnerCourseManagementTest extends TestCase
 
     public function test_owner_creates_course_stamped_with_their_tenant(): void
     {
+        // Basic plan: 30 seats per class. (Free is capped at 1 student, see below.)
         $acme = $this->makeTenant('acme');
+        $acme->update(['plan' => 'basic', 'subscription_status' => 'active', 'current_period_end' => now()->addMonth()]);
         $token = $this->ownerToken($acme);
 
         $response = $this->authed($token)->postJson('/api/frontend/lms/owner/courses', [
@@ -106,6 +108,39 @@ class OwnerCourseManagementTest extends TestCase
             ->first();
         $this->assertNotNull($course);
         $this->assertSame($acme->id, $course->tenant_id);
+    }
+
+    public function test_free_plan_course_capacity_is_clamped_to_the_plan_cap(): void
+    {
+        // Free allows 1 student academy-wide, so a course can't advertise more.
+        $acme = $this->makeTenant('acme');
+        $token = $this->ownerToken($acme);
+
+        $this->authed($token)->postJson('/api/frontend/lms/owner/courses', [
+            'title' => 'Tiny Course',
+            'price' => 10000,
+            'max_students' => 30,
+        ])->assertCreated()->assertJsonPath('course.max_students', 1);
+    }
+
+    public function test_owner_can_create_a_monthly_course(): void
+    {
+        $acme = $this->makeTenant('acme');
+        $token = $this->ownerToken($acme);
+
+        $this->authed($token)->postJson('/api/frontend/lms/owner/courses', [
+            'title' => 'Monthly Coding Club',
+            'price' => 15000,
+            'max_students' => 1,
+            'billing_type' => 'monthly',
+        ])->assertCreated()->assertJsonPath('course.billing_type', 'monthly');
+
+        $this->authed($token)->postJson('/api/frontend/lms/owner/courses', [
+            'title' => 'Bad Billing',
+            'price' => 15000,
+            'max_students' => 1,
+            'billing_type' => 'weekly',
+        ])->assertStatus(422)->assertJsonValidationErrors(['billing_type']);
     }
 
     public function test_owner_update_applies_only_present_fields(): void

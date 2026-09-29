@@ -51,6 +51,23 @@ class AdminController extends BaseLmsController
      * jorsas-only. Same rule as transactionsPage(). Every query is batched
      * (grouped/aggregated in SQL), never per-tenant loops.
      */
+    /**
+     * The platform's cut of one academy's course sales: the service charge
+     * actually recorded on each payment, plus, for payments that predate
+     * per-payment recording (platform_fee NULL), the academy's plan rate as
+     * before. Recording per payment is what keeps a rate change (5/3/0% → flat
+     * 5%) from silently rewriting past earnings.
+     *
+     * @param  object|null  $row  a grouped row with fees + legacy_gross
+     */
+    private static function platformCut(?object $row, float $rate): float
+    {
+        $fees = (float) ($row->fees ?? 0);
+        $legacyGross = (float) ($row->legacy_gross ?? 0);
+
+        return round($fees + $legacyGross * ($rate / 100), 2);
+    }
+
     public function index(Request $request)
     {
         $this->ensureLmsEnabled();
@@ -71,7 +88,7 @@ class AdminController extends BaseLmsController
         $paidByTenant = Payment::query()
             ->withoutGlobalScope($scope)
             ->where('status', 'success')
-            ->selectRaw('tenant_id, COUNT(*) as sales, SUM(amount) as gross')
+            ->selectRaw('tenant_id, COUNT(*) as sales, SUM(amount) as gross, SUM(COALESCE(platform_fee, 0)) as fees, SUM(CASE WHEN platform_fee IS NULL THEN amount ELSE 0 END) as legacy_gross')
             ->groupBy('tenant_id')
             ->get()
             ->keyBy('tenant_id');
@@ -102,6 +119,7 @@ class AdminController extends BaseLmsController
             $row = $paidByTenant->get($t->id);
             $gross = (float) ($row->gross ?? 0);
             $rate = $t->commissionPercent();
+            $commission = static::platformCut($row, $rate);
 
             return [
                 'id' => $t->id,
@@ -113,7 +131,7 @@ class AdminController extends BaseLmsController
                 'courses' => (int) ($coursesByTenant[$t->id] ?? 0),
                 'sales' => (int) ($row->sales ?? 0),
                 'gross' => round($gross, 2),
-                'commission' => round($gross * ($rate / 100), 2),
+                'commission' => $commission,
                 'created_at' => $t->created_at,
             ];
         })->sortByDesc('gross')->values();
@@ -765,7 +783,7 @@ class AdminController extends BaseLmsController
         $paidByTenant = Payment::query()
             ->withoutGlobalScope(\App\Scopes\TenantScope::class)
             ->where('status', 'success')
-            ->selectRaw('tenant_id, COUNT(*) as sales, SUM(amount) as gross')
+            ->selectRaw('tenant_id, COUNT(*) as sales, SUM(amount) as gross, SUM(COALESCE(platform_fee, 0)) as fees, SUM(CASE WHEN platform_fee IS NULL THEN amount ELSE 0 END) as legacy_gross')
             ->groupBy('tenant_id')
             ->get()
             ->keyBy('tenant_id');
@@ -777,7 +795,7 @@ class AdminController extends BaseLmsController
                 $row = $paidByTenant->get($t->id);
                 $gross = (float) ($row->gross ?? 0);
                 $rate = $t->commissionPercent();
-                $commission = round($gross * ($rate / 100), 2);
+                $commission = static::platformCut($row, $rate);
 
                 return [
                     'tenant_name' => $t->name,

@@ -19,6 +19,7 @@ use App\Models\LmsTrack;
 use App\Models\Payment;
 use App\Models\Tenant;
 use App\Models\TrainingRegistration;
+use App\Services\CourseBilling;
 use App\Models\User;
 use App\Scopes\TenantScope;
 use App\Services\PaystackService;
@@ -289,9 +290,23 @@ class OwnerAdminController extends BaseLmsController
                 ->unique()
                 ->flip();
 
+        // Monthly-course standing per student, from their CURRENT registration,
+        // one query for the whole roster (same reason as $paid above).
+        $monthly = $paidRegistrationIds->isEmpty()
+            ? collect()
+            : TrainingRegistration::query()
+                ->whereIn('id', $paidRegistrationIds)
+                ->where('billing_type', LmsCourse::BILLING_MONTHLY)
+                ->get(['id', 'billing_type', 'billing_status', 'paid_until', 'course_price', 'charge_currency', 'course_name', 'tenant_id'])
+                ->keyBy('id');
+
         $students = $students->map(fn (LmsStudent $s) => [
             'id' => $s->id,
             'name' => trim("{$s->first_name} {$s->last_name}") ?: ($s->email ?? 'Student'),
+            // null for one-time courses; otherwise status / paid_until / locked.
+            'billing' => ($reg = $monthly->get($s->training_registration_id))
+                ? \Illuminate\Support\Arr::only(CourseBilling::summary($reg), ['status', 'paid_until', 'access_ends_at', 'locked', 'amount', 'currency'])
+                : null,
             'email' => $s->email,
             'phone' => $s->phone,
             'course' => $s->course?->title,
@@ -1175,7 +1190,7 @@ class OwnerAdminController extends BaseLmsController
             ->withCount(['students', 'tracks'])
             ->withPrerecordedCounts()
             ->latest('id')
-            ->get(['id', 'title', 'slug', 'description', 'requirements', 'price', 'original_price', 'cover_image_path', 'max_students', 'registered_count', 'is_live_available', 'is_prerecorded_available', 'is_active']);
+            ->get(['id', 'title', 'slug', 'description', 'requirements', 'price', 'original_price', 'prerecorded_price', 'billing_type', 'cover_image_path', 'max_students', 'registered_count', 'is_live_available', 'is_prerecorded_available', 'is_active']);
 
         // Build the card context (ratings/instructor/bestseller) once for the
         // whole list to avoid a per-course N+1.
@@ -2216,7 +2231,7 @@ class OwnerAdminController extends BaseLmsController
             'domains' => $domains,
             // Shown as the DNS target the owner points a CNAME at. The platform's
             // own apex is the safe default; ops can override via APP_DOMAIN.
-            'cname_target' => (string) (env('APP_DOMAIN') ?: parse_url((string) config('saas.frontend_url'), PHP_URL_HOST)),
+            'cname_target' => (string) (config('saas.app_domain') ?: parse_url((string) config('saas.frontend_url'), PHP_URL_HOST)),
         ]);
     }
 
@@ -2248,8 +2263,10 @@ class OwnerAdminController extends BaseLmsController
             return response()->json(['message' => 'Enter a valid domain, for example learn.youracademy.com.'], 422);
         }
 
-        // Never let a custom domain shadow the platform's own hosts.
-        $appDomain = strtolower((string) env('APP_DOMAIN'));
+        // Never let a custom domain shadow the platform's own hosts. config(),
+        // not env(): under config:cache env() is null, which silently switched
+        // this guard off and let an academy claim a platform subdomain.
+        $appDomain = strtolower((string) config('saas.app_domain'));
         if ($appDomain !== '' && ($host === $appDomain || str_ends_with($host, '.' . $appDomain))) {
             return response()->json(['message' => 'That domain is reserved by the platform. Use a domain you own.'], 422);
         }
@@ -2765,6 +2782,8 @@ class OwnerAdminController extends BaseLmsController
             // Optional cheaper price for the pre-recorded mode (item 6). Only
             // persisted when pre-recorded is actually offered on this plan.
             'prerecorded_price' => ['nullable', 'numeric', 'min:0.01'],
+            // One-time (default) or monthly: a monthly course's price is per month.
+            'billing_type' => ['nullable', 'in:one_time,monthly'],
             // Capacity is at least 1 seat; the plan-cap clamp below bounds the top.
             'max_students' => ['required', 'integer', 'min:1'],
             'is_live_available' => ['nullable', 'boolean'],
@@ -2795,6 +2814,7 @@ class OwnerAdminController extends BaseLmsController
             'price' => $validated['price'],
             'original_price' => $validated['original_price'] ?? null,
             'prerecorded_price' => $prerecordedPrice,
+            'billing_type' => $validated['billing_type'] ?? LmsCourse::BILLING_ONE_TIME,
             'max_students' => $maxStudents,
             'is_live_available' => $validated['is_live_available'] ?? true,
             'is_prerecorded_available' => $prerecorded,
@@ -2835,6 +2855,9 @@ class OwnerAdminController extends BaseLmsController
             'price' => ['sometimes', 'required', 'numeric', 'min:0.01'],
             'original_price' => ['nullable', 'numeric', 'min:0'],
             'prerecorded_price' => ['nullable', 'numeric', 'min:0.01'],
+            // Only affects NEW registrations: each student's billing type is frozen
+            // when they register (TrainingRegistration::booted).
+            'billing_type' => ['sometimes', 'in:one_time,monthly'],
             'max_students' => ['sometimes', 'required', 'integer', 'min:1'],
             'is_live_available' => ['nullable', 'boolean'],
             'is_prerecorded_available' => ['nullable', 'boolean'],
@@ -2847,7 +2870,7 @@ class OwnerAdminController extends BaseLmsController
         // fields), so a partial save never blanks untouched columns.
         $data = array_intersect_key($validated, array_flip([
             'title', 'description', 'requirements', 'price', 'original_price', 'prerecorded_price',
-            'max_students', 'is_live_available', 'is_prerecorded_available', 'is_active',
+            'billing_type', 'max_students', 'is_live_available', 'is_prerecorded_available', 'is_active',
         ]));
         if (array_key_exists('max_students', $data)) {
             // Same plan-cap clamp as create (see storeCourse): capacity can't exceed
@@ -3109,6 +3132,7 @@ class OwnerAdminController extends BaseLmsController
             'price' => $course->price,
             'original_price' => $course->original_price,
             'prerecorded_price' => $course->prerecorded_price,
+            'billing_type' => $course->billing_type ?: LmsCourse::BILLING_ONE_TIME,
             'cover_image_url' => $course->cover_image_url,
             'rating_average' => $card['rating_average'],
             'rating_count' => $card['rating_count'],

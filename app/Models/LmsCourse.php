@@ -33,6 +33,7 @@ class LmsCourse extends Model
         'price',
         'original_price',
         'prerecorded_price',
+        'billing_type',
         'cover_image_path',
         'max_students',
         'registered_count',
@@ -77,6 +78,17 @@ class LmsCourse extends Model
                 $course->slug = $slug;
             }
         });
+    }
+
+    /** Billed once for the whole course (every course before monthly billing). */
+    public const BILLING_ONE_TIME = 'one_time';
+
+    /** The price is per month; the student pays again each month to keep access. */
+    public const BILLING_MONTHLY = 'monthly';
+
+    public function isMonthly(): bool
+    {
+        return $this->billing_type === self::BILLING_MONTHLY;
     }
 
     public function slotsRemaining(): int

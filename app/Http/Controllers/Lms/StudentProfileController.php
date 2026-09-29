@@ -35,6 +35,9 @@ class StudentProfileController extends BaseLmsController
         return response()->json(array_merge($student->toArray(), [
             'plan' => $this->planForSession($session),
             'tenant' => $this->tenantPayloadForSession($session),
+            // Monthly-course standing, so the shell can send a student whose
+            // access has paused straight to the billing page.
+            'billing' => \App\Services\CourseBilling::summary(\App\Services\CourseBilling::currentRegistration($student)),
         ]));
     }
 

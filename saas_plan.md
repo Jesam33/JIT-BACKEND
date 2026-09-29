@@ -1,119 +1,83 @@
-# JorsasTech → SaaS Plan
+# JorsasTech SaaS: how the platform works
 
-Goal: turn the existing Jorsas single-institute LMS into a multi-tenant, white-label SaaS platform where any institute can run their own branded school on the same codebase.
+A multi-tenant, white-label LMS. Any academy ("institute") signs up, pays, and runs its own branded school on one shared codebase and database. Jorsas (JIT) is the primary institute and runs on the same platform.
 
-## Current state (inventory of what we already have)
+_Last reviewed 2026-09-29. This replaces the original plan, which proposed one database per tenant; that design was not built._
 
-- **Backend**: Laravel 12 + Botble CMS, custom LMS stack
-  - Models: `LmsCourse`, `LmsStudent`, `LmsTeacher`, `LmsTrack`, `LmsBatch`, `LmsClassroom`, `LmsModule`, `LmsMaterial`, `LmsTask`, `LmsEnrollment`, `LmsAttendance*`, `LmsCertificate`, `Chat (LmsMessage/DmThread/GroupChat)`, `Agent*` (commissions/withdrawals), `Paystack payments`
-  - Portals: student (dashboard, modules, timetable, tasks, grading, attendance, certs, chat), staff/teacher (module/content authoring, scheduling, classes via Zoom, tasks, attendance, certs, announcements, reports), agent (referrals, commissions, withdrawals), admin (Botble backend: intake/registration approval, courses, tracks, batches, classrooms, students, agents, payouts)
-  - 68 migrations in `database/migrations`
-  - Payments: Paystack init/verify/webhook
-  - Real-time chat: Laravel Reverb + WebSockets
-  - Classrooms: Zoom Meeting SDK integration
-- **Frontend**: `jorsas-tech-v2/` — Next.js SPA (React 19, Tailwind 4, Redux, Redux-Thunk, pusher-js, Zoom Meeting SDK)
-- **Hard-wired single-tenant assumptions (what we must break):**
-  - No `tenant_id` anywhere (problem solved by DB-per-tenant — no schema changes needed)
-  - Single `.env` config, system-wide super admin
-  - Shared Zoom/Pusher credentials
+## Stack
 
-## Decisions locked (from brainstorming)
+| Part | Where | What |
+|---|---|---|
+| Backend | repo root | Laravel 12 + Botble CMS (the super-admin back office), PHP 8.2 to 8.4, MySQL |
+| Frontend | `jorsas-tech-v2/` (its own git repo) | Next.js 16, React 19, Tailwind 4 |
+| Payments | Paystack | Pay-first signup, plan subscriptions, course fees split to each academy's own bank |
+| Live classes | 8x8 JaaS (Jitsi) | Replaced Zoom |
+| Realtime chat | Laravel Reverb / Pusher, polling fallback | `BROADCAST_CONNECTION=null` falls back to polling |
+| Video lessons | Bunny Stream | Pre-recorded courses |
+| AI materials | Gamma | Pro and above |
 
-| Topic | Decision |
-|---|---|
-| Tenancy model | **DB-per-tenant** — one full MySQL database per institute |
-| Product model | Managed core + **white-label & custom domain/branding** |
-| Billing | Start with **flat tiered subscriptions** (see below), not per-seat or commission cuts |
-| JIT role | **Seed tenant** — migrate Jorsas as tenant #1 and run it live (dogfood) |
+## Tenancy
 
-## Revenue model — recommended
+**One shared database.** Tenant-owned tables carry a `tenant_id` column, and models using the `TenantAware` trait are filtered by a global `TenantScope` that fails closed (no bound tenant, no rows).
 
-- **Flat tiered subscriptions** via Paystack recurring (start here — predictable, simple to build, no payment-processor liability)
-- Do **NOT** take a commission cut of institute course fees initially (regulatory + gateway pain in Nigeria)
+How the tenant is resolved for a request:
 
-Plans (draft):
-- **Starter**: 1 course, 100 students, platform subdomain
-- **Pro**: 10 courses, 1,000 students, agents + Zoom
-- **Scale**: unlimited courses/students, white-label custom domain, priority support
-- 14-day free trial on Pro, then paid
+- `ResolveTenant`: subdomain (`{slug}.jorsastech.com`), a verified custom domain, or the `X-Tenant-Slug` header.
+- `ResolveTenantFromSession`: a logged-in portal request takes its tenant from the bearer session, which wins over any header.
+- Public storefronts (`/i/{slug}`) and payment callbacks bind the tenant from the URL slug or from the record being paid for.
+- `RequireTenant` rejects tenant-scoped routes with no tenant; `BindPrimaryTenant` binds JIT for the back office.
 
-Aside: per-seat metering and commission-cut can be added later without redesign.
+Rules that keep this safe:
 
-## Architecture (DB-per-tenant + white-label)
+- `tenant_id` is not mass-assignable. Use `createForTenant()` / `firstOrCreateForTenant()`.
+- A model whose table has no `tenant_id` must not use `TenantAware`.
+- The console (scheduled jobs) runs unscoped, so every query there names its tenant explicitly.
 
-```
- Operator hub (control plane)                     Tenant app
- ┌──────────────────────────────┐                 ┌─────────────────────┐
- │ Control-plane DB             │  resolves       │ MySQL DB per tenant │
- │ saas_tenants, domains,       │                 │ ALL existing LMS    │
- │ subscriptions, invoices,     │   tenant DB     │ tables UNCHANGED    │
- │ operator_users, audit_logs   │                 │ students, staff,    │
- └──────────────┬───────────────┘   └───────────► │ agents, courses,    │
-                │                                 │ chat                │
- ┌──────────────┴───────────┐                     └─────────▲───────────┘
- │ ResolveTenant middleware │ ◄── host → tenant lookup      │
- └──────────────────────────┘            Request host ──────┘
-                                   Next.js app (white-label SPA)
-```
+## Portals
 
-**Two datastores:**
+| Portal | Path | Who |
+|---|---|---|
+| Student | `/lms/app` | Modules, materials, classroom, timetable, tasks, attendance, certificates, chat, billing (monthly courses) |
+| Staff | `/lms/staff` | Course and module authoring, AI materials, students, attendance, tasks, reports, chat |
+| Academy owner | `/lms/admin` | Setup wizard, branding, domains, plan billing, payout bank, courses and cohorts, staff, students, agents, payments |
+| Admission agents | `/lms/agent` | Referral links, registrations, commissions, withdrawals |
+| Public | `/`, `/i/{slug}`, `/campuses`, `/pricing`, `/signup` | Marketing site, per-academy storefronts, academy directory |
+| Super-admin | `/{ADMIN_DIR}/lms` | Botble back office: every academy, revenue ledger, global announcements |
 
-1. **Control plane DB** (small, central): `tenants` (name, slug, plan, status), `domains` (custom_domain, kind, verified), `subscriptions`, `invoices`, `operator_users`, `audit_logs`. Only the operator (your team) reads/writes this.
+Each portal area has its own layout (`layout.tsx`) that supplies the branded shell. Academies can install their portal as a PWA under their own name and logo.
 
-2. **Tenant DB** — one full per-institute MySQL DB. Contains **exactly the current tables, unmodified**. All 68 migrations run per tenant. Payoff: the entire existing LMS codebase (students, staff, agents, courses, tasks, chat, certs, Paystack) works on this connection with **zero schema changes**.
+## Plans (academy pays the platform)
 
-**Runtime flow:**
+Defined in `config/saas.php` → `plans`, read only through `Tenant::planConfig()`, `planLimit()` and `planFeature()`.
 
-- `ResolveTenant` middleware derives tenant from the host (custom domain first, else `slug.jitsaas.com`), looks up control plane (cached), resolves the tenant connection name.
-- The Laravel `tenant` connection is set lazily at boot. All Eloquent models already use the `default` connection name; we make their configured connection dynamic per-tenant so no per-model changes are needed.
-- Queue workers manually set the tenant connection at job start from the job payload.
+| Plan | Price / month | Courses | Students | Staff | Per class |
+|---|---|---|---|---|---|
+| Free ("Start") | ₦0 | 3 | 1 | 1 | n/a |
+| Basic ("Grow") | ₦5,000 | 10 | unlimited | 5 | 30 |
+| Pro ("Scale") | ₦15,000 | 50 | unlimited | 25 | 50 |
+| Enterprise ("Expand") | contact sales | unlimited | unlimited | unlimited | 50 platform cap |
 
-**White-label & domains:**
+Feature gates (chat, certificates, pre-recorded video, agents, branding removal, analytics, custom domain, AI materials) are per plan in the same config. Past-due freezing of the owner portal (`EnsureSubscriptionActive`) ships switched off: `SUBSCRIPTION_ENFORCE_FREEZE=false`.
 
-- Every tenant gets a free subdomain; can map any custom domain via DNS CNAME.
-- Per-tenant branding stored as JSON in a tenant settings table: `institute_name`, `logo`, `primary_color`, `accent_color`, `copyright`, support email, currency, etc.
-- Next.js SPA renders branding from endpoint `/api/saas/theme` (token-safe) instead of hard-coded site config.
-- Domains map: `sites` table → route TLS (Let's Encrypt), so each tenant keeps SSL.
+## Student payments (student pays the academy)
 
-## Build list — net new ≈ 10% of product effort vs. rework
+- Course fees settle to the **academy's own Paystack subaccount**. A non-primary academy cannot take paid registrations until it links a bank.
+- **Service charge: a flat 5% on every plan**, deducted from the academy's share. Sent to Paystack per transaction (`transaction_charge`) and recorded on each payment (`payments.platform_fee` / `academy_amount`). The owner gets the breakdown on every payment.
+- **One-time or monthly, per course.** A monthly course is billed every month: card payers are re-charged automatically, everyone else gets a pay link; access pauses 3 days after a missed payment and returns on payment; billing stops when the cohort ends or the student cancels. Logic: `App\Services\CourseBilling`; scheduled job `lms:process-course-renewals` (hourly).
+- Admission agents earn a commission (default 5%, set per academy) on the first payment only.
+- Display prices are localized by visitor country; charges are NGN (USD only if `USD_CHARGE_ENABLED`).
 
-Mostly-built and reusable (~90% of product):
-- Whole student portal, staff portal, agent-commission system
-- All migrations/tables, chat, Zoom classrooms, Payments, certificates
-- Next.js frontend pages (only need branding/theming hooks)
+## Deploying
 
-**New components (the actual SaaS infra):**
+1. `php artisan migrate`, then `php artisan config:cache`.
+2. Every setting is read through `config()`, never `env()` at a call site: after `config:cache`, `env()` returns null. This has caused live outages before (login 404, payments 503).
+3. Production flags that must be on: `LMS_FEATURE_ENABLED`, `TRAINING_FEATURE_ENABLED`, `FRONTEND_API_ENABLED`, `TRAINING_EMAIL_ENABLED`.
+4. Set `APP_DOMAIN`, `LMS_BASE_URL` (the public frontend URL used in every emailed link) and live Paystack keys. The frontend needs `LARAVEL_BACKEND_URL`.
+5. Run the scheduler (`php artisan schedule:run` every minute). It drives notification emails, announcements, attendance, cohort-end notices, subscription reminders, account purges and monthly-course renewals.
+6. Point the Paystack webhook at `/api/paystack/webhook`. It handles plan payments and student course payments.
 
-1. `app/Tenancy` — core tenancy passport: `Tenant` (control-plane model), `TenancyService` (boot with `tenant_` connection), `TenantNotFound` exception
-2. Control-plane schema: `tenants`, `domains`, `plans`, `subscriptions`, `invoices`, `operator_users`, `audit_logs`
-3. (optional) domain resolution middleware + caching
-4. Migration-based tenant provisioning — queue job per tenant: build DB, run migrations, seed defaults (default roles, demo track/course)
-5. Onboarding wizard (Next.js): institute name/logo, Paystack keys, Zoom credentials, custom domain, theme pick
-6. Billing — plans table + Paystack recurring, billing-gate middleware enforcing plan limits, trial windows
-7. Per-tenant backups + monitoring/DR
-8. Admin/operator console UI for the team (list tenants, statistics, per-tenant actions, force provision/suspend, etc.)
+## Not built yet
 
-## Phases / implementation order
-
-- **Phase 0 (≈2–3 wks)**: control-plane schema; Tenant-connection resolution; domain routing; provisioning job; prototype a brand new tenant + site
-- **Phase 1**: migrate JIT to tenant #1 (seed tenant); white-label/theme per domain; run it live (JIT dogfoods the platform)
-- **Phase 2**: Paystack subscriptions, plans & limits, trials, billing gates
-- **Phase 3**: sign-up/onboarding flow; provisioning queue; per-tenant backups; monitoring/DR; operator console
-- **Phase 4**: launch self-serve — sign up, pay, provisioning, analytics, etc.
-
-## Notes / selected design
-
-- **JIT = seed tenant (dogfood)**: migrate our current `jorsastech_local` to `tenant_jit`; keep a rollback path (env flag pointing back to the old standalone).
-- **Cap cost**: many tenant DBs is fine — each DB is small and cheap; cap provisioning to what you can maintain.
-- **No per-tenant schema drift**: one migration set, single codebase; provisioning runs migrations per tenant at build time.
-- **Zoom/Pusher credentials are per-tenant secrets** — never shared across tenants.
-
-## Unmade decisions (future)
-
-- Row-level tenancy (shared DB) for thousands of tenants later — a known migration path, not now.
-- Per-seat pricing and commission-sharing for the agent program.
-- Bring-your-own domain TLS (SAN / Let's Encrypt proxying) at scale.
-
----
-
-_Living document — keep in repo, update as phases absorb._
+- Push notifications for the PWA.
+- Bring-your-own-domain TLS at scale.
+- Per-academy database isolation (not planned; the shared-database design is deliberate).

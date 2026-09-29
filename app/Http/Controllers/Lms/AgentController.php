@@ -575,11 +575,11 @@ class AgentController extends BaseLmsController
 
     private function sendWithdrawalEmail(\App\Models\Agent $agent, float $amount): void
     {
-        $adminEmail = env('TRAINING_ADMIN_EMAIL');
+        $adminEmail = config('saas.training_admin_email');
         if (!$adminEmail) return;
 
-        $adminUrl = rtrim(env('APP_URL', 'http://127.0.0.1:8000'), '/')
-            . '/' . trim(env('ADMIN_DIR', 'admin'), '/')
+        $adminUrl = rtrim(config('app.url', 'http://127.0.0.1:8000'), '/')
+            . '/' . trim(config('saas.admin_dir', 'admin'), '/')
             . '/lms/agents/withdrawals';
 
         try {

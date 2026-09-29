@@ -347,6 +347,15 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::post('/api/frontend/lms/profile/photo', [StudentProfileController::class, 'uploadPhoto']);
     Route::get('/api/frontend/lms/certificates', [StudentProfileController::class, 'certificates']);
 
+    // Monthly-course billing (student pays each month). EnsureAccountActive lets
+    // these through even when access has paused for non-payment, so the student
+    // can always pay their way back in.
+    Route::get('/api/frontend/lms/course-billing', [\App\Http\Controllers\Lms\StudentBillingController::class, 'show']);
+    Route::post('/api/frontend/lms/course-billing/renew', [\App\Http\Controllers\Lms\StudentBillingController::class, 'renew'])->middleware('throttle:10,1');
+    Route::get('/api/frontend/lms/course-billing/verify', [\App\Http\Controllers\Lms\StudentBillingController::class, 'verify'])->middleware('throttle:30,1');
+    Route::post('/api/frontend/lms/course-billing/cancel', [\App\Http\Controllers\Lms\StudentBillingController::class, 'cancel']);
+    Route::post('/api/frontend/lms/course-billing/resume', [\App\Http\Controllers\Lms\StudentBillingController::class, 'resume']);
+
     // Student account lifecycle (deactivate / delete / reactivate). The same
     // controller serves the staff block below; it resolves the actor from
     // whichever bearer session the request carries. `reactivate` and
