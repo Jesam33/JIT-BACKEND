@@ -672,6 +672,9 @@ class Tenant extends Model
                 'courses' => $this->planLimit('courses'),
                 'students' => $this->planLimit('students'),
                 'staff' => $this->planLimit('staff'),
+                // Most seats one course can have here: Free 1, Basic 30, Pro and
+                // above 50 (never unlimited). Same rule the course model enforces.
+                'seats_per_course' => \App\Support\PlanGate::courseSeatCap($this),
             ],
             'features' => [
                 'live_classes' => $this->planFeature('live_classes'),

@@ -41,13 +41,36 @@ class PlanGate
     }
 
     /**
-     * Clamp a requested seat count to the platform ceiling. 0 means "unlimited"
-     * on a course (LmsCourse::slotsRemaining() reads 0 that way), and is left
-     * alone: what it resolves to is the academy's plan caps, not this ceiling.
+     * The most seats one course may have at this academy: the tightest of its
+     * plan's academy-wide student cap, its per-class cap and the platform
+     * ceiling. Never 0 ("unlimited"): Free = 1, Basic = 30, Pro and above = 50.
+     * With no tenant known, the platform ceiling applies.
      */
-    public static function clampCourseSeats(int $requested): int
+    public static function courseSeatCap(?Tenant $tenant): int
     {
-        return $requested <= 0 ? $requested : min($requested, static::maxStudentsPerCourse());
+        $limits = array_filter(
+            [
+                $tenant?->planLimit('students'),
+                $tenant?->planLimit('per_course'),
+                static::maxStudentsPerCourse(),
+            ],
+            fn ($v) => $v !== null
+        );
+
+        return max(1, (int) min($limits));
+    }
+
+    /**
+     * Resolve a requested seat count for a course at this academy. Blank / 0
+     * ("as many as allowed") becomes the cap; anything above the cap is clamped
+     * down to it. Enforced for every save in LmsCourse::booted(), so no path
+     * (owner form, setup wizard, host back office, seeding) can store more.
+     */
+    public static function clampCourseSeats(int $requested, ?Tenant $tenant = null): int
+    {
+        $cap = static::courseSeatCap($tenant);
+
+        return $requested <= 0 ? $cap : min($requested, $cap);
     }
     /** Throw a 402 PlanLimitException if the tenant is at/over its course cap. */
     public static function ensureCanAddCourse(Tenant $tenant): void

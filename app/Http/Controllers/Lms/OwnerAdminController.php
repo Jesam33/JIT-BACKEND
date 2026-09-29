@@ -2732,30 +2732,15 @@ class OwnerAdminController extends BaseLmsController
      * tenant_id is accepted from the client.
      */
     /**
-     * Clamp a course's requested capacity to the academy's plan student cap.
-     *
-     * A single course can never seat more students than the plan allows for the
-     * whole academy, so this returns min(requested, planCap). A requested value of
-     * 0 means "unlimited", honoured only on an unlimited plan (null cap); on a
-     * capped plan 0 becomes the plan cap so it isn't silently unbounded.
+     * Clamp a course's requested capacity to what this academy's plan allows
+     * per course: Free = 1, Basic = 30, Pro and above = 50. Blank means "as many
+     * as allowed". The rule lives in PlanGate::clampCourseSeats, which
+     * LmsCourse::booted() also applies on every save, so this is the same number
+     * the model would store anyway; it runs here so the response is exact.
      */
     private function capCourseCapacity(Tenant $tenant, int $requested): int
     {
-        // A course seats no more than the tightest of the academy-wide student
-        // cap, the per-class cap and the platform-wide ceiling, any of which may
-        // be null (unlimited). Resulting per-class ceiling: Free = 1 (dominated by
-        // its 1-student academy cap), Basic = 30, Pro = 50, Enterprise = 50.
-        $limits = array_filter(
-            [$tenant->planLimit('students'), $tenant->planLimit('per_course'), \App\Support\PlanGate::maxStudentsPerCourse()],
-            fn ($v) => $v !== null
-        );
-        $max = empty($limits) ? 0 : min($limits);   // 0 = unlimited (both null)
-
-        if ($requested <= 0) {
-            return $max;                              // blank = "as many as the plan allows"
-        }
-
-        return $max === 0 ? $requested : min($requested, $max);
+        return PlanGate::clampCourseSeats($requested, $tenant);
     }
 
     public function storeCourse(Request $request): JsonResponse

@@ -78,6 +78,33 @@ class LmsCourse extends Model
                 $course->slug = $slug;
             }
         });
+
+        // Seat ceiling, on EVERY save by every path (owner form, setup wizard, host
+        // back office, seeding): never more than the platform ceiling of 50 per
+        // course, whatever the plan (so Pro and above top out at 50), and never
+        // 0/"unlimited", the column's default: a blank capacity becomes the most
+        // this academy's plan allows (Free 1, Basic 30, Pro and above 50). The
+        // owner form additionally applies the plan tier to explicit numbers
+        // (PlanGate::clampCourseSeats); the host back office may exceed a tier
+        // but not the ceiling. Only runs for new rows or a changed capacity, so
+        // unrelated edits never rewrite an old row.
+        static::saving(function (LmsCourse $course): void {
+            if ($course->exists && ! $course->isDirty('max_students')) {
+                return;
+            }
+
+            // `saving` fires BEFORE TenantAware's `creating` stamps tenant_id on a
+            // new row, so fall back to the bound academy, which is the one that
+            // stamp is about to use.
+            $tenant = $course->tenant_id
+                ? Tenant::find($course->tenant_id)
+                : (app()->bound('currentTenant') ? app('currentTenant') : null);
+
+            $requested = (int) $course->max_students;
+            $course->max_students = $requested <= 0
+                ? \App\Support\PlanGate::courseSeatCap($tenant)
+                : min($requested, \App\Support\PlanGate::maxStudentsPerCourse());
+        });
     }
 
     /** Billed once for the whole course (every course before monthly billing). */

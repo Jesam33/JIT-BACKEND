@@ -123,6 +123,57 @@ class OwnerCourseManagementTest extends TestCase
         ])->assertCreated()->assertJsonPath('course.max_students', 1);
     }
 
+    public function test_pro_plan_course_capacity_never_exceeds_50(): void
+    {
+        // Pro: unlimited students overall, but at most 50 in any one course.
+        $acme = $this->makeTenant('acme');
+        $acme->update(['plan' => 'pro', 'subscription_status' => 'active', 'current_period_end' => now()->addMonth()]);
+        $token = $this->ownerToken($acme);
+
+        $this->authed($token)->postJson('/api/frontend/lms/owner/courses', [
+            'title' => 'Big Class',
+            'price' => 20000,
+            'max_students' => 300,
+        ])->assertCreated()->assertJsonPath('course.max_students', 50);
+    }
+
+    public function test_enterprise_plan_course_capacity_never_exceeds_50(): void
+    {
+        // "Pro and above": Enterprise has no per-class limit of its own, so the
+        // platform ceiling is what holds it to 50.
+        $acme = $this->makeTenant('acme');
+        $acme->update(['plan' => 'enterprise', 'subscription_status' => 'active', 'current_period_end' => now()->addMonth()]);
+        $token = $this->ownerToken($acme);
+
+        $this->authed($token)->postJson('/api/frontend/lms/owner/courses', [
+            'title' => 'Huge Class',
+            'price' => 20000,
+            'max_students' => 1000,
+        ])->assertCreated()->assertJsonPath('course.max_students', 50);
+    }
+
+    public function test_no_path_can_store_an_unlimited_or_oversized_course(): void
+    {
+        // The model enforces the rule on every save, so paths that never set a
+        // capacity (setup wizard, seeded demo course, host back office) are held
+        // to it too: blank becomes the plan maximum, over 50 becomes 50.
+        $pro = $this->makeTenant('prolike');
+        $pro->update(['plan' => 'pro']);
+        $free = $this->makeTenant('freebie');
+
+        $blankPro = $this->asTenant($pro, fn () => LmsCourse::create(['title' => 'No capacity given']));
+        $bigPro = $this->asTenant($pro, fn () => LmsCourse::create(['title' => 'Too big', 'max_students' => 500]));
+        $blankFree = $this->asTenant($free, fn () => LmsCourse::create(['title' => 'Free default']));
+
+        $this->assertSame(50, $blankPro->max_students);
+        $this->assertSame(50, $bigPro->max_students);
+        $this->assertSame(1, $blankFree->max_students);
+
+        // Raising an existing course past the ceiling is clamped as well.
+        $blankPro->update(['max_students' => 80]);
+        $this->assertSame(50, $blankPro->fresh()->max_students);
+    }
+
     public function test_owner_can_create_a_monthly_course(): void
     {
         $acme = $this->makeTenant('acme');

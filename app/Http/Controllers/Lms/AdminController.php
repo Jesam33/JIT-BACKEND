@@ -487,11 +487,11 @@ class AdminController extends BaseLmsController
             'description' => $validated['description'] ?? null,
             'requirements' => $validated['requirements'] ?? null,
             'price' => $validated['price'] ?? 0,
-            // Clamped to the platform ceiling: this path is not plan-gated (the
-            // host back office may legitimately exceed an academy's own tier), but
-            // it is still bound by the product rule that one course seats no more
-            // than saas.max_students_per_course. 0 stays 0 = unlimited.
-            'max_students' => \App\Support\PlanGate::clampCourseSeats((int) ($validated['max_students'] ?? 0)),
+            // Not plan-gated (the host back office may exceed an academy's own
+            // tier), but LmsCourse::booted() still holds it to the platform
+            // ceiling of 50 per course, and a blank/0 becomes the academy's plan
+            // maximum rather than "unlimited".
+            'max_students' => (int) ($validated['max_students'] ?? 0),
             'is_live_available' => $validated['is_live_available'] ?? true,
             'is_prerecorded_available' => $validated['is_prerecorded_available'] ?? true,
             'is_active' => true,
