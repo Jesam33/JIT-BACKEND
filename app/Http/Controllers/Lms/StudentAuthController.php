@@ -90,7 +90,12 @@ class StudentAuthController extends BaseLmsController
         $this->bindTenantFromModel($registration);
 
         $resolvedCourseId = $validated['course_id'] ?? $registration->course_id;
-        $resolvedLearningMode = $validated['learning_mode'] ?? $registration->learning_mode ?? 'live';
+        // What was paid for wins: a one-on-one registration stays one-on-one
+        // whatever the signup page sends (it only knows live / pre-recorded),
+        // and the page can't turn a group purchase into one-on-one either.
+        $resolvedLearningMode = $registration->learning_mode === LmsStudent::MODE_ONE_ON_ONE
+            ? LmsStudent::MODE_ONE_ON_ONE
+            : ($validated['learning_mode'] ?? $registration->learning_mode ?? 'live');
 
         $student = LmsStudent::query()->updateOrCreate(
             ['email' => $registration->email],
@@ -140,11 +145,14 @@ class StudentAuthController extends BaseLmsController
 
                 LmsGroupChat::query()->firstOrCreate(['track_id' => $track->id]);
 
-                LmsDmThread::query()->firstOrCreate([
-                    'student_id' => $student->id,
-                    'instructor_id' => $track->instructor_id,
-                    'track_id' => $track->id,
-                ]);
+                // Unassigned cohort: the thread is created once an instructor is.
+                if ($track->instructor_id) {
+                    LmsDmThread::query()->firstOrCreate([
+                        'student_id' => $student->id,
+                        'instructor_id' => $track->instructor_id,
+                        'track_id' => $track->id,
+                    ]);
+                }
             }
         }
 
@@ -217,11 +225,14 @@ class StudentAuthController extends BaseLmsController
 
                 LmsGroupChat::query()->firstOrCreate(['track_id' => $track->id]);
 
-                LmsDmThread::query()->firstOrCreate([
-                    'student_id' => $student->id,
-                    'instructor_id' => $track->instructor_id,
-                    'track_id' => $track->id,
-                ]);
+                // Unassigned cohort: the thread is created once an instructor is.
+                if ($track->instructor_id) {
+                    LmsDmThread::query()->firstOrCreate([
+                        'student_id' => $student->id,
+                        'instructor_id' => $track->instructor_id,
+                        'track_id' => $track->id,
+                    ]);
+                }
             }
         }
 

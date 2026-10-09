@@ -20,6 +20,7 @@ class LmsSession extends Model
         // "new sign-in" alert and listed on the profile; see LoginDeviceTracker.
         'ip',
         'user_agent',
+        'device_fingerprint',
         'last_seen_at',
     ];
 
@@ -51,6 +52,9 @@ class LmsSession extends Model
         return [
             'ip' => $request->ip(),
             'user_agent' => mb_substr((string) $request->userAgent(), 0, 255),
+            // Which device opened this session (LoginDeviceTracker), so "sign out
+            // this device" finds it even after the device's IP has changed.
+            'device_fingerprint' => \App\Support\LoginDeviceTracker::fingerprint($request),
             // Every session is alive the moment it is minted, and this is the
             // field the "sign out other devices" list sorts by.
             'last_seen_at' => now(),

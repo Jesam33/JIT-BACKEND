@@ -93,11 +93,17 @@ class StudentChatController extends BaseLmsController
         }
 
         $groupChat = LmsGroupChat::query()->firstOrCreate(['track_id' => $track->id]);
-        $dmThread = LmsDmThread::query()->firstOrCreate([
-            'student_id' => $session->user_id,
-            'instructor_id' => $track->instructor_id,
-            'track_id' => $track->id,
-        ]);
+        // DM goes to the student's teacher (one-on-one teacher, else the cohort
+        // instructor); nobody yet → no thread.
+        $me = \App\Models\LmsStudent::query()->find($session->user_id);
+        $dmInstructorId = $me ? \App\Services\OneOnOne::dmInstructorId($me, $track) : $track->instructor_id;
+        $dmThread = $dmInstructorId
+            ? LmsDmThread::query()->firstOrCreate([
+                'student_id' => $session->user_id,
+                'instructor_id' => $dmInstructorId,
+                'track_id' => $track->id,
+            ])
+            : null;
 
         $unreadNotifs = LmsNotification::query()
             ->where('student_id', $session->user_id)
@@ -110,24 +116,28 @@ class StudentChatController extends BaseLmsController
             ->where('chat_id', $groupChat->id)
             ->first();
 
-        $unreadGroup = LmsMessage::query()
+        // One-on-one students aren't in the group chat, so no group unread badge.
+        $unreadGroup = $me?->isOneOnOne() ? 0 : LmsMessage::query()
             ->where('chat_type', 'group')
             ->where('chat_id', $groupChat->id)
             ->whereNull('deleted_at')
             ->when($groupReadState?->last_read_at, fn ($q) => $q->where('created_at', '>', $groupReadState->last_read_at))
             ->count();
 
-        $dmReadState = LmsChatReadState::query()
-            ->where('student_id', $session->user_id)
-            ->where('chat_type', 'dm')
-            ->where('chat_id', $dmThread->id)
-            ->first();
+        $unreadDm = 0;
+        if ($dmThread) {
+            $dmReadState = LmsChatReadState::query()
+                ->where('student_id', $session->user_id)
+                ->where('chat_type', 'dm')
+                ->where('chat_id', $dmThread->id)
+                ->first();
 
-        $unreadDm = LmsMessage::query()
-            ->where('chat_type', 'dm')
-            ->where('chat_id', $dmThread->id)
-            ->when($dmReadState?->last_read_at, fn ($q) => $q->where('created_at', '>', $dmReadState->last_read_at))
-            ->count();
+            $unreadDm = LmsMessage::query()
+                ->where('chat_type', 'dm')
+                ->where('chat_id', $dmThread->id)
+                ->when($dmReadState?->last_read_at, fn ($q) => $q->where('created_at', '>', $dmReadState->last_read_at))
+                ->count();
+        }
 
         return response()->json([
             'unread_notifications' => $unreadNotifs,
@@ -143,6 +153,10 @@ class StudentChatController extends BaseLmsController
         if (! $session) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
+        if ($blocked = $this->groupChatBlockedForOneOnOne($session->user_id)) {
+            return $blocked;
+        }
+
         [$track, $groupChat] = $this->ensureStudentTrackContext($session->user_id);
         $this->markGroupAsRead($session->user_id, $groupChat->id);
         return response()->json(['ok' => true]);
@@ -156,7 +170,9 @@ class StudentChatController extends BaseLmsController
             return response()->json(['message' => 'Unauthorized'], 401);
         }
         [$track, $groupChat, $dmThread] = $this->ensureStudentTrackContext($session->user_id);
-        $this->markDmAsRead($session->user_id, $dmThread->id);
+        if ($dmThread) {
+            $this->markDmAsRead($session->user_id, $dmThread->id);
+        }
         return response()->json(['ok' => true]);
     }
 
@@ -212,6 +228,22 @@ class StudentChatController extends BaseLmsController
         return response()->json($message, 201);
     }
 
+    /**
+     * One-on-one students chat privately with their teacher and are not in the
+     * cohort's group chat. A 403 for them, null for everyone else.
+     */
+    private function groupChatBlockedForOneOnOne(int $studentId): ?JsonResponse
+    {
+        $student = \App\Models\LmsStudent::query()->find($studentId);
+
+        return $student && $student->isOneOnOne()
+            ? response()->json([
+                'message' => 'You take this course one-on-one, so you chat privately with your teacher instead of in the group chat.',
+                'one_on_one' => true,
+            ], 403)
+            : null;
+    }
+
     public function chatBootstrap(Request $request): JsonResponse
     {
         $this->ensureLmsEnabled();
@@ -223,6 +255,7 @@ class StudentChatController extends BaseLmsController
         }
 
         [$track, $groupChat, $dmThread] = $this->ensureStudentTrackContext($session->user_id);
+        $oneOnOne = (bool) \App\Models\LmsStudent::query()->find($session->user_id)?->isOneOnOne();
 
         return response()->json([
             'track' => [
@@ -230,15 +263,18 @@ class StudentChatController extends BaseLmsController
                 'name' => $track->name,
                 'course_title' => $track->course?->title,
             ],
-            'group_chat' => [
+            // One-on-one students: private chat with their teacher only.
+            'one_on_one' => $oneOnOne,
+            'group_chat' => $oneOnOne ? null : [
                 'id' => $groupChat->id,
                 'track_id' => $groupChat->track_id,
             ],
-            'dm_thread' => [
+            // Null while the cohort has no instructor assigned.
+            'dm_thread' => $dmThread ? [
                 'id' => $dmThread->id,
                 'instructor_id' => $dmThread->instructor_id,
                 'instructor_name' => optional($dmThread->instructor)->name,
-            ],
+            ] : null,
         ]);
     }
 
@@ -250,6 +286,10 @@ class StudentChatController extends BaseLmsController
 
         if (! $session) {
             return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if ($blocked = $this->groupChatBlockedForOneOnOne($session->user_id)) {
+            return $blocked;
         }
 
         [$track, $groupChat] = $this->ensureStudentTrackContext($session->user_id);
@@ -294,6 +334,10 @@ class StudentChatController extends BaseLmsController
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        if ($blocked = $this->groupChatBlockedForOneOnOne($session->user_id)) {
+            return $blocked;
+        }
+
         [$track, $groupChat] = $this->ensureStudentTrackContext($session->user_id);
 
         $students = LmsEnrollment::query()
@@ -303,6 +347,8 @@ class StudentChatController extends BaseLmsController
             ->pluck('student')
             ->filter()
             ->reject(fn ($s) => (int) $s->id === $session->user_id)
+            // One-on-one students aren't in the group chat, so can't be tagged.
+            ->reject(fn ($s) => $s->isOneOnOne())
             ->map(fn ($s) => [
                 'id' => $s->id,
                 'name' => trim($s->first_name . ' ' . $s->last_name),
@@ -327,6 +373,10 @@ class StudentChatController extends BaseLmsController
 
         if (! $session) {
             return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        if ($blocked = $this->groupChatBlockedForOneOnOne($session->user_id)) {
+            return $blocked;
         }
 
         [$track, $groupChat] = $this->ensureStudentTrackContext($session->user_id);
@@ -455,6 +505,10 @@ class StudentChatController extends BaseLmsController
 
         [$track, $groupChat, $dmThread] = $this->ensureStudentTrackContext($session->user_id);
 
+        if (! $dmThread) {
+            return response()->json([]);
+        }
+
         $this->markDmAsRead($session->user_id, $dmThread->id);
 
         $messages = LmsMessage::query()
@@ -494,6 +548,13 @@ class StudentChatController extends BaseLmsController
         }
 
         [$track, $groupChat, $dmThread] = $this->ensureStudentTrackContext($session->user_id);
+
+        if (! $dmThread) {
+            return response()->json([
+                'message' => "Your class doesn't have an instructor assigned yet. You can message them here once your academy assigns one.",
+                'no_instructor' => true,
+            ], 422);
+        }
 
         $this->markDmAsRead($session->user_id, $dmThread->id);
 
@@ -728,8 +789,9 @@ class StudentChatController extends BaseLmsController
 
         $message = LmsMessage::query()->whereNull('deleted_at')->findOrFail($id);
 
-        $reachable = ($message->chat_type === 'group' && (int) $message->chat_id === (int) $groupChat->id)
-            || ($message->chat_type === 'dm' && (int) $message->chat_id === (int) $dmThread->id);
+        $isOneOnOne = (bool) \App\Models\LmsStudent::query()->find($session->user_id)?->isOneOnOne();
+        $reachable = ($message->chat_type === 'group' && ! $isOneOnOne && (int) $message->chat_id === (int) $groupChat->id)
+            || ($message->chat_type === 'dm' && $dmThread && (int) $message->chat_id === (int) $dmThread->id);
 
         if (! $reachable) {
             return response()->json(['message' => 'Not allowed.'], 403);

@@ -6,6 +6,7 @@ use App\Models\LmsCourse;
 use App\Models\Tenant;
 use App\Models\TrainingRegistration;
 use App\Services\CourseBilling;
+use App\Services\CoursePayments;
 use App\Services\PaystackService;
 use App\Support\Notify;
 use Illuminate\Console\Command;
@@ -15,10 +16,14 @@ use Illuminate\Support\Facades\Log;
  * The monthly-course renewal sweep. For every monthly registration still being
  * billed, in this order:
  *
- *   1. ENDED   the student moved to another course, or their cohort finishes
- *              before the next month starts → stop billing for good (no lock).
- *   2. DUE SOON  within saas.monthly_reminder_days of paid_until → one reminder
- *              per period (billing_reminded_for).
+ *   1. ENDED   the cohort finishes before the next month, the course was
+ *              deleted, the academy closed, or the student was suspended,
+ *              deleted or moved course → stop billing for good (no lock).
+ *              See CourseBilling::endReason(); most of these are also stopped
+ *              immediately when they happen, this is the safety net.
+ *   2. DUE SOON  within saas.monthly_reminder_days (7) of paid_until → a
+ *              reminder every day, at/after saas.monthly_reminder_hour local
+ *              time (billing_reminded_for = when the last one went out).
  *   3. DUE     paid_until has passed and the month is unpaid → charge the saved
  *              card (at most once a day, billing_last_attempt_at); no card, or
  *              the charge failed → past_due and a "pay now" notice with a link.
@@ -74,19 +79,12 @@ class ProcessCourseRenewals extends Command
         $now = now();
         $cancelled = $registration->billing_status === CourseBilling::STATUS_CANCELLED;
 
-        // 1. Ended: stop billing for good, and say so once.
-        if (CourseBilling::shouldEnd($registration)) {
+        // 1. Ended: stop billing for good (cohort finished, course deleted,
+        // academy closed, student suspended or moved on), and say why once.
+        if ($reason = CourseBilling::endReason($registration)) {
             $stats['ended']++;
             if (! $dry) {
-                $registration->forceFill(['billing_status' => CourseBilling::STATUS_ENDED])->save();
-                if (! $cancelled) {
-                    CourseBilling::notifyStudent(
-                        $registration,
-                        'billing_ended',
-                        'No more monthly payments',
-                        'Your course ' . $registration->course_name . ' is finishing, so you will not be charged again.'
-                    );
-                }
+                CourseBilling::endBilling($registration, $reason);
             }
 
             return;
@@ -111,28 +109,17 @@ class ProcessCourseRenewals extends Command
             return;
         }
 
-        // 2. Due soon: one reminder per period.
-        $reminderDays = max(0, (int) config('saas.monthly_reminder_days', 3));
+        // 2. Due soon: a reminder EVERY DAY of the last week (portal + email),
+        // sent once per local day at/after the reminder hour so it never lands
+        // at night. billing_reminded_for holds when the last one went out.
         if ($now->lessThan($paidUntil)) {
-            $remindFrom = $paidUntil->copy()->subDays($reminderDays);
-            $alreadyReminded = $registration->billing_reminded_for && $registration->billing_reminded_for->equalTo($paidUntil);
+            $remindFrom = $paidUntil->copy()->subDays(max(0, (int) config('saas.monthly_reminder_days', 7)));
 
-            if ($now->greaterThanOrEqualTo($remindFrom) && ! $alreadyReminded) {
+            if ($now->greaterThanOrEqualTo($remindFrom) && $this->reminderDueToday($registration, $now)) {
                 $stats['reminded']++;
                 if (! $dry) {
-                    $card = CourseBilling::authorization($registration);
-                    $amount = CourseBilling::money($registration->charge_currency, (float) $registration->course_price);
-                    CourseBilling::notifyStudent(
-                        $registration,
-                        'billing_due_soon',
-                        'Your next monthly payment is due ' . $paidUntil->format('j M'),
-                        $card
-                            ? 'We will charge ' . $amount . ' for ' . $registration->course_name . ' to your card ending '
-                                . ($card['last4'] ?? '') . ' on ' . $paidUntil->format('j M Y') . '. Nothing to do if that card is still good.'
-                            : 'Your ' . $amount . ' payment for ' . $registration->course_name . ' is due on '
-                                . $paidUntil->format('j M Y') . '. Open Billing in your portal to pay for next month.'
-                    );
-                    $registration->forceFill(['billing_reminded_for' => $paidUntil])->save();
+                    $this->sendDueSoonReminder($registration, $paidUntil, $now);
+                    $registration->forceFill(['billing_reminded_for' => $now])->save();
                 }
             }
 
@@ -171,37 +158,79 @@ class ProcessCourseRenewals extends Command
         }
     }
 
+    /**
+     * Whether today's reminder is still owed: it is past the reminder hour in
+     * the reminder timezone, and none has gone out yet on this local day.
+     */
+    private function reminderDueToday(TrainingRegistration $registration, \Illuminate\Support\Carbon $now): bool
+    {
+        $tz = (string) config('saas.monthly_reminder_timezone', 'Africa/Lagos');
+        $local = $now->copy()->setTimezone($tz);
+
+        if ($local->hour < (int) config('saas.monthly_reminder_hour', 8)) {
+            return false;
+        }
+
+        $last = $registration->billing_reminded_for;
+
+        return ! $last || ! $last->copy()->setTimezone($tz)->isSameDay($local);
+    }
+
+    /** "Due in 5 days" / "due tomorrow" / "due today", plus how it will be paid. */
+    private function sendDueSoonReminder(TrainingRegistration $registration, \Illuminate\Support\Carbon $paidUntil, \Illuminate\Support\Carbon $now): void
+    {
+        $tz = (string) config('saas.monthly_reminder_timezone', 'Africa/Lagos');
+        $daysLeft = (int) $now->copy()->setTimezone($tz)->startOfDay()
+            ->diffInDays($paidUntil->copy()->setTimezone($tz)->startOfDay());
+
+        $when = match (true) {
+            $daysLeft <= 0 => 'today',
+            $daysLeft === 1 => 'tomorrow',
+            default => "in {$daysLeft} days",
+        };
+
+        $date = $paidUntil->copy()->setTimezone($tz)->format('j M Y');
+        $card = CourseBilling::authorization($registration);
+        $amount = CourseBilling::money($registration->charge_currency, (float) $registration->course_price);
+        $grace = CourseBilling::graceDays();
+
+        CourseBilling::notifyStudent(
+            $registration,
+            'billing_due_soon',
+            "Your monthly payment is due {$when}",
+            $card
+                ? "We will charge {$amount} for {$registration->course_name} to your card ending " . ($card['last4'] ?? '')
+                    . " on {$date}. Nothing to do if that card is still good; to use another, pay from Billing in your portal."
+                : "Your {$amount} payment for {$registration->course_name} is due on {$date}. Pay from Billing in your portal."
+                    . " If it isn't paid, your access pauses {$grace} day" . ($grace === 1 ? '' : 's') . ' after that date.'
+        );
+    }
+
     /** Charge the saved card for the next month. True when the money was taken. */
     private function chargeCard(TrainingRegistration $registration, array $card, PaystackService $paystack): bool
     {
         $registration->forceFill(['billing_last_attempt_at' => now()])->save();
 
-        if (! $paystack->isConfigured()) {
+        // The card is charged through the gateway that saved it (Paystack
+        // authorization or Flutterwave card token).
+        $gateway = ($card['gateway'] ?? CoursePayments::PAYSTACK) === CoursePayments::FLUTTERWAVE
+            ? CoursePayments::flutterwave()
+            : $paystack;
+        if (! $gateway->isConfigured()) {
             return false;
         }
 
         $tenant = Tenant::find($registration->tenant_id);
-        $subaccount = CourseBilling::subaccountCode($tenant);
 
-        // Never collect a non-primary academy's fees into the platform account.
-        if ($tenant && ! $tenant->isPrimary() && ! $subaccount) {
+        // Never collect a non-primary academy's fees into the platform account
+        // (re-checked inside chargeSaved for the card's own gateway).
+        if ($tenant && ! $tenant->isPrimary() && ! CoursePayments::linked($tenant)) {
             return false;
         }
 
-        [$payment, $fee] = CourseBilling::newRenewalPayment($registration);
+        [$payment, $fee] = CourseBilling::newRenewalPayment($registration, $card['gateway'] ?? CoursePayments::PAYSTACK);
 
-        $response = $paystack->chargeAuthorization(
-            $registration->email,
-            (float) $payment->amount,
-            (string) $card['code'],
-            $payment->reference,
-            ['registration_id' => $registration->id, 'course_name' => $registration->course_name, 'purpose' => 'monthly_renewal'],
-            $subaccount,
-            $payment->currency,
-            $fee
-        );
-
-        $data = (array) ($response['data'] ?? []);
+        $data = CoursePayments::chargeSaved($payment, $tenant, $card, (string) $registration->email, $fee);
 
         if (($data['status'] ?? '') === 'success') {
             return CourseBilling::completeRenewal($payment, $data) !== 'review';
@@ -212,13 +241,13 @@ class ProcessCourseRenewals extends Command
         // gateway can still confirm later through the webhook.
         $payment->update([
             'status' => in_array($data['status'] ?? '', ['pending', 'ongoing', 'send_otp', 'send_pin'], true) ? 'pending' : 'failed',
-            'gateway_response' => $response,
+            'gateway_response' => $data,
         ]);
 
         Log::info('Monthly auto-charge not completed', [
             'registration_id' => $registration->id,
             'status' => $data['status'] ?? null,
-            'message' => $response['message'] ?? ($data['gateway_response'] ?? null),
+            'message' => $data['message'] ?? ($data['gateway_response'] ?? null),
         ]);
 
         return false;

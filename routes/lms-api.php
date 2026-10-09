@@ -72,9 +72,15 @@ Route::get('/api/onboarding-status', [\App\Http\Controllers\PublicPagesControlle
 Route::get('/api/frontend/lms/owner-summary', [\App\Http\Controllers\PublicPagesController::class, 'ownerSummary']);
 
 // Registration + payment flow
+// Early "already enrolled?" check as the visitor types their email. Throttled
+// harder than its usefulness needs, to keep it useless for probing rosters.
+Route::post('/api/frontend/training/check-enrolment', [LmsIntakeController::class, 'checkEnrolment'])->middleware('throttle:15,1');
 Route::post('/api/frontend/training/register', [LmsIntakeController::class, 'register'])->middleware('throttle:10,1');Route::post('/api/frontend/paystack/initialize', [LmsIntakeController::class, 'initializePayment']);
 Route::get('/api/frontend/paystack/verify', [LmsIntakeController::class, 'verifyPayment']);
 Route::post('/api/frontend/paystack/webhook', [LmsIntakeController::class, 'webhook']);
+// Flutterwave: every student payment (course fees, renewals, extra sessions).
+// Set this URL + a secret hash on the Flutterwave dashboard (Settings > Webhooks).
+Route::post('/api/frontend/flutterwave/webhook', [LmsIntakeController::class, 'flutterwaveWebhook'])->middleware('throttle:120,1');
 // Generic Paystack webhook endpoint for subscriptions and transactions
 Route::post('/api/paystack/webhook', [\App\Http\Controllers\PaystackWebhookController::class, 'handle']);
 
@@ -220,6 +226,8 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::post('/api/frontend/lms/owner/courses', [OwnerAdminController::class, 'storeCourse']);
     Route::put('/api/frontend/lms/owner/courses/{id}', [OwnerAdminController::class, 'updateCourse']);
     Route::delete('/api/frontend/lms/owner/courses/{id}', [OwnerAdminController::class, 'destroyCourse']);
+    // Stop monthly billing for every student of a course (students keep access).
+    Route::post('/api/frontend/lms/owner/courses/{id}/stop-monthly-billing', [OwnerAdminController::class, 'stopCourseBilling']);
     // Course storefront cover image (upload / remove) — multipart, owner-scoped.
     Route::post('/api/frontend/lms/owner/courses/{id}/cover', [OwnerAdminController::class, 'uploadCourseCover']);
 
@@ -232,6 +240,14 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::post('/api/frontend/lms/owner/students/{id}/cancel-deletion', [OwnerAdminController::class, 'cancelStudentDeletion']);
     Route::delete('/api/frontend/lms/owner/students/{id}', [OwnerAdminController::class, 'destroyStudent']);
     Route::post('/api/frontend/lms/owner/students/{id}/resend-invite', [OwnerAdminController::class, 'resendStudentInvite']);
+    // One-on-one overview for a month (per teacher / student / session) and the
+    // owner's final say on what happened at a session.
+    Route::get('/api/frontend/lms/owner/one-on-one', [\App\Http\Controllers\Lms\OwnerOneOnOneController::class, 'overview']);
+    Route::post('/api/frontend/lms/owner/one-on-one/sessions/{sessionId}/outcome', [\App\Http\Controllers\Lms\OwnerOneOnOneController::class, 'outcome']);
+    // Assign / change a one-on-one student's teacher.
+    Route::post('/api/frontend/lms/owner/students/{id}/one-on-one-teacher', [OwnerAdminController::class, 'assignOneOnOneTeacher']);
+    // Stop monthly billing for one student (they keep access).
+    Route::post('/api/frontend/lms/owner/students/{id}/stop-monthly-billing', [OwnerAdminController::class, 'stopStudentBilling']);
     // Owner course invite: attach a student to a specific course — paid via the
     // academy's own Paystack (pay-first, provisioned on confirmation) or comped
     // straight in. Distinct from the bulk importer above (course-less accounts).
@@ -303,10 +319,15 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
 
     // Owner course-fee payout: link the institute's own Paystack subaccount so
     // course fees settle to its bank (institute collects, not the platform).
-    Route::get('/api/frontend/lms/owner/payment-settings', [OwnerAdminController::class, 'paymentSettings']);
-    Route::post('/api/frontend/lms/owner/payment-settings', [OwnerAdminController::class, 'updatePaymentSettings']);
+    // Course payments: academy country/currency + the bank student payments
+    // settle to (Flutterwave; pre-move Paystack links still honoured).
+    Route::get('/api/frontend/lms/owner/payment-settings', [\App\Http\Controllers\Lms\OwnerPayoutController::class, 'show']);
+    Route::post('/api/frontend/lms/owner/payment-settings', [\App\Http\Controllers\Lms\OwnerPayoutController::class, 'update']);
+    Route::post('/api/frontend/lms/owner/academy-country', [\App\Http\Controllers\Lms\OwnerPayoutController::class, 'setCountry']);
+    Route::get('/api/frontend/lms/owner/payout-banks', [\App\Http\Controllers\Lms\OwnerPayoutController::class, 'banks'])->middleware('throttle:60,1');
+    Route::get('/api/frontend/lms/owner/payout-banks/{bankId}/branches', [\App\Http\Controllers\Lms\OwnerPayoutController::class, 'branches'])->whereNumber('bankId')->middleware('throttle:60,1');
     // Confirm the account-holder name before linking (Paystack /bank/resolve).
-    Route::post('/api/frontend/lms/owner/resolve-account', [OwnerAdminController::class, 'resolveBankAccount'])->middleware('throttle:30,1');
+    Route::post('/api/frontend/lms/owner/resolve-account', [\App\Http\Controllers\Lms\OwnerPayoutController::class, 'resolve'])->middleware('throttle:30,1');
 
     // Owner custom domains (Pro/Enterprise): point learn.youracademy.com at the
     // platform. Add → publish DNS → verify (TXT check) → the domain resolves the
@@ -402,6 +423,16 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::delete('/api/frontend/lms/notifications/{id}', [StudentDashboardController::class, 'dismissNotification']);
     Route::post('/api/frontend/lms/notifications/clear', [StudentDashboardController::class, 'clearNotifications']);
     Route::get('/api/frontend/lms/attendance', [StudentDashboardController::class, 'attendance']);
+
+    // One-on-one self-booking: open slots in the teacher's week, book, cancel
+    // (inside the cancellation window). Rules in App\Services\OneOnOneBooking.
+    Route::get('/api/frontend/lms/one-on-one/booking', [\App\Http\Controllers\Lms\StudentOneOnOneController::class, 'show']);
+    Route::post('/api/frontend/lms/one-on-one/booking', [\App\Http\Controllers\Lms\StudentOneOnOneController::class, 'book'])->middleware('throttle:20,1');
+    Route::post('/api/frontend/lms/one-on-one/booking/{sessionId}/cancel', [\App\Http\Controllers\Lms\StudentOneOnOneController::class, 'cancel'])->middleware('throttle:20,1');
+    Route::post('/api/frontend/lms/one-on-one/booking/{sessionId}/report-no-show', [\App\Http\Controllers\Lms\StudentOneOnOneController::class, 'reportNoShow'])->middleware('throttle:10,1');
+    // Extra sessions once the allowance is used (academy's Paystack, 5% service charge).
+    Route::post('/api/frontend/lms/one-on-one/extras', [\App\Http\Controllers\Lms\StudentOneOnOneController::class, 'buyExtras'])->middleware('throttle:10,1');
+    Route::get('/api/frontend/lms/one-on-one/extras/verify', [\App\Http\Controllers\Lms\StudentOneOnOneController::class, 'verifyExtras'])->middleware('throttle:30,1');
 
     // Student course rating (Udemy-style ★). Enrolled-only gate lives in the
     // controller; a student can only rate the course they're enrolled in. Kept
@@ -584,6 +615,22 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
         Route::get('/api/frontend/lms/staff/scheduled-classes', [StaffModuleController::class, 'classes']);
         Route::put('/api/frontend/lms/staff/scheduled-classes/{classId}', [StaffModuleController::class, 'updateClass']);
         Route::delete('/api/frontend/lms/staff/scheduled-classes/{classId}', [StaffModuleController::class, 'destroyClass']);
+
+        // One-on-one students and their private sessions (same Timetable
+        // permission: private sessions are timetable items too).
+        Route::get('/api/frontend/lms/staff/one-on-one', [\App\Http\Controllers\Lms\StaffOneOnOneController::class, 'index']);
+        Route::get('/api/frontend/lms/staff/one-on-one/{studentId}/sessions', [\App\Http\Controllers\Lms\StaffOneOnOneController::class, 'sessions']);
+        Route::post('/api/frontend/lms/staff/one-on-one/{studentId}/sessions', [\App\Http\Controllers\Lms\StaffOneOnOneController::class, 'store']);
+        Route::put('/api/frontend/lms/staff/one-on-one/sessions/{sessionId}', [\App\Http\Controllers\Lms\StaffOneOnOneController::class, 'reschedule']);
+        Route::post('/api/frontend/lms/staff/one-on-one/sessions/{sessionId}/cancel', [\App\Http\Controllers\Lms\StaffOneOnOneController::class, 'cancel']);
+        Route::post('/api/frontend/lms/staff/one-on-one/sessions/{sessionId}/outcome', [\App\Http\Controllers\Lms\StaffOneOnOneController::class, 'outcome']);
+        // Self-booking: my weekly availability + days off, and the per-student
+        // "let them book" switch.
+        Route::get('/api/frontend/lms/staff/one-on-one/availability', [\App\Http\Controllers\Lms\StaffOneOnOneController::class, 'availability']);
+        Route::put('/api/frontend/lms/staff/one-on-one/availability', [\App\Http\Controllers\Lms\StaffOneOnOneController::class, 'saveAvailability']);
+        Route::post('/api/frontend/lms/staff/one-on-one/time-off', [\App\Http\Controllers\Lms\StaffOneOnOneController::class, 'addTimeOff']);
+        Route::delete('/api/frontend/lms/staff/one-on-one/time-off/{id}', [\App\Http\Controllers\Lms\StaffOneOnOneController::class, 'deleteTimeOff'])->whereNumber('id');
+        Route::post('/api/frontend/lms/staff/one-on-one/{studentId}/self-booking', [\App\Http\Controllers\Lms\StaffOneOnOneController::class, 'setSelfBooking'])->whereNumber('studentId');
     });
 
     // Student Modules & Timetable

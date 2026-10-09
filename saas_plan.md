@@ -63,7 +63,7 @@ Feature gates (chat, certificates, pre-recorded video, agents, branding removal,
 
 - Course fees settle to the **academy's own Paystack subaccount**. A non-primary academy cannot take paid registrations until it links a bank.
 - **Service charge: a flat 5% on every plan**, deducted from the academy's share. Sent to Paystack per transaction (`transaction_charge`) and recorded on each payment (`payments.platform_fee` / `academy_amount`). The owner gets the breakdown on every payment.
-- **One-time or monthly, per course.** A monthly course is billed every month: card payers are re-charged automatically, everyone else gets a pay link; access pauses 3 days after a missed payment and returns on payment; billing stops when the cohort ends or the student cancels. Logic: `App\Services\CourseBilling`; scheduled job `lms:process-course-renewals` (hourly).
+- **One-time or monthly, per course.** A monthly course is billed every month: card payers are re-charged automatically, everyone else gets a pay link; a reminder is emailed a week before each payment is due; access pauses 2 days after a missed payment and returns on payment; billing stops when the cohort ends or the student cancels. Logic: `App\Services\CourseBilling`; scheduled job `lms:process-course-renewals` (hourly).
 - Admission agents earn a commission (default 5%, set per academy) on the first payment only.
 - Display prices are localized by visitor country; charges are NGN (USD only if `USD_CHARGE_ENABLED`).
 

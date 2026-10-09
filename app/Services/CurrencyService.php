@@ -6,19 +6,17 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 /**
- * Localized DISPLAY pricing + charge-currency resolution.
+ * Localized DISPLAY pricing.
  *
- * Two separate concerns kept deliberately apart:
+ * Each academy sells in its own currency (Tenant::currency(); the charge is
+ * always in that currency, frozen at registration). This service only produces
+ * the cosmetic "≈ £30" a visitor elsewhere sees, converted from the academy's
+ * price at live FX rates and rounded. Never authoritative; recomputed per view.
  *
- *  • DISPLAY, a cosmetic "≈ £30" the visitor sees, converted from the base NGN
- *    price at live FX rates and rounded. Never authoritative; recomputed per view.
- *  • CHARGE, the currency money is actually collected in: NGN for Nigeria, USD
- *    for everyone else *only when* `saas.usd_charge_enabled` is on (off by default,
- *    so today every buyer is charged NGN). Frozen server-side at registration.
- *
- * FX rates are base-NGN, fetched from a free no-key provider and cached. On
- * provider downtime the last-good rates are served; with no cache at all the
- * display silently falls back to base NGN, the storefront never errors over FX.
+ * FX rates are base-NGN (convertBetween goes through NGN for other bases),
+ * fetched from a free no-key provider and cached. On provider downtime the
+ * last-good rates are served; with no cache at all the display falls back to
+ * the academy's own price, so the storefront never errors over FX.
  */
 class CurrencyService
 {
@@ -39,6 +37,7 @@ class CurrencyService
         'GH' => 'GHS', 'KE' => 'KES', 'ZA' => 'ZAR', 'UG' => 'UGX',
         'TZ' => 'TZS', 'RW' => 'RWF', 'ET' => 'ETB', 'EG' => 'EGP',
         'MA' => 'MAD', 'CI' => 'XOF', 'SN' => 'XOF',
+        'ZM' => 'ZMW', 'MW' => 'MWK', 'CM' => 'XAF',
         'IN' => 'INR', 'PK' => 'PKR', 'BD' => 'BDT', 'LK' => 'LKR',
         'CN' => 'CNY', 'JP' => 'JPY', 'KR' => 'KRW', 'SG' => 'SGD',
         'MY' => 'MYR', 'ID' => 'IDR', 'PH' => 'PHP', 'TH' => 'THB',
@@ -62,6 +61,8 @@ class CurrencyService
         'JPY' => '¥', 'CNY' => '¥', 'KRW' => '₩', 'SGD' => 'S$',
         'AED' => 'AED ', 'SAR' => 'SAR ', 'BRL' => 'R$', 'CHF' => 'CHF ',
         'TRY' => '₺', 'RUB' => '₽', 'PHP' => '₱', 'THB' => '฿',
+        'UGX' => 'USh ', 'TZS' => 'TSh ', 'RWF' => 'RF ', 'ZMW' => 'ZK ', 'MWK' => 'MK ',
+        'XAF' => 'FCFA ', 'XOF' => 'CFA ',
     ];
 
     /**
@@ -113,73 +114,87 @@ class CurrencyService
     }
 
     /**
-     * Cosmetic display packet for a base-NGN price given a visitor country.
-     * Falls back local → USD → base NGN so it always returns something renderable.
+     * Convert between any two currencies through the base-NGN rate table
+     * (X per 1 NGN). Null when either rate is missing.
+     */
+    public function convertBetween(float $amount, string $from, string $to): ?float
+    {
+        $from = strtoupper($from);
+        $to = strtoupper($to);
+        if ($from === $to) {
+            return $amount;
+        }
+        if ($from === 'NGN') {
+            return $this->convert($amount, $to);
+        }
+
+        $rates = $this->rates();
+        $fromRate = $rates[$from] ?? null;
+        if (! $fromRate || ! is_numeric($fromRate) || (float) $fromRate <= 0) {
+            return null;
+        }
+
+        $ngn = $amount / (float) $fromRate;
+
+        return $to === 'NGN' ? $ngn : $this->convert($ngn, $to);
+    }
+
+    /**
+     * Cosmetic display packet for a price in $base (the academy's currency)
+     * given a visitor country. Falls back local → USD → base so it always
+     * returns something renderable.
      *
      * @return array{currency:string,symbol:string,amount:float,is_base:bool}
      */
-    public function displayFor(float $ngnAmount, ?string $countryCode): array
+    public function displayFor(float $amount, ?string $countryCode, string $base = 'NGN'): array
     {
-        return $this->displayInCurrency($ngnAmount, $this->displayCurrencyForCountry($countryCode));
+        $local = $countryCode ? $this->displayCurrencyForCountry($countryCode) : $base;
+
+        return $this->displayInCurrency($amount, $local, $base);
     }
 
     /**
      * Cosmetic display packet in an explicit currency (e.g. from the manual
      * currency selector). Same graceful fallback as {@see displayFor}: an
-     * unsupported/rate-less currency degrades to USD, then to base NGN.
+     * unsupported/rate-less currency degrades to USD, then to the base.
      *
      * @return array{currency:string,symbol:string,amount:float,is_base:bool}
      */
-    public function displayInCurrency(float $ngnAmount, ?string $currency): array
+    public function displayInCurrency(float $amount, ?string $currency, string $base = 'NGN'): array
     {
+        $base = strtoupper($base) ?: 'NGN';
         $currency = strtoupper(trim((string) $currency));
-        if ($currency === '' || $currency === 'NGN') {
-            return $this->pack('NGN', $ngnAmount);
+        if ($currency === '' || $currency === $base) {
+            return $this->pack($base, $amount, $base);
         }
 
-        $converted = $this->convert($ngnAmount, $currency);
+        $converted = $this->convertBetween($amount, $base, $currency);
 
         // No rate for the requested currency → try USD as a universal reference.
         if ($converted === null && $currency !== 'USD') {
-            $usd = $this->convert($ngnAmount, 'USD');
+            $usd = $this->convertBetween($amount, $base, 'USD');
             if ($usd !== null) {
-                return $this->pack('USD', $usd);
+                return $this->pack('USD', $usd, $base);
             }
         }
 
-        // Still nothing (FX provider fully down, no cache) → show base NGN.
+        // Still nothing (FX provider fully down, no cache) → show the base price.
         if ($converted === null) {
-            return $this->pack('NGN', $ngnAmount);
+            return $this->pack($base, $amount, $base);
         }
 
-        return $this->pack($currency, $converted);
+        return $this->pack($currency, $converted, $base);
     }
 
     /** @return array{currency:string,symbol:string,amount:float,is_base:bool} */
-    private function pack(string $currency, float $amount): array
+    private function pack(string $currency, float $amount, string $base = 'NGN'): array
     {
         return [
             'currency' => $currency,
             'symbol' => $this->symbol($currency),
             'amount' => $this->roundDisplay($amount),
-            'is_base' => $currency === 'NGN',
+            'is_base' => $currency === $base,
         ];
-    }
-
-    /**
-     * The currency the visitor is charged in: NGN for Nigeria (and whenever the
-     * country is unknown), otherwise USD, but only when USD charging is enabled;
-     * while it's off, everyone is charged NGN (today's behavior).
-     */
-    public function chargeCurrencyForCountry(?string $countryCode): string
-    {
-        $country = strtoupper(trim((string) $countryCode));
-
-        if ($country === '' || $country === 'NG') {
-            return 'NGN';
-        }
-
-        return config('saas.usd_charge_enabled') ? 'USD' : 'NGN';
     }
 
     /** Display currency for a country: mapped → its currency; detected-but-unmapped → USD; undetected → NGN. */

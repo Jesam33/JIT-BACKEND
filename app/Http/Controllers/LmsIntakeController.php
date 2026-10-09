@@ -18,8 +18,8 @@ use App\Models\Tenant;
 use App\Models\TrainingRegistration;
 use App\Scopes\TenantScope;
 use App\Services\CourseBilling;
-use App\Services\CurrencyService;
-use App\Services\PaystackService;
+use App\Services\CoursePayments;
+use App\Support\EnrollmentGuard;
 use App\Support\Notify;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,25 +39,6 @@ class LmsIntakeController extends BaseLmsController
         if (! config('saas.training_feature_enabled')) {
             throw new NotFoundHttpException();
         }
-    }
-
-    /**
-     * The currently-bound institute's Paystack subaccount code, or null. When
-     * present, course fees are split to the institute's own bank; when absent
-     * (primary institute, or one that hasn't connected a payout account yet),
-     * the transaction settles to the platform account exactly as before.
-     */
-    private function tenantSubaccountCode(): ?string
-    {
-        $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
-
-        if (! $tenant) {
-            return null;
-        }
-
-        $code = data_get($tenant->settings, 'paystack.subaccount_code');
-
-        return is_string($code) && $code !== '' ? $code : null;
     }
 
     /**
@@ -101,6 +82,8 @@ class LmsIntakeController extends BaseLmsController
                 // Content-gated like the storefront: the toggle alone is not
                 // enough, the course must have a pre-recorded lesson behind it.
                 'is_prerecorded_available' => $course->is_prerecorded_available && $course->hasPrerecordedContent(),
+                'is_one_on_one_available' => $course->offersOneOnOne(app()->bound('currentTenant') ? app('currentTenant') : null),
+                'one_on_one_price' => $course->one_on_one_price !== null ? (float) $course->one_on_one_price : null,
                 'registration_open' => $course->registrationOpen(),
                 'registration_closes_at' => $course->openCohort()?->registrationClosesAt(),
                 'next_cohort_starts_at' => $course->tracks()->whereNotNull('start_date')->orderBy('start_date')->value('start_date'),
@@ -139,10 +122,54 @@ class LmsIntakeController extends BaseLmsController
             'is_live_available' => $course->is_live_available,
             // Content-gated like the storefront (see LmsCourse::hasPrerecordedContent).
             'is_prerecorded_available' => $course->is_prerecorded_available && $course->hasPrerecordedContent(),
+                'is_one_on_one_available' => $course->offersOneOnOne(app()->bound('currentTenant') ? app('currentTenant') : null),
+                'one_on_one_price' => $course->one_on_one_price !== null ? (float) $course->one_on_one_price : null,
             'registration_open' => $course->registrationOpen(),
             'registration_closes_at' => $course->openCohort()?->registrationClosesAt(),
             'next_cohort_starts_at' => $course->tracks()->whereNotNull('start_date')->orderBy('start_date')->value('start_date'),
         ]);
+    }
+
+    /**
+     * Early "are you already enrolled?" check for the storefront form, run as
+     * soon as the visitor types their email, so they don't fill in the whole
+     * form only to be refused at submit. Same answer register() would give
+     * (EnrollmentGuard), and nothing more: it reveals no more than submitting
+     * the form already does. Rate-limited in the route, since an open "is this
+     * email enrolled?" lookup is otherwise an easy way to probe a roster.
+     */
+    public function checkEnrolment(Request $request): JsonResponse
+    {
+        $this->ensureIntakeEnabled();
+
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'max:255'],
+            'course_id' => ['required', 'integer'],
+            'institute_slug' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        // Same tenant binding as register(): the explicit storefront slug wins.
+        if (! empty($validated['institute_slug'])) {
+            $tenant = Tenant::query()->where('slug', $validated['institute_slug'])->first();
+            if ($tenant) {
+                app()->instance('currentTenant', $tenant);
+            }
+        }
+
+        $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
+
+        // Only courses of this academy (tenant-scoped); anything else is "fine",
+        // and register() does the real validation.
+        $course = LmsCourse::query()->find($validated['course_id']);
+        if (! $course) {
+            return response()->json(['status' => 'ok']);
+        }
+
+        $conflict = EnrollmentGuard::conflict($tenant, $validated['email'], (int) $course->id);
+
+        return response()->json($conflict
+            ? ['status' => isset($conflict['already_enrolled']) ? 'already_enrolled' : 'enrolled_elsewhere'] + $conflict
+            : ['status' => 'ok']);
     }
 
     public function register(Request $request): JsonResponse
@@ -158,7 +185,7 @@ class LmsIntakeController extends BaseLmsController
             'email' => ['required', 'email', 'max:255'],
             'whatsapp' => ['required', 'string', 'max:40'],
             'course_id' => ['required', 'integer', 'exists:lms_courses,id'],
-            'learning_mode' => ['required', 'in:live,pre_recorded'],
+            'learning_mode' => ['required', 'in:live,pre_recorded,one_on_one'],
             'referral_code' => ['nullable', 'string', 'max:20'],
             'institute_slug' => ['nullable', 'string', 'max:255'],
             // Visitor country hint (ISO alpha-2), forwarded by the storefront so
@@ -196,6 +223,14 @@ class LmsIntakeController extends BaseLmsController
         }
 
         $course = LmsCourse::query()->findOrFail($validated['course_id']);
+
+        // One course per student per academy: an email already enrolled here
+        // (in this course or another) is refused before anything is created or
+        // charged. Checked before "full" so an enrolled student is told the real
+        // reason. See EnrollmentGuard.
+        if ($conflict = EnrollmentGuard::conflict($tenant, $validated['email'], (int) $course->id)) {
+            return response()->json($conflict, 409);
+        }
 
         if ($course->isFull()) {
             return response()->json([
@@ -244,6 +279,15 @@ class LmsIntakeController extends BaseLmsController
             ], 422);
         }
 
+        // One-on-one: only when the course offers it AND the academy's plan
+        // includes it (Basic and up), re-checked here on every sale.
+        if ($validated['learning_mode'] === LmsStudent::MODE_ONE_ON_ONE && ! $course->offersOneOnOne($tenant)) {
+            return response()->json([
+                'message' => 'One-on-one classes aren’t offered for this course right now. Please choose another option.',
+                'one_on_one_unavailable' => true,
+            ], 422);
+        }
+
         // Plan student cap. Money-safe by design: this never throws (a self-enrolling
         // visitor can't upgrade the institute's plan) and never blocks an existing
         // student re-enrolling in another course, only a brand-new student email at
@@ -262,9 +306,8 @@ class LmsIntakeController extends BaseLmsController
         // prerecorded_price; otherwise both modes charge the live price. This base
         // amount is what the referral discount + currency freeze below operate on,
         // and what ultimately settles to Paystack/commissions via course_price.
-        $price = ($validated['learning_mode'] === 'pre_recorded' && $course->prerecorded_price !== null)
-            ? (float) $course->prerecorded_price
-            : (float) $course->price;
+        // Live, pre-recorded or one-on-one, each at its own price (LmsCourse::priceFor).
+        $price = $course->priceFor($validated['learning_mode']);
         if (! empty($validated['referral_code'])) {
             $agent = \App\Models\Agent::where('referral_code', $validated['referral_code'])
                 ->where('status', 'approved')
@@ -275,25 +318,13 @@ class LmsIntakeController extends BaseLmsController
             }
         }
 
-        // Freeze the CHARGE currency + amount. The referral discount is applied to
-        // the base NGN above; the charge currency is resolved from the visitor's
-        // country: NGN for Nigeria (and, while USD charging is disabled, for
-        // everyone). Only when USD charging is enabled AND the buyer is outside
-        // Nigeria is the NGN amount converted to USD and frozen in USD. If FX is
-        // unavailable at that moment we fall back to charging NGN rather than guess.
-        $currency = app(CurrencyService::class);
-        $chargeCurrency = $currency->chargeCurrencyForCountry($validated['country'] ?? null);
+        // Freeze the CHARGE currency + amount: the academy's own currency, at the
+        // price the owner set in it. No conversion: a Ghanaian academy sells in
+        // cedis and is paid in cedis; the student's card handles their side.
+        $chargeCurrency = $tenant ? $tenant->currency() : 'NGN';
         $chargeAmount = $price;
-        if ($chargeCurrency !== 'NGN') {
-            $converted = $currency->convert($price, $chargeCurrency);
-            if ($converted !== null && $converted > 0) {
-                $chargeAmount = round($converted, 2);
-            } else {
-                $chargeCurrency = 'NGN';
-            }
-        }
 
-        $registration = TrainingRegistration::query()->create([
+        $attributes = [
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
             'date_of_birth' => $validated['date_of_birth'],
@@ -308,7 +339,22 @@ class LmsIntakeController extends BaseLmsController
             'charge_currency' => $chargeCurrency,
             'status' => 'pending',
             'referred_by_agent_id' => $referredByAgentId,
-        ]);
+        ];
+
+        // A second attempt at the same course before paying (abandoned checkout,
+        // a second tab, a refresh) reuses the unpaid registration instead of
+        // piling up duplicates; it is refreshed with this attempt's details.
+        $registration = EnrollmentGuard::pendingRegistration($tenant, $validated['email'], (int) $course->id);
+        if ($registration) {
+            $registration->update($attributes + [
+                // Re-freeze from the course as it is now (booted() only runs on create).
+                'billing_type' => $chargeAmount > 0 && $course->isMonthly()
+                    ? LmsCourse::BILLING_MONTHLY
+                    : LmsCourse::BILLING_ONE_TIME,
+            ]);
+        } else {
+            $registration = TrainingRegistration::query()->create($attributes);
+        }
 
         return response()->json([
             'message' => 'Registration created. Proceed to payment.',
@@ -346,6 +392,14 @@ class LmsIntakeController extends BaseLmsController
             return response()->json(['message' => 'Payment already processed for this registration.'], 422);
         }
 
+        // Re-checked here, not just at registration: two tabs (or a pending
+        // registration for another course) can both reach checkout before either
+        // is paid. Once one course is paid, the other checkout is refused.
+        $boundTenant = app()->bound('currentTenant') ? app('currentTenant') : null;
+        if ($conflict = EnrollmentGuard::conflict($boundTenant, (string) $registration->email, (int) $registration->course_id)) {
+            return response()->json($conflict, 409);
+        }
+
         // Unlinked-institute guard (money safety). A non-primary institute that
         // hasn't linked its payout subaccount yet must not collect course fees
         // into the PLATFORM account. Block paid checkout until they link a bank;
@@ -354,10 +408,12 @@ class LmsIntakeController extends BaseLmsController
         // here, and the primary institute is exempt, it legitimately settles to
         // the platform account. Mirrors the primary-slug idiom used below at the
         // callback branch.
+        $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
+        $gateway = CoursePayments::gatewayFor($tenant);
+
         if ((float) $registration->course_price > 0) {
-            $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
             $isNonPrimary = $tenant && $tenant->slug && $tenant->slug !== config('saas.primary_slug', 'jorsas');
-            if ($isNonPrimary && ! $this->tenantSubaccountCode()) {
+            if ($isNonPrimary && ! $gateway) {
                 return response()->json([
                     'message' => 'This course isn’t open for purchase yet. The institute is finishing its payment setup.',
                 ], 409);
@@ -371,9 +427,9 @@ class LmsIntakeController extends BaseLmsController
         $reference = 'JORSAS-' . Str::upper(Str::random(20));
 
         try {
-            $paystack = app(PaystackService::class);
-
-            if (! $paystack->isConfigured()) {
+            // No gateway configured on the platform at all (local dev): the
+            // primary academy enrols without payment, as before.
+            if (! $gateway) {
                 return $this->handleZeroPayment($registration);
             }
 
@@ -396,51 +452,52 @@ class LmsIntakeController extends BaseLmsController
                 }
             }
 
-            // The currency this registration was frozen to charge in (NGN unless
-            // USD charging is enabled and the buyer registered from outside Nigeria).
+            // The currency this registration was frozen to charge in: the
+            // academy's own currency.
             $chargeCurrency = strtoupper((string) ($registration->charge_currency ?: 'NGN'));
 
             // The platform service charge on this payment (null when the money
             // settles to the platform account anyway, i.e. no subaccount).
-            $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
             $charge = CourseBilling::serviceCharge($tenant, (float) $registration->course_price);
 
-            $response = $paystack->initializeTransaction(
-                $registration->email,
-                (float) $registration->course_price,
-                $reference,
-                [
-                    'registration_id' => $registration->id,
-                    'course_name' => $registration->course_name,
-                ],
-                $callbackUrl,
-                // Settle course fees to the institute's own Paystack subaccount
-                // (its bank) when it has configured one; primary/unconfigured
-                // institutes fall back to the platform account, as before.
-                $this->tenantSubaccountCode(),
-                $chargeCurrency,
-                $charge['fee']
-            );
-
-            Payment::query()->create([
+            $payment = Payment::query()->create([
                 'registration_id' => $registration->id,
                 'reference' => $reference,
                 'amount' => $registration->course_price,
                 'currency' => $chargeCurrency,
                 'status' => 'pending',
-                'gateway' => 'paystack',
+                'gateway' => $gateway,
                 'kind' => Payment::KIND_INITIAL,
                 // 0 when unsplit (settles to the platform account): nothing held back.
                 'platform_fee' => $charge['fee'] ?? 0,
                 'academy_amount' => $charge['academy'],
             ]);
 
+            // Flutterwave (or a pre-move Paystack link) splits the payment: the
+            // academy's share to its bank, the service charge to the platform.
+            $checkout = CoursePayments::start(
+                $payment,
+                $tenant,
+                (string) $registration->email,
+                trim($registration->first_name . ' ' . $registration->last_name),
+                $callbackUrl,
+                ['registration_id' => $registration->id, 'course_name' => $registration->course_name],
+                $charge['fee'],
+                (string) $registration->course_name
+            );
+
+            if (! $checkout['url']) {
+                $payment->update(['status' => 'failed']);
+
+                return response()->json(['message' => $checkout['message'] ?: 'Could not initialize payment. Please try again.'], 502);
+            }
+
             return response()->json([
-                'authorization_url' => $response['data']['authorization_url'] ?? null,
+                'authorization_url' => $checkout['url'],
                 'reference' => $reference,
             ]);
         } catch (\Throwable $exception) {
-            Log::error('Paystack initialization failed', [
+            Log::error('Course payment initialization failed', [
                 'error' => $exception->getMessage(),
                 'registration_id' => $registration->id,
             ]);
@@ -471,19 +528,19 @@ class LmsIntakeController extends BaseLmsController
         }
 
         try {
-            $paystack = app(PaystackService::class);
-            $response = $paystack->verifyTransaction($validated['reference']);
+            // Asked of the gateway that took this payment (payments.gateway).
+            $data = CoursePayments::verify($payment);
 
-            if (($response['data']['status'] ?? '') === 'success') {
-                return $this->completePayment($payment, $response['data'] ?? null);
+            if (($data['status'] ?? '') === 'success') {
+                return $this->completePayment($payment, $data);
             }
 
             return response()->json([
                 'message' => 'Payment not yet confirmed.',
-                'status' => $response['data']['status'] ?? 'unknown',
+                'status' => $data['status'] ?? 'unknown',
             ]);
         } catch (\Throwable $exception) {
-            Log::error('Paystack verification failed', [
+            Log::error('Course payment verification failed', [
                 'error' => $exception->getMessage(),
                 'reference' => $validated['reference'],
             ]);
@@ -517,6 +574,58 @@ class LmsIntakeController extends BaseLmsController
             }
         }
 
+        return response()->json(['message' => 'Webhook received.']);
+    }
+
+    /**
+     * Flutterwave webhook for every student payment (course fees, monthly
+     * renewals, extra sessions). Authenticated by the secret hash set on the
+     * Flutterwave dashboard (sent back as `verif-hash`). The body is only a
+     * hint: the payment is re-read from Flutterwave before anything is granted,
+     * exactly like the browser's verify.
+     */
+    public function flutterwaveWebhook(Request $request): JsonResponse
+    {
+        $expected = (string) config('services.flutterwave.webhook_hash', '');
+        $given = (string) $request->header('verif-hash', '');
+
+        if ($expected === '' || ! hash_equals($expected, $given)) {
+            return response()->json(['message' => 'Invalid signature.'], 401);
+        }
+
+        $reference = (string) ($request->input('data.tx_ref') ?? $request->input('txRef') ?? '');
+        $payment = $reference !== ''
+            ? Payment::query()->withoutGlobalScope(TenantScope::class)->where('reference', $reference)->first()
+            : null;
+
+        if ($payment && $payment->status !== 'success') {
+            try {
+                $data = CoursePayments::verify($payment);
+                if (($data['status'] ?? '') === 'success') {
+                    $this->completePayment($payment, $data);
+                }
+            } catch (\Throwable $e) {
+                Log::error('Flutterwave webhook confirmation failed', ['reference' => $reference, 'err' => $e->getMessage()]);
+            }
+        }
+
+        // Not a student payment: an academy paying Jorsas for its plan.
+        if (! $payment && $reference !== '') {
+            $tx = \App\Models\PlatformTransaction::query()
+                ->where('reference', $reference)
+                ->where('gateway', CoursePayments::FLUTTERWAVE)
+                ->first();
+            if ($tx) {
+                try {
+                    \App\Services\PlatformBilling::confirm($tx);
+                } catch (\Throwable $e) {
+                    Log::error('Flutterwave plan payment confirmation failed', ['reference' => $reference, 'err' => $e->getMessage()]);
+                }
+            }
+        }
+
+        // Always 200 for an authenticated call: an unknown reference is not
+        // something Flutterwave can fix by retrying.
         return response()->json(['message' => 'Webhook received.']);
     }
 
@@ -681,6 +790,18 @@ class LmsIntakeController extends BaseLmsController
                 : response()->json(['message' => 'Payment confirmed. Thank you!', 'status' => 'success', 'renewal' => true]);
         }
 
+        // Extra one-on-one sessions: adds to the student's allowance only.
+        if ($payment->kind === Payment::KIND_EXTRA_SESSIONS) {
+            $status = \App\Services\OneOnOneExtras::complete($payment, $gatewayData);
+
+            return $status === 'review'
+                ? response()->json([
+                    'message' => 'Payment received but needs manual confirmation. Our team will verify it shortly.',
+                    'status' => 'review',
+                ])
+                : response()->json(['message' => 'Payment confirmed. Thank you!', 'status' => 'success', 'extra_sessions' => true]);
+        }
+
         $registration = $payment->registration;
 
         if (! $registration) {
@@ -721,6 +842,45 @@ class LmsIntakeController extends BaseLmsController
                     'status' => 'review',
                 ]);
             }
+        }
+
+        // Last line of defence against paying twice: this registration was
+        // already paid by another payment, or the email got enrolled in a course
+        // here in the meantime (two checkouts completed at once). The money is
+        // taken, so hold it for a refund instead of enrolling twice or silently
+        // swapping the student's course.
+        $alreadyPaid = $registration->status === 'approved';
+        $conflict = $alreadyPaid ? null : EnrollmentGuard::conflict(
+            app()->bound('currentTenant') ? app('currentTenant') : null,
+            (string) $registration->email,
+            (int) $registration->course_id
+        );
+        if ($alreadyPaid || $conflict) {
+            $payment->update([
+                'status' => 'review',
+                'gateway_response' => is_array($gatewayData) && $gatewayData !== [] ? $gatewayData : $payment->gateway_response,
+            ]);
+
+            $name = trim($registration->first_name . ' ' . $registration->last_name) ?: $registration->email;
+            Notify::owner(
+                'payment_duplicate',
+                'Duplicate payment needs a refund: ' . $name,
+                $name . ' (' . $registration->email . ') paid ' . CourseBilling::money($payment->currency, (float) $payment->amount)
+                    . ' for ' . $registration->course_name . ' but is already enrolled at your academy. Please refund payment '
+                    . $payment->reference . ' from your ' . ($payment->gateway === CoursePayments::FLUTTERWAVE ? 'Flutterwave' : 'Paystack') . ' dashboard.',
+                'payment',
+                $payment->id
+            );
+            Log::warning('Duplicate course payment held for refund', [
+                'reference' => $payment->reference,
+                'registration_id' => $registration->id,
+            ]);
+
+            return response()->json([
+                'message' => 'You are already enrolled, so this extra payment will be refunded. The academy has been notified.',
+                'status' => 'review',
+                'duplicate' => true,
+            ]);
         }
 
         $payment->update([
@@ -817,9 +977,8 @@ class LmsIntakeController extends BaseLmsController
         Notify::enrolment(
             LmsCourse::query()->find($registration->course_id),
             trim($registration->first_name . ' ' . $registration->last_name) ?: $registration->email,
-            // Currency code + amount rather than a ₦ symbol: the charge currency
-            // is geo-resolved and is not always NGN (see the CurrencyService
-            // freeze above), so a hardcoded symbol would misreport the amount.
+            // Currency code + amount rather than a ₦ symbol: each academy is
+            // paid in its own currency, so a hardcoded symbol would misreport it.
             // The owner is told the service-charge breakdown on EVERY payment;
             // for a first payment it rides on this enrolment bell (renewals
             // get their own, see CourseBilling::notifyOwnerOfRenewal).

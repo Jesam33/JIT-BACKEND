@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan Pricing Proposal</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --paper: #ffffff;
+    --ink: #14171f;
+    --muted: #5b6372;
+    --line: #e3e6ec;
+    --accent: #1f5eff;
+    --accent-soft: #eaf0ff;
+    --good: #0f7a4d;
+    --good-soft: #e6f5ee;
+    --warn: #9a5b00;
+    --warn-soft: #fff4e0;
+    --bad: #b42318;
+    --bad-soft: #fdecea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1218;
+      --paper: #171b23;
+      --ink: #e9ecf2;
+      --muted: #9aa3b2;
+      --line: #2a303b;
+      --accent: #6b95ff;
+      --accent-soft: #1b2540;
+      --good: #4cc38a;
+      --good-soft: #13281f;
+      --warn: #f0b450;
+      --warn-soft: #2d2412;
+      --bad: #f07c72;
+      --bad-soft: #2e1715;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  .page {
+    max-width: 920px;
+    margin: 32px auto;
+    padding: 48px 56px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 24px; margin-bottom: 32px; }
+  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  h1 { font-size: 30px; line-height: 1.2; margin: 6px 0 10px; }
+  h2 { font-size: 20px; margin: 40px 0 12px; }
+  h3 { font-size: 16px; margin: 24px 0 8px; }
+  p { margin: 0 0 12px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .lead { font-size: 16px; color: var(--muted); }
+
+  .summary { background: var(--accent-soft); border-radius: 12px; padding: 20px 24px; margin: 24px 0; }
+  .summary p:last-child { margin-bottom: 0; }
+
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0 8px; }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card.featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .card .name { font-weight: 700; }
+  .card .tag { font-size: 12px; color: var(--muted); }
+  .card .price { font-size: 24px; font-weight: 800; margin: 10px 0 0; }
+  .card .per { font-size: 12px; color: var(--muted); }
+  .card .was { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .card .year { font-size: 12px; margin-top: 2px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 8px; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; }
+  td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  tr.total td { font-weight: 800; border-top: 2px solid var(--ink); border-bottom: none; }
+  tr.sub td { color: var(--muted); }
+  .note { font-size: 13px; color: var(--muted); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .box { border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .box h3 { margin-top: 0; }
+  .pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
+  .pill.good { background: var(--good-soft); color: var(--good); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .pill.bad { background: var(--bad-soft); color: var(--bad); }
+  .callout { border-left: 4px solid var(--warn); background: var(--warn-soft); padding: 14px 18px; border-radius: 0 10px 10px 0; margin: 16px 0; }
+  .callout.good { border-color: var(--good); background: var(--good-soft); }
+  ol, ul { padding-left: 22px; margin: 0 0 12px; }
+  li { margin-bottom: 6px; }
+  footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  footer a { color: var(--muted); }
+
+  @media (max-width: 760px) {
+    .page { margin: 0; padding: 24px 16px; border-radius: 0; border-left: 0; border-right: 0; }
+    .cards { grid-template-columns: 1fr 1fr; }
+    .grid2 { grid-template-columns: 1fr; }
+    table { font-size: 13px; }
+    th, td { padding: 8px 6px; }
+  }
+  @media print {
+    body { background: #fff; }
+    .page { margin: 0; border: 0; padding: 0; max-width: none; }
+    h2 { break-after: avoid; }
+    table, .box, .card, .callout { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <div class="eyebrow">Proposal</div>
+  <h1>Plan pricing: what the platform costs us, and what we should charge</h1>
+  <p class="meta">Prepared 2 October 2026 · Exchange rate used: ₦1,400 = $1 (market rate today ₦1,328, with a buffer for naira movement)</p>
+</header>
+
+<div class="summary">
+  <p><strong>In short:</strong> today's prices do not cover what the platform costs to run. Basic at ₦5,000 a month is about $3.75, less than an academy's share of chat, email and hosting.</p>
+  <p>The proposal below is to <strong>raise Basic to ₦15,000 and Pro to ₦40,000 a month</strong>, keep Free as a trial, and keep the <strong>5% service charge</strong> on every student payment.</p>
+  <p>In both growth scenarios below, that pays for every service we use and leaves a margin of <strong>about 43–47%</strong>, provided three simple usage limits are added.</p>
+</div>
+
+<h2>1. Proposed prices</h2>
+<div class="cards">
+  <div class="card">
+    <div class="name">Free</div>
+    <div class="tag">Start · try the platform</div>
+    <div class="price">₦0</div>
+    <div class="per">forever</div>
+    <div class="was">Today: ₦0 (unchanged)</div>
+  </div>
+  <div class="card featured">
+    <div class="name">Basic</div>
+    <div class="tag">Grow · small academies</div>
+    <div class="price">₦15,000</div>
+    <div class="per">per month</div>
+    <div class="was">Today: ₦5,000</div>
+    <div class="year">₦150,000 / year (2 months free)</div>
+  </div>
+  <div class="card">
+    <div class="name">Pro</div>
+    <div class="tag">Scale · established academies</div>
+    <div class="price">₦40,000</div>
+    <div class="per">per month</div>
+    <div class="was">Today: ₦15,000</div>
+    <div class="year">₦400,000 / year (2 months free)</div>
+  </div>
+  <div class="card">
+    <div class="name">Enterprise</div>
+    <div class="tag">Expand · large institutions</div>
+    <div class="price">From ₦150,000</div>
+    <div class="per">per month, quoted</div>
+    <div class="was">Today: custom</div>
+  </div>
+</div>
+<p class="note">All plans also pay a 5% service charge on every student payment, deducted automatically from what the academy receives. This is unchanged.</p>
+
+<h3>What each plan includes (current product, unchanged)</h3>
+<table>
+  <thead><tr><th>Feature</th><th>Free</th><th>Basic</th><th>Pro</th><th>Enterprise</th></tr></thead>
+  <tbody>
+    <tr><td>Courses</td><td>3</td><td>10</td><td>50</td><td>Unlimited</td></tr>
+    <tr><td>Students</td><td>1</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td></tr>
+    <tr><td>Students per class</td><td>1</td><td>30</td><td>50</td><td>50</td></tr>
+    <tr><td>Staff accounts</td><td>1</td><td>5</td><td>25</td><td>Unlimited</td></tr>
+    <tr><td>Live classes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+    <tr><td>Group chat, certificates, admission agents, own branding</td><td>No</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+    <tr><td>Pre-recorded video, AI materials, custom domain, advanced analytics</td><td>No</td><td>No</td><td>Yes</td><td>Yes</td></tr>
+    <tr><td>API access, full white-label</td><td>No</td><td>No</td><td>No</td><td>Yes</td></tr>
+  </tbody>
+</table>
+
+<h2>2. What the platform costs us</h2>
+<p>Our costs come in two kinds. <strong>Fixed costs</strong> stay roughly the same whether we have 5 academies or 50, and the plan fees are what cover them. <strong>Per-student costs</strong> grow with every student who attends live classes or watches videos, and the 5% service charge is what covers those.</p>
+
+<h3>Fixed monthly costs (today's scale)</h3>
+<table>
+  <thead><tr><th>Service</th><th>What it does for us</th><th class="num">USD</th><th class="num">Naira</th></tr></thead>
+  <tbody>
+    <tr><td>8x8 JaaS</td><td>Live video classes (base plan, includes 300 learners a month)</td><td class="num">$99</td><td class="num">₦138,600</td></tr>
+    <tr><td>Pusher</td><td>Real-time chat (up to 500 people online at once)</td><td class="num">$49</td><td class="num">₦68,600</td></tr>
+    <tr><td>Hosting</td><td>Servers and database (estimate; confirm the actual bill)</td><td class="num">$40</td><td class="num">₦56,000</td></tr>
+    <tr><td>Gamma</td><td>AI course materials (Pro feature)</td><td class="num">$25</td><td class="num">₦35,000</td></tr>
+    <tr><td>Resend</td><td>All emails: reminders, receipts, invites (up to 50,000 a month)</td><td class="num">$20</td><td class="num">₦28,000</td></tr>
+    <tr><td>Bunny Stream</td><td>Pre-recorded video storage and streaming (light use)</td><td class="num">$10</td><td class="num">₦14,000</td></tr>
+    <tr class="total"><td colspan="2">Total fixed cost per month</td><td class="num">$243</td><td class="num">₦340,200</td></tr>
+  </tbody>
+</table>
+<p class="note">Botble (the back-office software) is a one-time licence, not a monthly cost. Currency rates and visitor-location lookups use free services.</p>
+
+<h3>Per-student and per-payment costs</h3>
+<table>
+  <thead><tr><th>Cost</th><th>How it grows</th><th class="num">Cost</th></tr></thead>
+  <tbody>
+    <tr><td>Live classes</td><td>Each person who joins at least one live class in a month (students and teachers). Cheaper per head on bigger JaaS plans.</td><td class="num">₦460–₦1,390<br><span class="note">per person per month</span></td></tr>
+    <tr><td>Pre-recorded video</td><td>Per hour of video watched by a student in Africa (about 0.5–1 GB per hour)</td><td class="num">₦40–₦85<br><span class="note">per hour watched</span></td></tr>
+    <tr><td>Paystack on plan payments</td><td>1.5% + ₦100 when an academy pays its plan fee. Course payments from students are paid for by the academy, not us.</td><td class="num">₦325 (Basic)<br>₦700 (Pro)</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <strong>Action needed before launch: email.</strong>
+  <p>We currently send email through a Gmail account, which is limited to about 500 emails a day. With daily payment reminders and notifications we will hit that quickly, and emails will silently stop.</p>
+  <p style="margin-bottom:0">Switching to Resend (included in the costs above at $20 a month) is a configuration change, not a code change.</p>
+</div>
+
+<h2>3. Does the proposed pricing pay for itself?</h2>
+<p>Two realistic scenarios. Both assume students pay on average ₦25,000 a month for their course (a one-time ₦75,000 course over three months counts the same). Free-plan academies bring in nothing, so they are left out.</p>
+
+<div class="grid2">
+  <div class="box">
+    <h3>A. Early stage <span class="pill good">profitable</span></h3>
+    <p class="note">15 paying academies (10 Basic, 5 Pro) · 400 students attending live classes</p>
+    <table>
+      <tbody>
+        <tr><td>Plan fees (10 × ₦15,000 + 5 × ₦40,000)</td><td class="num">₦350,000</td></tr>
+        <tr><td>5% service charge (400 × ₦25,000 × 5%)</td><td class="num">₦500,000</td></tr>
+        <tr class="total"><td>Revenue</td><td class="num">₦850,000</td></tr>
+        <tr class="sub"><td>Fixed services (excluding live video)</td><td class="num">₦201,600</td></tr>
+        <tr class="sub"><td>Live video: $99 plan + 100 extra learners</td><td class="num">₦277,200</td></tr>
+        <tr class="sub"><td>Paystack on plan payments</td><td class="num">₦6,750</td></tr>
+        <tr class="total"><td>Costs</td><td class="num">₦485,550</td></tr>
+        <tr class="total"><td>Margin</td><td class="num">₦364,450 (43%)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="box">
+    <h3>B. Growing <span class="pill good">profitable</span></h3>
+    <p class="note">45 paying academies (30 Basic, 15 Pro) · 2,000 students attending live classes</p>
+    <table>
+      <tbody>
+        <tr><td>Plan fees (30 × ₦15,000 + 15 × ₦40,000)</td><td class="num">₦1,050,000</td></tr>
+        <tr><td>5% service charge (2,000 × ₦25,000 × 5%)</td><td class="num">₦2,500,000</td></tr>
+        <tr class="total"><td>Revenue</td><td class="num">₦3,550,000</td></tr>
+        <tr class="sub"><td>Live video ($999 plan, up to 3,000 learners)</td><td class="num">₦1,398,600</td></tr>
+        <tr class="sub"><td>Hosting, chat, email, AI, video storage (scaled up)</td><td class="num">₦467,600</td></tr>
+        <tr class="sub"><td>Paystack on plan payments</td><td class="num">₦20,250</td></tr>
+        <tr class="total"><td>Costs</td><td class="num">₦1,886,450</td></tr>
+        <tr class="total"><td>Margin</td><td class="num">₦1,663,550 (47%)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="callout good">
+  <strong>What the scenarios show</strong>
+  <ul style="margin:8px 0 0">
+    <li><strong>The 5% service charge does most of the work.</strong> In scenario B, plan fees alone (₦1.05m) would not cover costs (₦1.89m). The service charge must stay on every plan.</li>
+    <li><strong>Live classes are our biggest cost by far,</strong> about three quarters of costs in scenario B. They are the thing to protect with usage limits.</li>
+    <li><strong>At today's prices the platform loses money.</strong> Scenario A at ₦5,000 / ₦15,000 brings in only ₦125,000 in plan fees, which doesn't even cover the ₦340,200 fixed costs.</li>
+  </ul>
+</div>
+
+<h2>4. Why these specific prices</h2>
+<div class="grid2">
+  <div class="box">
+    <h3>Free: ₦0</h3>
+    <p>With one student allowed, it works as a free trial: an academy can set up, build courses and see the product before paying. Its cost to us is close to nothing, and it brings academies in.</p>
+  </div>
+  <div class="box">
+    <h3>Basic: ₦15,000</h3>
+    <p>About $11 a month for a full branded school with live classes, chat, certificates and agents. That's affordable for a small Nigerian academy: it's covered by a single student paying ₦15,000.</p>
+    <p>It also pays its fair share of our fixed costs, which ₦5,000 did not.</p>
+  </div>
+  <div class="box">
+    <h3>Pro: ₦40,000</h3>
+    <p>Pro carries our three most expensive extras: pre-recorded video, AI materials and custom domains. It's aimed at academies already earning well, for whom ₦40,000 (about $30) is a small share of monthly sales.</p>
+    <p>At under 3× the price of Basic, upgrading is still an easy decision.</p>
+  </div>
+  <div class="box">
+    <h3>Enterprise: from ₦150,000</h3>
+    <p>Large institutions need unlimited capacity, API access and white-label, and usually some hands-on setup. Quoting from ₦150,000 lets us price each one on its real usage instead of losing money on a flat fee.</p>
+  </div>
+</div>
+
+<h2>5. Three safeguards to add</h2>
+<p>These matter as much as the prices. Each one protects us from an academy that costs more than it pays.</p>
+<ol>
+  <li><strong>A monthly allowance for live classes.</strong> Basic includes up to 100 learners in live classes a month and Pro up to 300. Beyond that: ₦1,000 per extra learner, or move up a plan.
+    <br><span class="note">Why: without it, one Basic academy with 400 live students could cost us around ₦400,000 a month while paying ₦15,000.</span></li>
+  <li><strong>A minimum service charge of ₦500 per payment</strong> ("5% or ₦500, whichever is higher").
+    <br><span class="note">Why: 5% of a cheap ₦5,000 course is only ₦250, which is less than that student's live classes cost us (₦460 or more).</span></li>
+  <li><strong>A fair-use limit on AI materials:</strong> 30 AI presentations per academy per month on Pro.
+    <br><span class="note">Why: one AI subscription is shared by every academy, so a few heavy users could use up the credits for everyone.</span></li>
+</ol>
+
+<h2>6. How to roll it out</h2>
+<ul>
+  <li><strong>Existing academies keep their current price for 3 months,</strong> with an email explaining the change and the new value. Notice makes increases far easier to accept.</li>
+  <li><strong>Annual plans get 2 months free.</strong> This brings in cash up front and keeps academies with us longer.</li>
+  <li><strong>Review prices every 6 months.</strong> Most of our costs are billed in dollars, so a weaker naira squeezes the margin.</li>
+  <li><strong>Prices can change without new software.</strong> They're settings, so new prices go live on the pricing page and plan cards as soon as they're changed. The three safeguards need a small amount of development, a few hours each.</li>
+</ul>
+
+<h2>7. Assumptions to confirm</h2>
+<ul>
+  <li>Hosting is estimated at $40 a month at early stage and $100 at growth stage. Please replace with the actual hosting bill.</li>
+  <li>An average student payment of ₦25,000 a month. If our academies charge much less, the minimum service charge in safeguard 2 becomes more important.</li>
+  <li>Service prices were checked on 2 October 2026 and can change. The current plan level we're on with each provider should be confirmed in their dashboards. In particular, if live video is still on the free 25-learner plan, classes will stop working beyond that.</li>
+</ul>
+
+<footer>
+  <p><strong>Sources (prices checked 2 October 2026):</strong>
+    <a href="https://cpaas.8x8.com/en/pricing/jitsi-as-a-service-pricing/">8x8 JaaS pricing</a> ·
+    <a href="https://developer.8x8.com/jaas/docs/faq/">JaaS FAQ</a> ·
+    <a href="https://bunny.net/pricing/stream/">Bunny Stream pricing</a> ·
+    <a href="https://bunny.net/docs/cdn/pricing">Bunny CDN regional pricing</a> ·
+    <a href="https://ably.com/topic/pusher-pricing">Pusher pricing</a> ·
+    <a href="https://developers.gamma.app/get-started/access-and-pricing">Gamma API pricing</a> ·
+    <a href="https://www.saasworthy.com/product/gamma-app/pricing">Gamma plans</a> ·
+    <a href="https://support.paystack.com/en/articles/2130306">Paystack fees</a> ·
+    <a href="https://www.courier.com/integrations/compare/postmark-vs-resend">Resend / Postmark pricing</a> ·
+    <a href="https://serversmtp.com/limits-of-gmail-smtp-server/">Gmail sending limits</a> ·
+    <a href="https://open.er-api.com/v6/latest/USD">USD/NGN rate</a>
+  </p>
+</footer>
+
+</div>
+</body>
+</html>

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\LmsCourse;
 use App\Models\LmsEnrollment;
 use App\Models\LmsStudent;
 use App\Models\LmsTrack;
@@ -79,7 +80,7 @@ class CourseBilling
     {
         $percent = $tenant ? $tenant->commissionPercent() : (float) config('saas.platform_commission_percent', 5);
 
-        if (! static::subaccountCode($tenant) || $amount <= 0) {
+        if (! CoursePayments::linked($tenant) || $amount <= 0) {
             return ['percent' => $percent, 'fee' => null, 'academy' => null];
         }
 
@@ -213,6 +214,8 @@ class CourseBilling
             'amount' => (float) $registration->course_price,
             'currency' => strtoupper((string) ($registration->charge_currency ?: 'NGN')),
             'status' => $registration->billing_status,
+            // Why billing stopped, when status is 'ended' (see END_* constants).
+            'end_reason' => $registration->billing_status === self::STATUS_ENDED ? $registration->billing_end_reason : null,
             'paid_until' => $registration->paid_until?->toIso8601String(),
             'access_ends_at' => static::accessEndsAt($registration)?->toIso8601String(),
             'grace_days' => static::graceDays(),
@@ -262,7 +265,11 @@ class CourseBilling
             return;
         }
 
+        // Column name is historical: it holds the saved card for either gateway
+        // (Paystack authorization code or Flutterwave card token), tagged so a
+        // renewal charges it through the gateway that issued it.
         $registration->paystack_authorization = json_encode([
+            'gateway' => ($gatewayData['gateway'] ?? null) === CoursePayments::FLUTTERWAVE ? CoursePayments::FLUTTERWAVE : CoursePayments::PAYSTACK,
             'code' => (string) $auth['authorization_code'],
             'last4' => $auth['last4'] ?? null,
             'brand' => $auth['card_type'] ?? ($auth['brand'] ?? null),
@@ -292,9 +299,10 @@ class CourseBilling
      *
      * @return array{0: Payment, 1: ?float}  [payment, service charge]
      */
-    public static function newRenewalPayment(TrainingRegistration $registration, string $gateway = 'paystack'): array
+    public static function newRenewalPayment(TrainingRegistration $registration, ?string $gateway = null): array
     {
         $tenant = Tenant::find($registration->tenant_id);
+        $gateway ??= CoursePayments::gatewayFor($tenant) ?? CoursePayments::PAYSTACK;
         $amount = (float) $registration->course_price;
         $charge = static::serviceCharge($tenant, $amount);
 
@@ -369,6 +377,7 @@ class CourseBilling
                 // Paying again also un-cancels: the student chose to continue.
                 'billing_status' => self::STATUS_ACTIVE,
                 'billing_cancelled_at' => null,
+                'billing_end_reason' => null,
                 'billing_reminded_for' => null,
                 'billing_lock_notified_at' => null,
             ]);
@@ -430,22 +439,62 @@ class CourseBilling
         return true;
     }
 
+    /* ---------------------------------------------------------------------
+     * Stopping billing
+     * ------------------------------------------------------------------ */
+
+    /** The cohort finished (its end date is on or before the next month). */
+    public const END_COHORT_ENDED = 'cohort_ended';
+
+    /** The course was deleted. */
+    public const END_COURSE_DELETED = 'course_deleted';
+
+    /** The academy was closed or scheduled for deletion. */
+    public const END_ACADEMY_CLOSED = 'academy_closed';
+
+    /** The owner stopped monthly billing for the course or for this student. */
+    public const END_STOPPED_BY_ACADEMY = 'stopped_by_academy';
+
+    /** The student was suspended or deleted. Resumes if they are reactivated. */
+    public const END_STUDENT_INACTIVE = 'student_inactive';
+
+    /** This is no longer the student's current course. */
+    public const END_MOVED_COURSE = 'moved_course';
+
+    /** Statuses that are still billed (or could be again), i.e. not ended. */
+    public const BILLED_STATUSES = [self::STATUS_ACTIVE, self::STATUS_PAST_DUE, self::STATUS_CANCELLED];
+
     /**
-     * Whether billing for this registration should stop for good: the student
-     * moved on to another course (it is no longer their current registration),
-     * or the cohort they are in has finished (its end date is on or before the
-     * day the next month would start).
+     * Why billing for this registration must stop for good, or null to carry on.
+     * Checked by the hourly sweep before every reminder or charge; the owner and
+     * lifecycle actions also stop it immediately (endBilling), so this is the
+     * safety net that catches anything done some other way.
      */
-    public static function shouldEnd(TrainingRegistration $registration): bool
+    public static function endReason(TrainingRegistration $registration): ?string
     {
         $student = LmsStudent::query()
             ->withoutGlobalScope(TenantScope::class)
             ->where('tenant_id', $registration->tenant_id)
             ->where('training_registration_id', $registration->id)
-            ->first(['id', 'tenant_id', 'training_registration_id']);
+            ->first();
 
         if (! $student) {
-            return true;
+            return self::END_MOVED_COURSE;
+        }
+
+        if ($student->lifecycleState() !== 'active') {
+            return self::END_STUDENT_INACTIVE;
+        }
+
+        $tenant = $registration->tenant_id ? Tenant::find($registration->tenant_id) : null;
+        if (! $tenant || in_array($tenant->lifecycleState(), ['purge_scheduled', 'purged'], true)) {
+            return self::END_ACADEMY_CLOSED;
+        }
+
+        // course_id is nulled by the foreign key when a course is deleted.
+        if (! $registration->course_id
+            || ! LmsCourse::query()->withoutGlobalScope(TenantScope::class)->whereKey($registration->course_id)->exists()) {
+            return self::END_COURSE_DELETED;
         }
 
         $trackId = LmsEnrollment::query()
@@ -457,14 +506,114 @@ class CourseBilling
             ? LmsTrack::query()->withoutGlobalScope(TenantScope::class)->whereKey($trackId)->value('end_date')
             : null;
 
-        if (! $endDate) {
+        if ($endDate && Carbon::parse($endDate)->endOfDay()->lessThanOrEqualTo($registration->paid_until ?? now())) {
+            return self::END_COHORT_ENDED;
+        }
+
+        return null;
+    }
+
+    /**
+     * Stop billing this registration for good and (optionally) tell the student
+     * why. The student keeps their access (an ended registration never locks).
+     * Returns false when it was not being billed anyway.
+     */
+    public static function endBilling(TrainingRegistration $registration, string $reason, bool $notify = true): bool
+    {
+        if (! $registration->isMonthly() || ! in_array($registration->billing_status, self::BILLED_STATUSES, true)) {
             return false;
         }
 
-        $end = Carbon::parse($endDate)->endOfDay();
-        $nextPeriodStarts = $registration->paid_until ?? now();
+        $wasCancelled = $registration->billing_status === self::STATUS_CANCELLED;
 
-        return $end->lessThanOrEqualTo($nextPeriodStarts);
+        $registration->forceFill([
+            'billing_status' => self::STATUS_ENDED,
+            'billing_end_reason' => $reason,
+        ])->save();
+
+        // Nobody needs telling when the student already stopped paying, moved to
+        // another course themselves, or has been suspended.
+        $message = self::endMessage($reason, $registration);
+        if ($notify && ! $wasCancelled && $message) {
+            static::notifyStudent($registration, 'billing_ended', 'No more monthly payments', $message);
+        }
+
+        return true;
+    }
+
+    /** What the student is told when billing stops, or null for "say nothing". */
+    public static function endMessage(string $reason, TrainingRegistration $registration): ?string
+    {
+        $course = $registration->course_name ?: 'your course';
+
+        return match ($reason) {
+            self::END_COHORT_ENDED => "Your course {$course} is finishing, so you will not be charged again.",
+            self::END_STOPPED_BY_ACADEMY => "Your academy has stopped monthly billing for {$course}. You will not be charged again.",
+            self::END_COURSE_DELETED => "{$course} is no longer offered by your academy, so you will not be charged again.",
+            self::END_ACADEMY_CLOSED => "Your academy has closed, so you will not be charged again for {$course}.",
+            default => null,
+        };
+    }
+
+    /**
+     * Stop billing every monthly student of a course (the owner's "Stop monthly
+     * billing", a course switched to one-time, or a deleted course). Returns how
+     * many were stopped.
+     */
+    public static function endForCourse(int $courseId, ?int $tenantId, string $reason): int
+    {
+        $count = 0;
+
+        TrainingRegistration::query()
+            ->withoutGlobalScope(TenantScope::class)
+            ->when($tenantId, fn ($q) => $q->where('tenant_id', $tenantId))
+            ->where('course_id', $courseId)
+            ->where('billing_type', LmsCourse::BILLING_MONTHLY)
+            ->whereIn('billing_status', self::BILLED_STATUSES)
+            ->get()
+            ->each(function (TrainingRegistration $registration) use ($reason, &$count) {
+                if (static::endBilling($registration, $reason)) {
+                    $count++;
+                }
+            });
+
+        return $count;
+    }
+
+    /**
+     * Keep billing in step with the student's account: suspended or deleted
+     * stops it; reactivated resumes it, without surprising them with a charge.
+     * Called from LmsStudent::booted() whenever the account state changes.
+     */
+    public static function syncWithStudentLifecycle(LmsStudent $student): void
+    {
+        $registration = static::currentRegistration($student);
+        if (! $registration || ! $registration->isMonthly()) {
+            return;
+        }
+
+        if ($student->lifecycleState() !== 'active') {
+            static::endBilling($registration, self::END_STUDENT_INACTIVE, false);
+
+            return;
+        }
+
+        // Back from a suspension: pick up where they left off. If the month they
+        // had paid for is still running, carry on as normal. If it ran out while
+        // they were suspended, they pay again themselves before their access
+        // returns (as 'cancelled', so their saved card is never charged for
+        // time they were locked out).
+        if ($registration->billing_status === self::STATUS_ENDED
+            && $registration->billing_end_reason === self::END_STUDENT_INACTIVE) {
+            $registration->forceFill([
+                'billing_status' => $registration->paid_until && $registration->paid_until->isFuture()
+                    ? self::STATUS_ACTIVE
+                    : self::STATUS_CANCELLED,
+                'billing_end_reason' => null,
+                'billing_reminded_for' => null,
+                'billing_lock_notified_at' => null,
+            ])->save();
+        }
     }
 
     /** Deep link to the student billing page on the student's own academy. */

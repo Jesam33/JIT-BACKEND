@@ -42,6 +42,7 @@
 
         .stat-body {
             display: flex;
+            flex-wrap: wrap;
             align-items: center;
             justify-content: space-between;
             gap: 16px;
@@ -76,6 +77,14 @@
         .delta.flat {
             background: #eef2f6;
             color: #5c7286;
+        }
+
+        /* Per-currency breakdown under a naira total (converted at today's rate). */
+        .stat-fx {
+            flex-basis: 100%;
+            color: #7d8fa0;
+            font-size: 11px;
+            margin-top: 2px;
         }
 
         .stat-meta {
@@ -316,10 +325,11 @@
         $agentTotals = [
             'agents' => $agentRows->sum('agents'),
             'deals' => $agentRows->sum('deals'),
-            'earned' => $agentRows->sum('earned'),
-            'pending_payout' => $agentRows->sum('pending_payout'),
-            'paid_out' => $agentRows->sum('paid_out'),
-            'balance' => $agentRows->sum('balance'),
+            // Naira totals (today's rate) across the academies' currencies.
+            'earned' => $agentRows->sum('earned_ngn'),
+            'pending_payout' => $agentRows->sum('pending_payout_ngn'),
+            'paid_out' => $agentRows->sum('paid_out_ngn'),
+            'balance' => $agentRows->sum('balance_ngn'),
         ];
     @endphp
 
@@ -332,6 +342,7 @@
             <div class="stat-body">
                 <div class="stat-value">₦{{ number_format($platformRevenue) }}</div>
                 <div class="delta up">{{ number_format($platformTxCount) }} payments</div>
+                <div class="stat-fx" title="Total converted to naira at today's rate">{{ \App\Support\PlatformMoney::totalNote($platformRevenueMoney ?? []) }}</div>
             </div>
             <div class="stat-meta">
                 <div>Successful<span>{{ number_format($platformTxCount) }}</span></div>
@@ -347,6 +358,7 @@
             <div class="stat-body">
                 <div class="stat-value">₦{{ number_format($courseGross) }}</div>
                 <div class="delta up">{{ number_format($salesCount) }} sales</div>
+                <div class="stat-fx" title="Total converted to naira at today's rate">{{ \App\Support\PlatformMoney::totalNote($courseGrossMoney ?? []) }}</div>
             </div>
             <div class="stat-meta">
                 <div>This month<span>₦{{ number_format($salesThisMonth) }}</span></div>
@@ -362,6 +374,7 @@
             <div class="stat-body">
                 <div class="stat-value">₦{{ number_format($totalCommission) }}</div>
                 <div class="delta flat">≈ {{ $courseGross > 0 ? round(($totalCommission / $courseGross) * 100, 1) : 0 }}% of sales</div>
+                <div class="stat-fx" title="Total converted to naira at today's rate">{{ \App\Support\PlatformMoney::totalNote($totalCommissionMoney ?? []) }}</div>
             </div>
             <div class="stat-meta">
                 <div>Lifetime sales<span>₦{{ number_format($courseGross) }}</span></div>
@@ -498,10 +511,10 @@
                                 </td>
                                 <td class="num">{{ number_format($row['agents']) }}</td>
                                 <td class="num">{{ number_format($row['deals']) }}</td>
-                                <td class="num">₦{{ number_format($row['earned']) }}</td>
-                                <td class="num">₦{{ number_format($row['pending_payout']) }}</td>
-                                <td class="num">₦{{ number_format($row['paid_out']) }}</td>
-                                <td class="num"><strong>₦{{ number_format($row['balance']) }}</strong></td>
+                                <td class="num">{{ \App\Support\PlatformMoney::format($row['earned'], $row['currency'] ?? 'NGN') }}</td>
+                                <td class="num">{{ \App\Support\PlatformMoney::format($row['pending_payout'], $row['currency'] ?? 'NGN') }}</td>
+                                <td class="num">{{ \App\Support\PlatformMoney::format($row['paid_out'], $row['currency'] ?? 'NGN') }}</td>
+                                <td class="num"><strong>{{ \App\Support\PlatformMoney::format($row['balance'], $row['currency'] ?? 'NGN') }}</strong></td>
                             </tr>
                         @endforeach
                         <tr class="total-row">
@@ -549,7 +562,7 @@
                                 </td>
                                 <td>{{ $agent['academy'] }}</td>
                                 <td class="num">{{ number_format($agent['deals']) }}</td>
-                                <td class="num"><strong>₦{{ number_format($agent['earned']) }}</strong></td>
+                                <td class="num"><strong>{{ \App\Support\PlatformMoney::format($agent['earned'], $agent['currency'] ?? 'NGN') }}</strong></td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -624,32 +637,53 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach ($academyRows->take(12) as $row)
+                        @foreach ($academyRows->filter(fn ($r) => empty($r['removed']))->take(12)->concat($academyRows->filter(fn ($r) => ! empty($r['removed']))) as $row)
                             <tr>
                                 <td>
                                     <strong>{{ $row['name'] }}</strong>
                                     @if ($row['is_primary'])
                                         <div class="row-sub">Primary institute</div>
+                                    @elseif (! empty($row['removed']))
+                                        <div class="row-sub">Sales of academies no longer on the platform</div>
                                     @endif
                                 </td>
                                 <td>
-                                    <div class="course-state {{ $planStates[$row['plan']] ?? 'inactive' }}" style="width: fit-content;">
-                                        {{ ucfirst($row['plan']) }}
-                                    </div>
+                                    @if ($row['plan'])
+                                        <div class="course-state {{ $planStates[$row['plan']] ?? 'inactive' }}" style="width: fit-content;">
+                                            {{ ucfirst($row['plan']) }}
+                                        </div>
+                                    @else
+                                        -
+                                    @endif
                                 </td>
                                 <td>
-                                    <div class="course-state {{ $subStates[$row['state']] ?? 'danger' }}" style="width: fit-content;">
-                                        {{ ucfirst($row['state']) }}
-                                    </div>
+                                    @if ($row['state'])
+                                        <div class="course-state {{ $subStates[$row['state']] ?? 'danger' }}" style="width: fit-content;">
+                                            {{ ucfirst($row['state']) }}
+                                        </div>
+                                    @else
+                                        -
+                                    @endif
                                 </td>
                                 <td class="num">{{ number_format($row['students']) }}</td>
                                 <td class="num">{{ number_format($row['courses']) }}</td>
                                 <td class="num">{{ number_format($row['sales']) }}</td>
-                                <td class="num">₦{{ number_format($row['gross']) }}</td>
-                                <td class="num"><strong>₦{{ number_format($row['commission']) }}</strong></td>
+                                <td class="num">{{ \App\Support\PlatformMoney::format($row['gross'], $row['currency'] ?? 'NGN') }}</td>
+                                <td class="num"><strong>{{ \App\Support\PlatformMoney::format($row['commission'], $row['currency'] ?? 'NGN') }}</strong></td>
                                 <td>{{ optional($row['created_at'])->format('d-m-Y') ?? '-' }}</td>
                             </tr>
                         @endforeach
+                        <tr class="total-row">
+                            <td>Total{{ $academyRows->count() > 13 ? ' (all academies)' : '' }}</td>
+                            <td></td>
+                            <td></td>
+                            <td class="num">{{ number_format($academyTotals['students']) }}</td>
+                            <td class="num">{{ number_format($academyTotals['courses']) }}</td>
+                            <td class="num">{{ number_format($academyTotals['sales']) }}</td>
+                            <td class="num">₦{{ number_format($academyTotals['gross']) }}</td>
+                            <td class="num"><strong>₦{{ number_format($academyTotals['commission']) }}</strong></td>
+                            <td></td>
+                        </tr>
                     </tbody>
                 </table>
             </div>

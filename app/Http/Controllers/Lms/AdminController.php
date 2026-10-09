@@ -24,6 +24,7 @@ use App\Models\QaTester;
 use App\Models\RightsRequest;
 use App\Models\CeoForum;
 use App\Models\TrainingRegistration;
+use App\Support\PlatformMoney;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -79,27 +80,48 @@ class AdminController extends BaseLmsController
         $tenantMap = $tenants->keyBy('id');
 
         // ─── Money ledgers ────────────────────────────────────────────────────
+        // Academies are paid in their own currencies, so every money figure is
+        // kept per currency and also totalled in naira at today's rate
+        // (PlatformMoney). The headline numbers below are those naira totals.
+        //
         // What the platform has been paid by institutes (paid signups + upgrades).
-        $platformRevenue = (float) \App\Models\PlatformTransaction::query()->where('status', 'success')->sum('amount');
-        $pendingPlatform = (float) \App\Models\PlatformTransaction::query()->where('status', 'pending')->sum('amount');
+        $platformByCurrency = fn (string $status) => \App\Models\PlatformTransaction::query()
+            ->where('status', $status)
+            ->selectRaw('currency, SUM(amount) as total')
+            ->groupBy('currency')
+            ->pluck('total', 'currency')
+            ->all();
+        $platformRevenueMoney = PlatformMoney::total($platformByCurrency('success'));
+        $pendingPlatformMoney = PlatformMoney::total($platformByCurrency('pending'));
+        $platformRevenue = $platformRevenueMoney['ngn'];
+        $pendingPlatform = $pendingPlatformMoney['ngn'];
         $platformTxCount = (int) \App\Models\PlatformTransaction::query()->where('status', 'success')->count();
 
-        // Successful course-fee payments across ALL academies, grouped per tenant.
-        $paidByTenant = Payment::query()
+        // Successful course-fee payments across ALL academies, per tenant and currency.
+        $paidRows = Payment::query()
             ->withoutGlobalScope($scope)
             ->where('status', 'success')
-            ->selectRaw('tenant_id, COUNT(*) as sales, SUM(amount) as gross, SUM(COALESCE(platform_fee, 0)) as fees, SUM(CASE WHEN platform_fee IS NULL THEN amount ELSE 0 END) as legacy_gross')
-            ->groupBy('tenant_id')
-            ->get()
-            ->keyBy('tenant_id');
+            ->selectRaw('tenant_id, currency, COUNT(*) as sales, SUM(amount) as gross, SUM(COALESCE(platform_fee, 0)) as fees, SUM(CASE WHEN platform_fee IS NULL THEN amount ELSE 0 END) as legacy_gross')
+            ->groupBy('tenant_id', 'currency')
+            ->get();
+        $paidByTenant = $paidRows->groupBy('tenant_id');
 
-        $courseGross = round((float) $paidByTenant->sum('gross'), 2);
-        $salesCount = (int) $paidByTenant->sum('sales');
-        $salesThisMonth = (float) Payment::query()
+        $grossByCurrency = [];
+        foreach ($paidRows as $r) {
+            PlatformMoney::add($grossByCurrency, $r->currency, (float) $r->gross);
+        }
+        $courseGrossMoney = PlatformMoney::total($grossByCurrency);
+        $courseGross = $courseGrossMoney['ngn'];
+        $salesCount = (int) $paidRows->sum('sales');
+        $salesThisMonthMoney = PlatformMoney::total(Payment::query()
             ->withoutGlobalScope($scope)
             ->where('status', 'success')
             ->where('created_at', '>=', now()->startOfMonth())
-            ->sum('amount');
+            ->selectRaw('currency, SUM(amount) as total')
+            ->groupBy('currency')
+            ->pluck('total', 'currency')
+            ->all());
+        $salesThisMonth = $salesThisMonthMoney['ngn'];
 
         // Platform scale, students/staff/courses per academy, all unscoped.
         $studentsByTenant = LmsStudent::query()->withoutGlobalScope($scope)
@@ -115,11 +137,29 @@ class AdminController extends BaseLmsController
         $newTenantsThisMonth = (int) Tenant::query()->where('created_at', '>=', now()->startOfMonth())->count();
 
         // ─── Per-academy performance (gross, commission at that academy's plan rate) ──
-        $academyRows = $tenants->map(function (Tenant $t) use ($paidByTenant, $studentsByTenant, $coursesByTenant) {
-            $row = $paidByTenant->get($t->id);
-            $gross = (float) ($row->gross ?? 0);
+        // Shown in the academy's own currency; *_ngn feed the totals and ordering.
+        $commissionByCurrency = [];
+        $academyRows = $tenants->map(function (Tenant $t) use ($paidByTenant, $studentsByTenant, $coursesByTenant, &$commissionByCurrency) {
+            $rows = $paidByTenant->get($t->id, collect());
             $rate = $t->commissionPercent();
-            $commission = static::platformCut($row, $rate);
+            $currency = $t->currency();
+            $gross = 0.0;
+            $commission = 0.0;
+            $grossNgn = 0.0;
+            $commissionNgn = 0.0;
+
+            foreach ($rows as $row) {
+                $rowCurrency = strtoupper((string) ($row->currency ?: 'NGN'));
+                $rowGross = (float) $row->gross;
+                $rowCut = static::platformCut($row, $rate);
+                PlatformMoney::add($commissionByCurrency, $rowCurrency, $rowCut);
+
+                $inOwn = fn (float $v) => $rowCurrency === $currency ? $v : (app(\App\Services\CurrencyService::class)->convertBetween($v, $rowCurrency, $currency) ?? $v);
+                $gross += $inOwn($rowGross);
+                $commission += $inOwn($rowCut);
+                $grossNgn += PlatformMoney::toNgn($rowGross, $rowCurrency) ?? 0;
+                $commissionNgn += PlatformMoney::toNgn($rowCut, $rowCurrency) ?? 0;
+            }
 
             return [
                 'id' => $t->id,
@@ -129,15 +169,67 @@ class AdminController extends BaseLmsController
                 'state' => $t->subscriptionState(),
                 'students' => (int) ($studentsByTenant[$t->id] ?? 0),
                 'courses' => (int) ($coursesByTenant[$t->id] ?? 0),
-                'sales' => (int) ($row->sales ?? 0),
+                'sales' => (int) $rows->sum('sales'),
+                'currency' => $currency,
                 'gross' => round($gross, 2),
-                'commission' => $commission,
+                'commission' => round($commission, 2),
+                'gross_ngn' => round($grossNgn, 2),
+                'commission_ngn' => round($commissionNgn, 2),
                 'created_at' => $t->created_at,
             ];
-        })->sortByDesc('gross')->values();
+        })->sortByDesc('gross_ngn')->values();
 
-        $totalCommission = round($academyRows->sum('commission'), 2);
-        $sellingAcademies = (int) $academyRows->where('gross', '>', 0)->count();
+        // Sales of academies whose record no longer exists (removed outright):
+        // still real money in the totals, so they get their own row and the
+        // table adds up to the headline figures.
+        $removedIds = $paidByTenant->keys()->filter(fn ($id) => ! $tenantMap->has($id))->values();
+        if ($removedIds->isNotEmpty()) {
+            $removedRate = (float) config('saas.platform_commission_percent', 5);
+            $removedGross = [];
+            $removedCut = [];
+            $removedSales = 0;
+            foreach ($removedIds as $id) {
+                foreach ($paidByTenant->get($id, collect()) as $row) {
+                    $cut = static::platformCut($row, $removedRate);
+                    PlatformMoney::add($removedGross, $row->currency, (float) $row->gross);
+                    PlatformMoney::add($removedCut, $row->currency, $cut);
+                    PlatformMoney::add($commissionByCurrency, $row->currency, $cut);
+                    $removedSales += (int) $row->sales;
+                }
+            }
+            $grossNgn = PlatformMoney::total($removedGross)['ngn'];
+            $cutNgn = PlatformMoney::total($removedCut)['ngn'];
+            $academyRows->push([
+                'id' => null,
+                'name' => 'Removed academies (' . $removedIds->count() . ')',
+                'removed' => true,
+                'is_primary' => false,
+                'plan' => null,
+                'state' => null,
+                'students' => 0,
+                'courses' => 0,
+                'sales' => $removedSales,
+                'currency' => 'NGN',
+                'gross' => $grossNgn,
+                'commission' => $cutNgn,
+                'gross_ngn' => $grossNgn,
+                'commission_ngn' => $cutNgn,
+                'created_at' => null,
+            ]);
+        }
+
+        // The table's Total row: every academy (not just the ones shown), in naira.
+        $academyTotals = [
+            'students' => (int) $academyRows->sum('students'),
+            'courses' => (int) $academyRows->sum('courses'),
+            'sales' => (int) $academyRows->sum('sales'),
+            'gross' => round((float) $academyRows->sum('gross_ngn'), 2),
+            'commission' => round((float) $academyRows->sum('commission_ngn'), 2),
+        ];
+
+        $totalCommissionMoney = PlatformMoney::total($commissionByCurrency);
+        $totalCommission = $totalCommissionMoney['ngn'];
+        $sellingAcademies = (int) $academyRows->filter(fn ($r) => $r['gross'] > 0 && empty($r['removed']))->count();
 
         // ─── Agent economy ────────────────────────────────────────────────────
         // One grouped query per ledger question: commissions EARNED (type
@@ -165,9 +257,14 @@ class AdminController extends BaseLmsController
                 $pendingPayout = (float) ($e->pending_payout ?? 0);
                 $paidOut = (float) ($e->paid_out ?? 0);
 
+                // Agents are paid in their academy's currency.
+                $currency = $t->currency();
+                $ngn = fn (float $v) => round(PlatformMoney::toNgn($v, $currency) ?? 0, 2);
+
                 return [
                     'name' => $t->name,
                     'is_primary' => $t->isPrimary(),
+                    'currency' => $currency,
                     'agents' => (int) ($agentsByTenant[$t->id] ?? 0),
                     'deals' => (int) ($e->deals ?? 0),
                     'earned' => $earned,
@@ -175,28 +272,33 @@ class AdminController extends BaseLmsController
                     'paid_out' => $paidOut,
                     // What agents of THIS academy can still withdraw.
                     'balance' => round($earned - $pendingPayout - $paidOut, 2),
+                    'earned_ngn' => $ngn($earned),
+                    'pending_payout_ngn' => $ngn($pendingPayout),
+                    'paid_out_ngn' => $ngn($paidOut),
+                    'balance_ngn' => $ngn($earned - $pendingPayout - $paidOut),
                 ];
             })
-            ->sortByDesc('earned')
+            ->sortByDesc('earned_ngn')
             ->values();
 
-        $agentEarnedTotal = round((float) $agentRows->sum('earned'), 2);
-        $agentPayoutPending = round((float) $agentRows->sum('pending_payout'), 2);
+        // Naira totals (today's rate) across every academy's currency.
+        $agentEarnedTotal = round((float) $agentRows->sum('earned_ngn'), 2);
+        $agentPayoutPending = round((float) $agentRows->sum('pending_payout_ngn'), 2);
         $agentCount = (int) $agentsByTenant->sum();
 
         // The split the host asked for by name: the primary institute's agents
-        // versus every other academy's agents.
+        // versus every other academy's agents (naira totals).
         $primaryAgentRow = $agentRows->firstWhere('is_primary', true);
         $otherAgentRows = $agentRows->where('is_primary', false)->values();
         $jorsasAgents = [
             'agents' => (int) ($primaryAgentRow['agents'] ?? 0),
-            'earned' => (float) ($primaryAgentRow['earned'] ?? 0),
-            'pending_payout' => (float) ($primaryAgentRow['pending_payout'] ?? 0),
+            'earned' => (float) ($primaryAgentRow['earned_ngn'] ?? 0),
+            'pending_payout' => (float) ($primaryAgentRow['pending_payout_ngn'] ?? 0),
         ];
         $otherAgents = [
             'agents' => (int) $otherAgentRows->sum('agents'),
-            'earned' => (float) $otherAgentRows->sum('earned'),
-            'pending_payout' => (float) $otherAgentRows->sum('pending_payout'),
+            'earned' => (float) $otherAgentRows->sum('earned_ngn'),
+            'pending_payout' => (float) $otherAgentRows->sum('pending_payout_ngn'),
         ];
 
         // Top earners across the whole platform (batched: one grouped query +
@@ -222,6 +324,7 @@ class AdminController extends BaseLmsController
                 'academy' => $tenantMap->get($agent->tenant_id ?? 0)?->name ?? '-',
                 'status' => $agent?->status ?? 'unknown',
                 'earned' => (float) $e->earned,
+                'currency' => $tenantMap->get($agent->tenant_id ?? 0)?->currency() ?? 'NGN',
                 'deals' => (int) $e->deals,
             ];
         })->values();
@@ -229,8 +332,14 @@ class AdminController extends BaseLmsController
         // ─── Attention center: what needs the host's action right now ─────────
         $withdrawalRequests = (int) \App\Models\AgentCommission::query()->withoutGlobalScope($scope)
             ->where('type', 'withdrawal')->where('status', 'withdrawal_requested')->count();
-        $withdrawalTotal = abs((float) \App\Models\AgentCommission::query()->withoutGlobalScope($scope)
-            ->where('type', 'withdrawal')->where('status', 'withdrawal_requested')->sum('commission_amount'));
+        // Owed to agents, in naira (today's rate) across their academies' currencies.
+        $withdrawalByCurrency = [];
+        foreach (\App\Models\AgentCommission::query()->withoutGlobalScope($scope)
+            ->where('type', 'withdrawal')->where('status', 'withdrawal_requested')
+            ->selectRaw('tenant_id, SUM(commission_amount) as total')->groupBy('tenant_id')->get() as $w) {
+            PlatformMoney::add($withdrawalByCurrency, $tenantMap->get($w->tenant_id)?->currency(), abs((float) $w->total));
+        }
+        $withdrawalTotal = PlatformMoney::total($withdrawalByCurrency)['ngn'];
         $pendingRegistrations = (int) TrainingRegistration::query()->withoutGlobalScope($scope)
             ->where('status', 'pending')->count();
         $pendingAgentApps = (int) \App\Models\Agent::query()->withoutGlobalScope($scope)
@@ -298,12 +407,15 @@ class AdminController extends BaseLmsController
         });
 
         // ─── Course-sales trend, REAL data (the old chart used rand()) ────────
+        // Per month and currency, then each month totalled in naira.
         $monthlyRaw = Payment::query()->withoutGlobalScope($scope)
             ->where('status', 'success')
             ->where('created_at', '>=', now()->subMonths(11)->startOfMonth())
-            ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as ym, SUM(amount) as gross")
+            ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as ym, currency, SUM(amount) as gross")
+            ->groupBy('ym', 'currency')
+            ->get()
             ->groupBy('ym')
-            ->pluck('gross', 'ym');
+            ->map(fn ($rows) => PlatformMoney::total($rows->pluck('gross', 'currency')->all())['ngn']);
 
         $chartWidth = 600;
         $chartHeight = 270;
@@ -356,7 +468,7 @@ class AdminController extends BaseLmsController
             'teachers' => $teacherCount,
             'tenantCount' => $tenants->count(),
 
-            // Money.
+            // Money: naira totals (today's rate), plus the per-currency breakdown.
             'platformRevenue' => $platformRevenue,
             'pendingPlatform' => $pendingPlatform,
             'platformTxCount' => $platformTxCount,
@@ -364,6 +476,11 @@ class AdminController extends BaseLmsController
             'salesCount' => $salesCount,
             'salesThisMonth' => $salesThisMonth,
             'totalCommission' => $totalCommission,
+            'platformRevenueMoney' => $platformRevenueMoney,
+            'pendingPlatformMoney' => $pendingPlatformMoney,
+            'courseGrossMoney' => $courseGrossMoney,
+            'salesThisMonthMoney' => $salesThisMonthMoney,
+            'totalCommissionMoney' => $totalCommissionMoney,
             'sellingAcademies' => $sellingAcademies,
 
             // Platform scale.
@@ -380,6 +497,7 @@ class AdminController extends BaseLmsController
 
             // Academies.
             'academyRows' => $academyRows,
+            'academyTotals' => $academyTotals,
             'newestAcademies' => $newestAcademies,
 
             // Attention center.
@@ -768,50 +886,65 @@ class AdminController extends BaseLmsController
                 'created_at' => $t->created_at,
             ]);
 
-        $platformRevenue = (float) \App\Models\PlatformTransaction::query()
-            ->where('status', 'success')
-            ->sum('amount');
-        $pendingPlatform = (float) \App\Models\PlatformTransaction::query()
-            ->where('status', 'pending')
-            ->sum('amount');
+        // Per currency, and totalled in naira at today's rate (PlatformMoney).
+        $platformByCurrency = fn (string $status) => \App\Models\PlatformTransaction::query()
+            ->where('status', $status)
+            ->selectRaw('currency, SUM(amount) as total')
+            ->groupBy('currency')
+            ->pluck('total', 'currency')
+            ->all();
+        $platformRevenueMoney = PlatformMoney::total($platformByCurrency('success'));
+        $pendingPlatformMoney = PlatformMoney::total($platformByCurrency('pending'));
+        $platformRevenue = $platformRevenueMoney['ngn'];
+        $pendingPlatform = $pendingPlatformMoney['ngn'];
         $successCount = \App\Models\PlatformTransaction::query()->where('status', 'success')->count();
 
         // --- Ledger 2: per-institute course earnings + commission (live) ---------
         // Successful course-fee payments across ALL tenants (scope removed), summed
-        // per tenant. Commission is applied per-tenant using that tenant's own plan
-        // rate, so the platform's cut reflects each institute's actual plan.
-        $paidByTenant = Payment::query()
+        // per tenant and currency. Commission is applied per-tenant using that
+        // tenant's own plan rate, so the platform's cut reflects each institute's
+        // actual plan. One row per academy per currency it has been paid in.
+        $paidRows = Payment::query()
             ->withoutGlobalScope(\App\Scopes\TenantScope::class)
             ->where('status', 'success')
-            ->selectRaw('tenant_id, COUNT(*) as sales, SUM(amount) as gross, SUM(COALESCE(platform_fee, 0)) as fees, SUM(CASE WHEN platform_fee IS NULL THEN amount ELSE 0 END) as legacy_gross')
-            ->groupBy('tenant_id')
-            ->get()
-            ->keyBy('tenant_id');
+            ->selectRaw('tenant_id, currency, COUNT(*) as sales, SUM(amount) as gross, SUM(COALESCE(platform_fee, 0)) as fees, SUM(CASE WHEN platform_fee IS NULL THEN amount ELSE 0 END) as legacy_gross')
+            ->groupBy('tenant_id', 'currency')
+            ->get();
+        $tenants = Tenant::query()->orderBy('name')->get()->keyBy('id');
 
-        $instituteEarnings = Tenant::query()
-            ->orderBy('name')
-            ->get()
-            ->map(function (Tenant $t) use ($paidByTenant) {
-                $row = $paidByTenant->get($t->id);
-                $gross = (float) ($row->gross ?? 0);
-                $rate = $t->commissionPercent();
+        $grossByCurrency = [];
+        $commissionByCurrency = [];
+        // Academies removed outright keep their sales in the ledger (labelled),
+        // so the totals still add up to every payment received.
+        $instituteEarnings = $paidRows
+            ->map(function ($row) use ($tenants, &$grossByCurrency, &$commissionByCurrency) {
+                $t = $tenants->get($row->tenant_id);
+                $currency = strtoupper((string) ($row->currency ?: 'NGN'));
+                $gross = (float) $row->gross;
+                $rate = $t ? $t->commissionPercent() : (float) config('saas.platform_commission_percent', 5);
                 $commission = static::platformCut($row, $rate);
+                PlatformMoney::add($grossByCurrency, $currency, $gross);
+                PlatformMoney::add($commissionByCurrency, $currency, $commission);
 
                 return [
-                    'tenant_name' => $t->name,
-                    'plan' => $t->planSlug(),
+                    'tenant_name' => $t ? $t->name : 'Removed academy (#' . $row->tenant_id . ')',
+                    'plan' => $t ? $t->planSlug() : '-',
                     'commission_percent' => $rate,
-                    'sales' => (int) ($row->sales ?? 0),
+                    'currency' => $currency,
+                    'sales' => (int) $row->sales,
                     'gross' => round($gross, 2),
                     'commission' => $commission,
                     'net_to_institute' => round($gross - $commission, 2),
                 ];
             })
             ->filter(fn ($r) => $r['sales'] > 0 || $r['gross'] > 0)
+            ->sortBy('tenant_name')
             ->values();
 
-        $totalCourseGross = round($instituteEarnings->sum('gross'), 2);
-        $totalCommission = round($instituteEarnings->sum('commission'), 2);
+        $courseGrossMoney = PlatformMoney::total($grossByCurrency);
+        $totalCommissionMoney = PlatformMoney::total($commissionByCurrency);
+        $totalCourseGross = $courseGrossMoney['ngn'];
+        $totalCommission = $totalCommissionMoney['ngn'];
 
         return view('admin.lms.transactions.index', array_merge($this->adminShellData(), [
             'activeLmsPage' => 'transactions',
@@ -822,6 +955,10 @@ class AdminController extends BaseLmsController
             'instituteEarnings' => $instituteEarnings,
             'totalCourseGross' => $totalCourseGross,
             'totalCommission' => $totalCommission,
+            'platformRevenueMoney' => $platformRevenueMoney,
+            'pendingPlatformMoney' => $pendingPlatformMoney,
+            'courseGrossMoney' => $courseGrossMoney,
+            'totalCommissionMoney' => $totalCommissionMoney,
         ]));
     }
 
@@ -1891,11 +2028,14 @@ class AdminController extends BaseLmsController
 
         LmsGroupChat::firstOrCreateForTenant($track->tenant_id, ['track_id' => $track->id]);
 
-        LmsDmThread::firstOrCreateForTenant($track->tenant_id, [
-            'student_id' => $student->id,
-            'instructor_id' => $track->instructor_id,
-            'track_id' => $track->id,
-        ]);
+        // Unassigned cohort: the thread is created once an instructor is.
+        if ($track->instructor_id) {
+            LmsDmThread::firstOrCreateForTenant($track->tenant_id, [
+                'student_id' => $student->id,
+                'instructor_id' => $track->instructor_id,
+                'track_id' => $track->id,
+            ]);
+        }
 
         return response()->json($enrollment, 201);
     }
@@ -2131,6 +2271,8 @@ class AdminController extends BaseLmsController
             'withdrawals' => $withdrawals,
             'paid' => $paid,
             'academyNames' => $academyNames,
+            // Agents are paid in their academy's currency.
+            'academyCurrencies' => Tenant::query()->get()->mapWithKeys(fn (Tenant $t) => [$t->id => $t->currency()]),
         ]));
     }
 

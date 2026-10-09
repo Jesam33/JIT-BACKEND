@@ -32,6 +32,30 @@ class LmsTrack extends Model
         'certificates_issued_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        // A cohort of a monthly course must have an end date: that date is what
+        // stops its students being billed (CourseBilling::endReason). Enforced on
+        // every save, so the owner portal, the host back office and anything else
+        // are all held to it. The course side of the same rule is in LmsCourse.
+        static::saving(function (LmsTrack $track): void {
+            if ($track->end_date || ! $track->course_id) {
+                return;
+            }
+
+            $monthly = LmsCourse::query()
+                ->withoutGlobalScope(\App\Scopes\TenantScope::class)
+                ->whereKey($track->course_id)
+                ->value('billing_type') === LmsCourse::BILLING_MONTHLY;
+
+            if ($monthly) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'end_date' => 'This cohort belongs to a monthly course, so it needs an end date. Students are billed every month until it ends.',
+                ]);
+            }
+        });
+    }
+
     public function batch()
     {
         return $this->belongsTo(Batch::class);

@@ -199,12 +199,41 @@ return [
 
     // ─── Monthly courses (student pays every month) ────────────────────
     // Days after a monthly student's paid period ends before their portal access
-    // pauses. Access comes back the moment they pay. Agreed rule: 3 days.
-    'monthly_grace_days' => (int) env('MONTHLY_GRACE_DAYS', 3),
+    // pauses. Access comes back the moment they pay. Agreed rule: 2 days
+    // (was 3 until 2026-09-30).
+    'monthly_grace_days' => (int) env('MONTHLY_GRACE_DAYS', 2),
 
-    // How many days before the next monthly payment is due the student gets a
-    // "payment due soon" reminder (once per period).
-    'monthly_reminder_days' => (int) env('MONTHLY_REMINDER_DAYS', 3),
+    // How many days before the month runs out the "payment due soon" reminders
+    // start. One reminder EVERY DAY of that window, in the portal AND by email
+    // (the notification email sweep sends every billing notice). Agreed rule: a
+    // week, daily.
+    'monthly_reminder_days' => (int) env('MONTHLY_REMINDER_DAYS', 7),
+
+    // The daily reminder goes out on the first hourly run at/after this hour in
+    // this timezone, so students are never emailed in the middle of the night
+    // (the server clock is UTC).
+    'monthly_reminder_hour' => (int) env('MONTHLY_REMINDER_HOUR', 8),
+    'monthly_reminder_timezone' => env('MONTHLY_REMINDER_TIMEZONE', 'Africa/Lagos'),
+
+    // One-on-one self-booking (students book their own private sessions from
+    // their teacher's weekly availability; App\Services\OneOnOneBooking).
+    // Availability is entered in monthly_reminder_timezone (the academy's local
+    // time); browsers show slots in the viewer's own time.
+    'one_on_one_booking' => [
+        // A student must book at least this many hours ahead.
+        'min_notice_hours' => (int) env('ONE_ON_ONE_MIN_NOTICE_HOURS', 12),
+        // A student may cancel up to this many hours before; after that only
+        // the teacher can cancel or move it.
+        'cancel_window_hours' => (int) env('ONE_ON_ONE_CANCEL_WINDOW_HOURS', 24),
+        // How far ahead open slots are shown.
+        'horizon_days' => (int) env('ONE_ON_ONE_HORIZON_DAYS', 14),
+        // "Starting soon" reminder to both sides this many minutes before.
+        'reminder_minutes' => (int) env('ONE_ON_ONE_REMINDER_MINUTES', 60),
+        // "Same time every week" books at most this many weeks in one go.
+        'repeat_max_weeks' => (int) env('ONE_ON_ONE_REPEAT_MAX_WEEKS', 8),
+        // A student can report "my teacher didn't come" up to this many days after.
+        'no_show_report_days' => (int) env('ONE_ON_ONE_NO_SHOW_REPORT_DAYS', 7),
+    ],
 
     // Default commission (percent of the course price) an admission agent earns on
     // a sale they refer or register. This is the platform-wide DEFAULT; each
@@ -259,11 +288,10 @@ return [
     // default keeps today's behavior byte-for-byte.
     'paystack_fee_bearer' => env('PAYSTACK_FEE_BEARER', 'subaccount'),
 
-    // Charge non-Nigerian buyers in USD (Paystack). OFF by default: leave it off
-    // until the platform's Paystack account is confirmed USD-enabled — while off,
-    // EVERY buyer is charged NGN (today's behavior) regardless of their country.
-    // The display price is always localized for the visitor either way; this flag
-    // only governs the currency money is actually collected in.
+    // RETIRED (2026-10-09): students are now always charged in the academy's own
+    // currency (Tenant::currency(), set from its country on the payout page) via
+    // Flutterwave, so there is no "convert to USD for foreign buyers" mode.
+    // Kept only so an old .env with USD_CHARGE_ENABLED doesn't confuse anyone.
     'usd_charge_enabled' => filter_var(env('USD_CHARGE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 
     // Geo + FX for localized DISPLAY pricing (never affects the charged amount).
@@ -343,6 +371,7 @@ return [
                 'chat' => false,
                 'certificates' => false,
                 'pre_recorded_video' => false,
+                'one_on_one' => false,       // one-on-one classes: Basic and up
                 'admission_marketer' => false,
                 // false → the storefront shows the "Powered by Jorsas" badge.
                 'remove_branding' => false,
@@ -377,6 +406,7 @@ return [
                 // are live-classes only. Explicit false (not just inherited from
                 // `free`) so the intent reads clearly here.
                 'pre_recorded_video' => false,
+                'one_on_one' => true,
                 'admission_marketer' => true,
                 'remove_branding' => true,
                 // Basic gets standard analytics; "advanced" analytics is Pro+.
@@ -403,6 +433,7 @@ return [
                 'chat' => true,
                 'certificates' => true,
                 'pre_recorded_video' => true,
+                'one_on_one' => true,
                 'admission_marketer' => true,
                 'remove_branding' => true,
                 'advanced_analytics' => true,
@@ -433,6 +464,7 @@ return [
                 'chat' => true,
                 'certificates' => true,
                 'pre_recorded_video' => true,
+                'one_on_one' => true,
                 'admission_marketer' => true,
                 'remove_branding' => true,
                 'advanced_analytics' => true,

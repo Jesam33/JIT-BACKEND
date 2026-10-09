@@ -44,14 +44,19 @@ class StudentDashboardController extends BaseLmsController
         // classes don't drag it down before they happen.
         $classroomIds = collect();
         $scheduledIds = collect();
+        // A one-on-one student is measured on their own private sessions only;
+        // the group's classes (scheduled and legacy) aren't theirs to attend.
+        $oneOnOne = $student->isOneOnOne();
+
         if ($course) {
-            $classroomIds = \App\Models\LmsClassroom::query()
+            $classroomIds = $oneOnOne ? collect() : \App\Models\LmsClassroom::query()
                 ->where('course_id', $course->id)
                 ->where('starts_at', '<=', now())
                 ->pluck('id');
 
             $scheduledIds = \App\Models\LmsScheduledClass::query()
                 ->whereHas('module', fn($q) => $q->where('course_id', $course->id))
+                ->visibleTo($student)
                 ->where('status', '!=', 'cancelled')
                 ->where('starts_at', '<=', now())
                 ->pluck('id');
@@ -78,7 +83,7 @@ class StudentDashboardController extends BaseLmsController
 
         $upcomingClass = null;
         if ($course) {
-            $upcomingClassroom = \App\Models\LmsClassroom::query()
+            $upcomingClassroom = $oneOnOne ? null : \App\Models\LmsClassroom::query()
                 ->where('course_id', $course->id)
                 ->where('starts_at', '>', now())
                 ->orderBy('starts_at')
@@ -100,6 +105,7 @@ class StudentDashboardController extends BaseLmsController
 
             $upcomingScheduled = \App\Models\LmsScheduledClass::query()
                 ->whereHas('module', fn($q) => $q->where('course_id', $course->id))
+                ->visibleTo($student)
                 ->where('status', 'scheduled')
                 ->where('starts_at', '>', now())
                 ->orderBy('starts_at')
@@ -109,6 +115,7 @@ class StudentDashboardController extends BaseLmsController
                 $upcomingClass = [
                     'id' => $upcomingScheduled->id,
                     'class_type' => 'scheduled',
+                    'is_private' => $upcomingScheduled->isPrivate(),
                     'title' => $upcomingScheduled->title,
                     'starts_at' => $upcomingScheduled->starts_at->toIso8601String(),
                     'ends_at' => $upcomingScheduled->ends_at?->toIso8601String(),
@@ -140,10 +147,10 @@ class StudentDashboardController extends BaseLmsController
 
         $timetable = [];
         if ($course) {
-            $oldClasses = \App\Models\LmsClassroom::query()
+            $oldClasses = ($oneOnOne ? collect() : \App\Models\LmsClassroom::query()
                 ->where('course_id', $course->id)
                 ->orderBy('starts_at')
-                ->get()
+                ->get())
                 ->map(fn ($c) => [
                     'id' => $c->id,
                     'class_type' => 'classroom',
@@ -160,12 +167,14 @@ class StudentDashboardController extends BaseLmsController
 
             $scheduledClasses = \App\Models\LmsScheduledClass::query()
                 ->whereHas('module', fn($q) => $q->where('course_id', $course->id))
+                ->visibleTo($student)
                 ->where('status', '!=', 'cancelled')
                 ->orderBy('starts_at')
                 ->get()
                 ->map(fn ($c) => [
                     'id' => $c->id,
                     'class_type' => 'scheduled',
+                    'is_private' => $c->isPrivate(),
                     'title' => $c->title,
                     'starts_at' => $c->starts_at?->toIso8601String(),
                     'ends_at' => $c->ends_at?->toIso8601String(),
@@ -320,6 +329,13 @@ class StudentDashboardController extends BaseLmsController
                 'overall_progress' => $overallProgress,
             ],
             'upcoming_class' => $upcomingClass,
+            // One-on-one students: who teaches them (null teacher = not yet
+            // assigned). Null for group / pre-recorded students.
+            'one_on_one' => $oneOnOne ? [
+                'teacher_name' => $student->oneOnOneTeacher?->name,
+                // Can they book their own sessions (Book a session page)?
+                'can_book' => \App\Services\OneOnOneBooking::blockedReason($student) === null,
+            ] : null,
             'next_lesson' => $nextLesson,
             'timetable' => $timetable,
             'materials' => $materials,

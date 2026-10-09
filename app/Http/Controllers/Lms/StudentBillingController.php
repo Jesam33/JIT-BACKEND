@@ -8,7 +8,7 @@ use App\Models\Tenant;
 use App\Models\TrainingRegistration;
 use App\Scopes\TenantScope;
 use App\Services\CourseBilling;
-use App\Services\PaystackService;
+use App\Services\CoursePayments;
 use App\Support\Notify;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -73,37 +73,31 @@ class StudentBillingController extends BaseLmsController
         }
 
         $tenant = Tenant::find($registration->tenant_id);
-        $subaccount = CourseBilling::subaccountCode($tenant);
 
         // Same money-safety rule as a first purchase: a non-primary academy with
         // no linked bank must not collect into the platform account.
-        if ($tenant && ! $tenant->isPrimary() && ! $subaccount) {
-            return response()->json([
-                'message' => 'Your academy is finishing its payment setup. Please try again later or contact them.',
-            ], 409);
-        }
-
-        $paystack = app(PaystackService::class);
-        if (! $paystack->isConfigured()) {
-            return response()->json(['message' => 'Payments are not available right now. Please try again later.'], 503);
+        if (! CoursePayments::gatewayFor($tenant)) {
+            return $tenant && ! $tenant->isPrimary()
+                ? response()->json(['message' => 'Your academy is finishing its payment setup. Please try again later or contact them.'], 409)
+                : response()->json(['message' => 'Payments are not available right now. Please try again later.'], 503);
         }
 
         [$payment, $fee] = CourseBilling::newRenewalPayment($registration);
 
         try {
-            $response = $paystack->initializeTransaction(
-                $registration->email,
-                (float) $payment->amount,
-                $payment->reference,
+            $checkout = CoursePayments::start(
+                $payment,
+                $tenant,
+                (string) $registration->email,
+                trim($registration->first_name . ' ' . $registration->last_name),
+                CourseBilling::billingUrl($registration, ['reference' => $payment->reference]),
                 [
                     'registration_id' => $registration->id,
                     'course_name' => $registration->course_name,
                     'purpose' => 'monthly_renewal',
                 ],
-                CourseBilling::billingUrl($registration, ['reference' => $payment->reference]),
-                $subaccount,
-                $payment->currency,
-                $fee
+                $fee,
+                (string) $registration->course_name
             );
         } catch (\Throwable $e) {
             Log::error('Monthly renewal initialization failed', [
@@ -115,14 +109,13 @@ class StudentBillingController extends BaseLmsController
             return response()->json(['message' => 'Could not start the payment. Please try again.'], 500);
         }
 
-        $url = $response['data']['authorization_url'] ?? null;
-        if (! $url) {
+        if (! $checkout['url']) {
             $payment->update(['status' => 'failed']);
 
-            return response()->json(['message' => $response['message'] ?? 'Could not start the payment. Please try again.'], 502);
+            return response()->json(['message' => $checkout['message'] ?: 'Could not start the payment. Please try again.'], 502);
         }
 
-        return response()->json(['authorization_url' => $url, 'reference' => $payment->reference]);
+        return response()->json(['authorization_url' => $checkout['url'], 'reference' => $payment->reference]);
     }
 
     /** Confirm a renewal after Paystack sends the student back. */
@@ -152,22 +145,22 @@ class StudentBillingController extends BaseLmsController
 
         if ($payment->status !== 'success') {
             try {
-                $response = app(PaystackService::class)->verifyTransaction($reference);
+                $data = CoursePayments::verify($payment);
             } catch (\Throwable $e) {
                 Log::error('Monthly renewal verification failed', ['reference' => $reference, 'err' => $e->getMessage()]);
 
                 return response()->json(['message' => 'Could not verify the payment yet. Please refresh in a moment.'], 500);
             }
 
-            if (($response['data']['status'] ?? '') !== 'success') {
+            if (($data['status'] ?? '') !== 'success') {
                 return response()->json([
                     'message' => 'Payment not confirmed yet.',
-                    'status' => $response['data']['status'] ?? 'unknown',
+                    'status' => $data['status'] ?? 'unknown',
                     'billing' => CourseBilling::summary($registration),
                 ]);
             }
 
-            $status = CourseBilling::completeRenewal($payment, (array) ($response['data'] ?? []));
+            $status = CourseBilling::completeRenewal($payment, (array) $data);
             if ($status === 'review') {
                 return response()->json([
                     'message' => 'Payment received but needs manual confirmation. Your academy will confirm it shortly.',

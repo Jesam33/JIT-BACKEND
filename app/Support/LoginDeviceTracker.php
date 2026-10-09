@@ -11,16 +11,21 @@ use Illuminate\Support\Collection;
  * Recognises the device a login came from, and warns the account holder when it
  * is one we have not seen before.
  *
- * The fingerprint is sha1(ip . '|' . normalised user agent). It is deliberately
- * coarse: browser minor versions change constantly, so a fingerprint that moved
- * with every Chrome update would alert on every release and teach people to
- * ignore the email. The normalisation below pins the parts that identify a
- * machine and discards the parts that churn.
+ * A device is identified by a random id the browser generates once and keeps
+ * (localStorage `lms_device_id`, sent as the `X-Device-Id` header): the
+ * fingerprint is sha1('device|' . id). The network is deliberately NOT part of
+ * it. It used to be (sha1(ip . '|' . user agent)), but on mobile data the IP
+ * changes all the time, so people's own phones kept "signing in from a new
+ * device" and they learned to ignore the alert that matters. The IP is still
+ * recorded and shown, just not used to decide.
  *
- * IP is included, which means the same laptop on a different network counts as a
- * new device. That is the intended trade: a genuinely new location IS the thing
- * worth telling someone about, and "same browser, new IP" is exactly the signal
- * an account-takeover alert should fire on.
+ * A request without the header (an old cached frontend, a script) falls back to
+ * the old ip + browser fingerprint, so nothing breaks. An old-style row is
+ * adopted quietly the first time the same browser signs in with an id (see
+ * record()), so the switch-over itself emails nobody.
+ *
+ * Clearing site data or a private window gives a new id, so that sign-in reads
+ * as a new device: an accepted, and arguably useful, trade.
  *
  * `lms_login_devices` outlives `lms_sessions` on purpose. Sessions expire after
  * 7 days; if "have I seen this before?" were derived from sessions, a returning
@@ -57,11 +62,32 @@ class LoginDeviceTracker
             $userAgent = self::truncate((string) $request->userAgent(), 255);
             $label = self::describe($userAgent);
 
+            $byDeviceId = self::deviceId($request) !== null;
+
             $device = LmsLoginDevice::query()
                 ->where('role', $role)
                 ->where('user_id', $userId)
                 ->where('fingerprint', $fingerprint)
                 ->first();
+
+            // Switch-over: the first sign-in with a device id from a browser we
+            // already knew the old way (ip + browser) takes over that row instead
+            // of alerting. Matched on the browser + system only, since the IP is
+            // exactly what we stopped trusting; each old row is adopted once.
+            if (! $device && $byDeviceId) {
+                $normalisedUa = self::normalise((string) $request->userAgent());
+                $device = LmsLoginDevice::query()
+                    ->where('role', $role)
+                    ->where('user_id', $userId)
+                    ->where('by_device_id', false)
+                    ->orderByDesc('last_seen_at')
+                    ->get()
+                    ->first(fn (LmsLoginDevice $d) => self::normalise((string) $d->user_agent) === $normalisedUa);
+
+                if ($device) {
+                    $device->forceFill(['fingerprint' => $fingerprint, 'by_device_id' => true]);
+                }
+            }
 
             if ($device) {
                 // Seen before: this is the common case and it must stay cheap.
@@ -94,6 +120,7 @@ class LoginDeviceTracker
                 'device_label' => $label,
                 'first_seen_at' => now(),
                 'last_seen_at' => now(),
+                'by_device_id' => $byDeviceId,
             ]);
 
             if (! $isFirstEver && $email) {
@@ -139,14 +166,37 @@ class LoginDeviceTracker
     }
 
     /**
-     * Stable identity for a device: the IP plus a version-stripped user agent.
-     *
-     * Browser and OS version numbers are removed because they change on every
-     * update; the engine and platform names are kept because they do not.
+     * Stable identity for a device: its browser-held device id, or, for a
+     * request without one, the old IP + version-stripped user agent.
      */
     public static function fingerprint(Request $request): string
     {
-        return sha1(self::ip($request) . '|' . self::normalise((string) $request->userAgent()));
+        $deviceId = self::deviceId($request);
+
+        return $deviceId !== null
+            ? sha1('device|' . $deviceId)
+            : self::legacyFingerprint(self::ip($request), (string) $request->userAgent());
+    }
+
+    /**
+     * The pre-device-id fingerprint: IP plus a version-stripped user agent
+     * (versions change on every browser update; engine/platform names don't).
+     */
+    private static function legacyFingerprint(?string $ip, string $userAgent): string
+    {
+        return sha1(($ip ?? '') . '|' . self::normalise($userAgent));
+    }
+
+    /**
+     * The random id the frontend keeps per browser (X-Device-Id), or null when
+     * absent or malformed. Format-checked only: it identifies a browser, it is
+     * not a secret and grants nothing on its own.
+     */
+    private static function deviceId(Request $request): ?string
+    {
+        $id = trim((string) $request->header('X-Device-Id', ''));
+
+        return preg_match('/^[A-Za-z0-9_-]{16,64}$/', $id) ? $id : null;
     }
 
     private static function normalise(string $userAgent): string
@@ -284,7 +334,10 @@ class LoginDeviceTracker
             ->get();
 
         $matches = $sessions->filter(function (LmsSession $session) use ($fingerprint, $exceptFingerprint): bool {
-            $own = sha1(($session->ip ?? '') . '|' . self::normalise((string) $session->user_agent));
+            // Sessions opened since device ids store their device's fingerprint;
+            // older ones are matched the old way, from their own ip + agent.
+            $own = $session->device_fingerprint
+                ?: self::legacyFingerprint($session->ip, (string) $session->user_agent);
 
             return $fingerprint !== null
                 ? $own === $fingerprint

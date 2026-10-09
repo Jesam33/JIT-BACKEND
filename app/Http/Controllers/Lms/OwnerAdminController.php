@@ -119,6 +119,10 @@ class OwnerAdminController extends BaseLmsController
                 'name' => $tenant->name,
                 'slug' => $tenant->slug,
                 'status' => $tenant->status,
+                // What the academy sells and is paid in (owner screens label
+                // prices with it).
+                'currency' => $tenant->currency(),
+                'country' => $tenant->payoutCountry(),
             ],
             'owner' => [
                 'email' => $owner?->email,
@@ -253,7 +257,9 @@ class OwnerAdminController extends BaseLmsController
                 'rejected' => $regByStatus['rejected'] ?? 0,
                 'total' => array_sum($regByStatus),
             ],
-            'currency' => '₦',
+            // The academy's own currency symbol (revenue is in it).
+            'currency' => trim(app(\App\Services\CurrencyService::class)->symbol($tenant->currency())),
+            'currency_code' => $tenant->currency(),
         ]);
     }
 
@@ -270,9 +276,9 @@ class OwnerAdminController extends BaseLmsController
         [$tenant] = $context;
 
         $students = LmsStudent::query()
-            ->with('course:id,title')
+            ->with(['course:id,title', 'oneOnOneTeacher:id,name'])
             ->latest('id')
-            ->get(['id', 'first_name', 'last_name', 'email', 'phone', 'selected_course_id', 'learning_mode', 'onboarding_completed', 'created_at', 'is_active', 'deactivated_at', 'purge_after', 'purged_at', 'training_registration_id']);
+            ->get(['id', 'first_name', 'last_name', 'email', 'phone', 'selected_course_id', 'learning_mode', 'one_on_one_teacher_id', 'onboarding_completed', 'created_at', 'is_active', 'deactivated_at', 'purge_after', 'purged_at', 'training_registration_id']);
 
         // Which of these students have paid. Resolved in ONE query for the whole
         // roster rather than by calling hasSuccessfulPayment() per row, which
@@ -305,12 +311,17 @@ class OwnerAdminController extends BaseLmsController
             'name' => trim("{$s->first_name} {$s->last_name}") ?: ($s->email ?? 'Student'),
             // null for one-time courses; otherwise status / paid_until / locked.
             'billing' => ($reg = $monthly->get($s->training_registration_id))
-                ? \Illuminate\Support\Arr::only(CourseBilling::summary($reg), ['status', 'paid_until', 'access_ends_at', 'locked', 'amount', 'currency'])
+                ? \Illuminate\Support\Arr::only(CourseBilling::summary($reg), ['status', 'end_reason', 'paid_until', 'access_ends_at', 'locked', 'amount', 'currency'])
                 : null,
             'email' => $s->email,
             'phone' => $s->phone,
             'course' => $s->course?->title,
             'learning_mode' => $s->learning_mode,
+            // One-on-one students: their teacher (null = needs one assigned).
+            'one_on_one' => $s->isOneOnOne() ? [
+                'teacher_id' => $s->one_on_one_teacher_id,
+                'teacher_name' => $s->oneOnOneTeacher?->name,
+            ] : null,
             'onboarding_completed' => (bool) $s->onboarding_completed,
             'created_at' => $s->created_at,
             // The roster has to be able to say WHICH kind of off this is:
@@ -560,7 +571,7 @@ class OwnerAdminController extends BaseLmsController
             'emails' => ['required', 'array', 'min:1'],
             'emails.*' => ['string'],
             'course_id' => ['required', 'integer'],
-            'learning_mode' => ['nullable', 'in:live,pre_recorded'],
+            'learning_mode' => ['nullable', 'in:live,pre_recorded,one_on_one'],
             'requires_payment' => ['nullable', 'boolean'],
         ]);
 
@@ -587,12 +598,15 @@ class OwnerAdminController extends BaseLmsController
             $mode = 'live';
             $modeFellBack = true;
         }
+        // Same for one-on-one when the course (or plan) doesn't offer it.
+        if ($mode === LmsStudent::MODE_ONE_ON_ONE && ! $course->offersOneOnOne($tenant)) {
+            $mode = 'live';
+            $modeFellBack = true;
+        }
 
-        // Base fee for the chosen mode (pre-recorded may be cheaper). A 0 base is
+        // Base fee for the chosen mode (each mode has its own price). A 0 base is
         // always free, whatever the toggle says.
-        $base = ($mode === 'pre_recorded' && $course->prerecorded_price !== null)
-            ? (float) $course->prerecorded_price
-            : (float) $course->price;
+        $base = $course->priceFor($mode);
 
         $mustPay = $request->boolean('requires_payment', true) && $base > 0;
 
@@ -600,7 +614,7 @@ class OwnerAdminController extends BaseLmsController
         // before it can collect course fees, or the money would settle to the
         // platform account. Mirrors the defense in LmsIntakeController.
         $isNonPrimary = $tenant->slug && $tenant->slug !== config('saas.primary_slug', 'jorsas');
-        if ($mustPay && $isNonPrimary && ! $this->payoutSubaccountCode($tenant)) {
+        if ($mustPay && $isNonPrimary && ! $tenant->payoutConfigured()) {
             return response()->json([
                 'message' => 'Link your bank account under Payment settings before inviting students to a paid course, so fees settle to you.',
             ], 409);
@@ -621,7 +635,7 @@ class OwnerAdminController extends BaseLmsController
         $seatsUsed = (int) $course->registered_count;
 
         $brand = $this->mailBranding($tenant);
-        $priceDisplay = '₦' . number_format($base, 2);
+        $priceDisplay = \App\Services\CourseBilling::money($tenant->currency(), (float) $base);
 
         $invited = 0;
         $created = 0;
@@ -674,9 +688,8 @@ class OwnerAdminController extends BaseLmsController
 
             // One TrainingRegistration per invite carries the course + a fresh
             // invite_token. Paid → pending (provisioned on payment); comped/free →
-            // approved now. course_price is frozen for the paid charge, in NGN, 
-            // the academy's settlement currency (its Paystack subaccount is a
-            // Nigerian bank).
+            // approved now. course_price is frozen for the paid charge, in the
+            // academy's own currency (what it sells and is paid in).
             $registration = TrainingRegistration::query()->create([
                 'first_name' => $student->first_name ?: Str::before($email, '@'),
                 'last_name' => $student->last_name ?? '',
@@ -685,7 +698,7 @@ class OwnerAdminController extends BaseLmsController
                 'course_name' => $course->title,
                 'learning_mode' => $mode,
                 'course_price' => $mustPay ? $base : 0,
-                'charge_currency' => 'NGN',
+                'charge_currency' => $tenant->currency(),
                 'status' => $mustPay ? 'pending' : 'approved',
                 'approved_by' => $mustPay ? null : ($owner->id ?? null),
                 'approved_at' => $mustPay ? null : now(),
@@ -778,19 +791,6 @@ class OwnerAdminController extends BaseLmsController
             'message' => $this->summariseCourseInvite($invited, $mustPay, $course->title, $limited, $courseFull, $failed)
                 . ($modeFellBack ? ' Pre-recorded isn’t set up for this course yet, so they were invited to the live mode.' : ''),
         ]);
-    }
-
-    /**
-     * The institute's own Paystack subaccount code (its bank), or null when it
-     * hasn't linked one. Paid course fees split to this so the money settles to
-     * the academy, not the platform. Kept private + local to mirror
-     * LmsIntakeController::tenantSubaccountCode (also private there).
-     */
-    private function payoutSubaccountCode(Tenant $tenant): ?string
-    {
-        $code = data_get($tenant->settings, 'paystack.subaccount_code');
-
-        return is_string($code) && $code !== '' ? $code : null;
     }
 
     /**
@@ -919,13 +919,14 @@ class OwnerAdminController extends BaseLmsController
     /**
      * Remove a staff member (teacher/admin) from the institute.
      *
-     * SAFETY: lms_tracks.instructor_id is a NOT-NULL foreign key with
-     * cascadeOnDelete, deleting a teacher who still leads a cohort would
-     * silently cascade-delete that cohort (and, in turn, its enrolments, DM
-     * threads and group chat). So we refuse while the teacher is assigned to any
-     * cohort and tell the owner to reassign it first (Tracks & Cohorts page).
-     * Every other teacher reference (tasks, modules, classrooms, graded-by) is
-     * nullOnDelete; their own DM threads + notifications cascade harmlessly.
+     * Their cohorts are NOT lost: lms_tracks.instructor_id is nullOnDelete
+     * (since 2026-09-30; it used to cascade and delete the cohort, so removal
+     * was refused while they led one). The deletion is scheduled; until it
+     * completes they stay the cohorts' instructor (and it can be cancelled),
+     * after that the cohorts become Unassigned, with students, enrolments and
+     * group chat intact, until the owner assigns someone new. Every other
+     * teacher reference (tasks, modules, classrooms, graded-by) is nullOnDelete;
+     * their own DM threads + notifications go with them.
      */
     public function destroyStaff(Request $request, int $id): JsonResponse
     {
@@ -940,22 +941,22 @@ class OwnerAdminController extends BaseLmsController
         $teacher = LmsTeacher::query()->staffOnly()->findOrFail($id);
 
         $cohortCount = LmsTrack::query()->where('instructor_id', $teacher->id)->count();
-        if ($cohortCount > 0) {
-            return response()->json([
-                'message' => "{$teacher->name} leads {$cohortCount} cohort" . ($cohortCount === 1 ? '' : 's')
-                    . '. Reassign ' . ($cohortCount === 1 ? 'it' : 'them') . ' to another instructor on the '
-                    . 'Tracks & Cohorts page before removing this staff member.',
-            ], 422);
-        }
 
         $teacher->schedulePurge();
         $teacher = $teacher->fresh();
         $this->notifyAccountLifecycle($teacher, 'staff', 'deletion_scheduled');
         Notify::staffAdmin('deleted', $teacher->name, 'Deletion scheduled for ' . $teacher->purge_after->format('j F Y') . '.');
 
+        $until = $teacher->purge_after->format('j F Y');
+        $cohortNote = $cohortCount > 0
+            ? " They lead {$cohortCount} cohort" . ($cohortCount === 1 ? '' : 's') . ': assign '
+                . ($cohortCount === 1 ? 'it' : 'them') . " a new instructor on the Tracks & Cohorts page. From {$until} "
+                . ($cohortCount === 1 ? 'it becomes' : 'they become') . ' Unassigned (students and chats are kept).'
+            : '';
+
         return response()->json([
-            'message' => "Deletion scheduled for {$teacher->name}. They can be restored until "
-                . $teacher->purge_after->format('j F Y') . '.',
+            'message' => "Deletion scheduled for {$teacher->name}. They can be restored until {$until}." . $cohortNote,
+            'cohorts_led' => $cohortCount,
             'staff' => [
                 'id' => $teacher->id,
                 'lifecycle' => $teacher->lifecycleState(),
@@ -1188,13 +1189,20 @@ class OwnerAdminController extends BaseLmsController
 
         $courses = LmsCourse::query()
             ->withCount(['students', 'tracks'])
+            ->withCount(['registrations as monthly_billed_count' => fn ($q) => $q
+                ->where('billing_type', LmsCourse::BILLING_MONTHLY)
+                ->whereIn('billing_status', CourseBilling::BILLED_STATUSES)])
             ->withPrerecordedCounts()
             ->latest('id')
-            ->get(['id', 'title', 'slug', 'description', 'requirements', 'price', 'original_price', 'prerecorded_price', 'billing_type', 'cover_image_path', 'max_students', 'registered_count', 'is_live_available', 'is_prerecorded_available', 'is_active']);
+            ->get(['id', 'title', 'slug', 'description', 'requirements', 'price', 'original_price', 'prerecorded_price', 'billing_type', 'cover_image_path', 'max_students', 'registered_count', 'is_live_available', 'is_prerecorded_available', 'is_one_on_one_available', 'one_on_one_price', 'one_on_one_session_minutes', 'one_on_one_session_limit', 'one_on_one_extra_session_price', 'is_active']);
 
         // Build the card context (ratings/instructor/bestseller) once for the
         // whole list to avoid a per-course N+1.
         $cardCtx = CourseCards::context($courses->pluck('id')->all(), $tenant->name);
+
+        // Paid-enrolment counts for the delete guard, one query for the list.
+        $paid = LmsCourse::paidEnrolmentCounts($courses->pluck('id')->all());
+        $courses->each(fn (LmsCourse $c) => $c->setAttribute('paid_enrolments', $paid[$c->id] ?? 0));
 
         $payload = $courses->map(fn (LmsCourse $c) => $this->coursePayload($c, $cardCtx));
 
@@ -2773,8 +2781,18 @@ class OwnerAdminController extends BaseLmsController
             'max_students' => ['required', 'integer', 'min:1'],
             'is_live_available' => ['nullable', 'boolean'],
             'is_prerecorded_available' => ['nullable', 'boolean'],
+            // One-on-one (Basic and up): private sessions at their own price.
+            'is_one_on_one_available' => ['nullable', 'boolean'],
+            'one_on_one_price' => ['nullable', 'numeric', 'min:0.01', 'required_if_accepted:is_one_on_one_available'],
+            // Self-booking: session length, and how many sessions a student
+            // can book per month (monthly) or in total (one-time); null = unlimited.
+            'one_on_one_session_minutes' => ['nullable', 'integer', 'in:30,45,60,90,120'],
+            'one_on_one_session_limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+            // Price of one extra session once the limit is used; null = not sold.
+            'one_on_one_extra_session_price' => ['nullable', 'numeric', 'min:0.01'],
         ], [
-            'price.min' => 'Enter a price greater than ₦0. Courses can\'t be free.',
+            'price.min' => 'Enter a price greater than 0. Courses can\'t be free.',
+            'one_on_one_price.required_if_accepted' => 'Enter a price for one-on-one classes.',
         ]);
 
         // A course cannot seat more students than the plan allows for the whole
@@ -2792,6 +2810,9 @@ class OwnerAdminController extends BaseLmsController
         // is offered; otherwise store null so a hidden mode can't carry a price.
         $prerecordedPrice = $prerecorded ? ($validated['prerecorded_price'] ?? null) : null;
 
+        // One-on-one only on plans that include it; its price only while it's on.
+        $oneOnOne = ($validated['is_one_on_one_available'] ?? false) && $tenant->planFeature('one_on_one');
+
         $course = LmsCourse::query()->create([
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
@@ -2803,6 +2824,11 @@ class OwnerAdminController extends BaseLmsController
             'max_students' => $maxStudents,
             'is_live_available' => $validated['is_live_available'] ?? true,
             'is_prerecorded_available' => $prerecorded,
+            'is_one_on_one_available' => $oneOnOne,
+            'one_on_one_price' => $oneOnOne ? ($validated['one_on_one_price'] ?? null) : null,
+            'one_on_one_session_minutes' => $validated['one_on_one_session_minutes'] ?? 60,
+            'one_on_one_session_limit' => $validated['one_on_one_session_limit'] ?? null,
+            'one_on_one_extra_session_price' => $validated['one_on_one_extra_session_price'] ?? null,
             'is_active' => true,
         ]);
 
@@ -2843,20 +2869,49 @@ class OwnerAdminController extends BaseLmsController
             // Only affects NEW registrations: each student's billing type is frozen
             // when they register (TrainingRegistration::booted).
             'billing_type' => ['sometimes', 'in:one_time,monthly'],
+            // When switching monthly → one-time: also stop billing the students
+            // already paying monthly (the owner is asked in the form). Without it
+            // they keep paying monthly until their cohort ends.
+            'stop_existing_billing' => ['sometimes', 'boolean'],
             'max_students' => ['sometimes', 'required', 'integer', 'min:1'],
             'is_live_available' => ['nullable', 'boolean'],
             'is_prerecorded_available' => ['nullable', 'boolean'],
+            'is_one_on_one_available' => ['nullable', 'boolean'],
+            'one_on_one_price' => ['nullable', 'numeric', 'min:0.01'],
+            'one_on_one_session_minutes' => ['sometimes', 'integer', 'in:30,45,60,90,120'],
+            'one_on_one_session_limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'one_on_one_extra_session_price' => ['nullable', 'numeric', 'min:0.01'],
             'is_active' => ['nullable', 'boolean'],
         ], [
-            'price.min' => 'Enter a price greater than ₦0. Courses can\'t be free.',
+            'price.min' => 'Enter a price greater than 0. Courses can\'t be free.',
         ]);
 
         // Apply only the keys the client actually sent (validated() omits absent
         // fields), so a partial save never blanks untouched columns.
         $data = array_intersect_key($validated, array_flip([
             'title', 'description', 'requirements', 'price', 'original_price', 'prerecorded_price',
-            'billing_type', 'max_students', 'is_live_available', 'is_prerecorded_available', 'is_active',
+            'billing_type', 'max_students', 'is_live_available', 'is_prerecorded_available',
+            'is_one_on_one_available', 'one_on_one_price', 'is_active',
+            'one_on_one_session_minutes', 'one_on_one_session_limit', 'one_on_one_extra_session_price',
         ]));
+
+        // One-on-one: forced off on plans without it; needs a price while on;
+        // the price is cleared when it's switched off (same rule as pre-recorded).
+        if (array_key_exists('is_one_on_one_available', $data)) {
+            $data['is_one_on_one_available'] = (bool) $data['is_one_on_one_available'] && $tenant->planFeature('one_on_one');
+        }
+        if (array_key_exists('is_one_on_one_available', $data) || array_key_exists('one_on_one_price', $data)) {
+            $effectiveOneOnOne = $data['is_one_on_one_available'] ?? (bool) $course->is_one_on_one_available;
+            $effectivePrice = array_key_exists('one_on_one_price', $data) ? $data['one_on_one_price'] : $course->one_on_one_price;
+            if (! $effectiveOneOnOne) {
+                $data['one_on_one_price'] = null;
+            } elseif ($effectivePrice === null) {
+                return response()->json([
+                    'message' => 'Enter a price for one-on-one classes.',
+                    'errors' => ['one_on_one_price' => ['Enter a price for one-on-one classes.']],
+                ], 422);
+            }
+        }
         if (array_key_exists('max_students', $data)) {
             // Same plan-cap clamp as create (see storeCourse): capacity can't exceed
             // the academy's plan student cap.
@@ -2880,15 +2935,112 @@ class OwnerAdminController extends BaseLmsController
             }
         }
 
+        $wasMonthly = $course->isMonthly();
+
         $course->update($data);
+
+        $billingStopped = 0;
+        if ($wasMonthly && ! $course->isMonthly() && $request->boolean('stop_existing_billing')) {
+            $billingStopped = CourseBilling::endForCourse((int) $course->id, (int) $tenant->id, CourseBilling::END_STOPPED_BY_ACADEMY);
+        }
 
         Notify::courseChanged('updated', $course->title, $course->fresh());
 
-        return response()->json(['course' => $this->coursePayload($course->fresh())]);
+        return response()->json([
+            'course' => $this->coursePayload($course->fresh()),
+            'billing_stopped' => $billingStopped,
+        ]);
+    }
+
+    /**
+     * Stop monthly billing for every student of one of this academy's courses
+     * (course cancelled, teacher left, ...). Each student is told and keeps
+     * their access; nobody is charged again. The course itself is unchanged, so
+     * new students still register the way it is set up.
+     */
+    public function stopCourseBilling(Request $request, int $id): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        [$tenant] = $context;
+        $course = LmsCourse::query()->findOrFail($id);
+
+        $stopped = CourseBilling::endForCourse((int) $course->id, (int) $tenant->id, CourseBilling::END_STOPPED_BY_ACADEMY);
+
+        return response()->json([
+            'stopped' => $stopped,
+            'message' => $stopped === 0
+                ? 'No students are being billed monthly for this course.'
+                : "Monthly billing stopped for {$stopped} student" . ($stopped === 1 ? '' : 's') . '. They have been told and will not be charged again.',
+            'course' => $this->coursePayload($course->fresh()),
+        ]);
+    }
+
+    /**
+     * Assign (or change) a one-on-one student's teacher. Any staff member of
+     * this academy, or the owner themselves. Both are told; existing chat
+     * history stays where it is.
+     */
+    public function assignOneOnOneTeacher(Request $request, int $id): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        $validated = $request->validate(['teacher_id' => ['required', 'integer']]);
+
+        // TenantAware: another academy's student or teacher 404s.
+        $student = LmsStudent::query()->findOrFail($id);
+        if (! $student->isOneOnOne()) {
+            return response()->json(['message' => 'This student does not take their course one-on-one.'], 422);
+        }
+
+        $teacher = LmsTeacher::query()->find($validated['teacher_id']);
+        if (! $teacher || $teacher->lifecycleState() !== 'active') {
+            return response()->json(['message' => 'Choose an active staff member of your academy.'], 422);
+        }
+
+        \App\Services\OneOnOne::assignTeacher($student, $teacher);
+
+        return response()->json([
+            'message' => trim($student->first_name . ' ' . $student->last_name) . "'s one-on-one teacher is now {$teacher->name}.",
+            'one_on_one' => ['teacher_id' => $teacher->id, 'teacher_name' => $teacher->name],
+        ]);
+    }
+
+    /**
+     * Stop monthly billing for one student (scholarship, left the academy...).
+     * They keep their access and are told they won't be charged again.
+     */
+    public function stopStudentBilling(Request $request, int $id): JsonResponse
+    {
+        $context = $this->ownerContext($request);
+        if (! $context) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        // TenantAware: another academy's student 404s.
+        $student = LmsStudent::query()->findOrFail($id);
+        $registration = CourseBilling::currentRegistration($student);
+
+        if (! $registration || ! CourseBilling::endBilling($registration, CourseBilling::END_STOPPED_BY_ACADEMY)) {
+            return response()->json(['message' => 'This student is not being billed monthly.'], 422);
+        }
+
+        return response()->json([
+            'message' => 'Monthly billing stopped. ' . (trim($student->first_name . ' ' . $student->last_name) ?: 'The student') . ' will not be charged again.',
+            'billing' => CourseBilling::summary($registration->fresh()),
+        ]);
     }
 
     /**
      * Delete one of this institute's courses (tenant-scoped findOrFail).
+     * Refused once any student has paid for it (anti-scam, see
+     * LmsCourse::deleteBlockedReason); unpublishing stays available.
      */
     public function destroyCourse(Request $request, int $id): JsonResponse
     {
@@ -2898,6 +3050,10 @@ class OwnerAdminController extends BaseLmsController
         }
 
         $course = LmsCourse::query()->findOrFail($id);
+
+        if ($reason = $course->deleteBlockedReason()) {
+            return response()->json(['message' => $reason, 'delete_blocked' => true], 422);
+        }
 
         // Resolved BEFORE the delete: the staff list comes from the course's
         // cohorts, which are gone (or orphaned) the moment the course row is.
@@ -3128,12 +3284,28 @@ class OwnerAdminController extends BaseLmsController
             'tracks_count' => $course->tracks_count,
             'is_live_available' => (bool) $course->is_live_available,
             'is_prerecorded_available' => (bool) $course->is_prerecorded_available,
+            'is_one_on_one_available' => (bool) $course->is_one_on_one_available,
+            'one_on_one_price' => $course->one_on_one_price,
+            'one_on_one_session_minutes' => (int) ($course->one_on_one_session_minutes ?: 60),
+            'one_on_one_session_limit' => $course->one_on_one_session_limit,
+            'one_on_one_extra_session_price' => $course->one_on_one_extra_session_price,
             // Whether pre-recorded lessons actually exist yet. The toggle above
             // can be on with nothing behind it, and the storefront then hides the
             // mode entirely (LmsCourse::hasPrerecordedContent), so the owner form
             // is told rather than left wondering why students aren't offered it.
             'has_prerecorded_content' => $course->hasPrerecordedContent(),
             'is_active' => (bool) $course->is_active,
+            // Anti-scam: a course students have paid for can't be deleted. The
+            // list greys the Delete button and shows why (same rule the delete
+            // endpoint enforces).
+            'delete_blocked_reason' => $course->deleteBlockedReason(),
+            // Students currently billed monthly for this course (drives the
+            // owner's "Stop monthly billing" control).
+            'monthly_billed_count' => (int) ($course->monthly_billed_count
+                ?? $course->registrations()
+                    ->where('billing_type', LmsCourse::BILLING_MONTHLY)
+                    ->whereIn('billing_status', CourseBilling::BILLED_STATUSES)
+                    ->count()),
         ];
     }
 

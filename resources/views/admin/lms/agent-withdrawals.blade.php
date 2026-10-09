@@ -86,7 +86,7 @@
                             <span style="color:var(--muted)">Not provided</span>
                         @endif
                     </td>
-                    <td class="num"><strong>₦{{ number_format(abs($wd->commission_amount), 2) }}</strong></td>
+                    <td class="num"><strong>{{ \App\Support\PlatformMoney::format(abs((float) $wd->commission_amount), $academyCurrencies[$wd->tenant_id] ?? 'NGN', 2) }}</strong></td>
                     <td class="num">{{ $wd->created_at->format('d M Y') }}</td>
                     <td>
                         <form method="POST" action="{{ route('admin.lms.agents.pay', $a->id) }}" onsubmit="return confirm('Mark all commissions for {{ $a->name }} as paid?')">
@@ -143,7 +143,7 @@
                             <span style="color:var(--muted)">Not provided</span>
                         @endif
                     </td>
-                    <td class="num"><strong>₦{{ number_format(abs($wd->commission_amount), 2) }}</strong></td>
+                    <td class="num"><strong>{{ \App\Support\PlatformMoney::format(abs((float) $wd->commission_amount), $academyCurrencies[$wd->tenant_id] ?? 'NGN', 2) }}</strong></td>
                     <td class="num" style="color:var(--muted)">{{ $wd->created_at->format('d M Y') }}</td>
                 </tr>
                 @endforeach

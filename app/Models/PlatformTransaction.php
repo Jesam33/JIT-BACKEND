@@ -49,7 +49,7 @@ class PlatformTransaction extends Model
      * pending row rather than inserting a duplicate, and never overwrites a row
      * that already reached a terminal state (success/failed).
      */
-    public static function recordPending(Tenant $tenant, string $reference, float $amount, string $purpose, ?string $plan = null, string $currency = 'NGN'): void
+    public static function recordPending(Tenant $tenant, string $reference, float $amount, string $purpose, ?string $plan = null, string $currency = 'NGN', string $gateway = 'paystack'): void
     {
         if ($reference === '') {
             return;
@@ -70,7 +70,7 @@ class PlatformTransaction extends Model
                 'amount' => $amount,
                 'currency' => strtoupper($currency),
                 'status' => 'pending',
-                'gateway' => 'paystack',
+                'gateway' => $gateway,
             ]
         );
     }
@@ -101,7 +101,8 @@ class PlatformTransaction extends Model
             'plan' => $plan ?? $existing->plan ?? $tenant->plan,
             'purpose' => $purpose,
             'status' => 'success',
-            'gateway' => 'paystack',
+            // The gateway that took it (Flutterwave payloads say so; Paystack's don't).
+            'gateway' => ($gatewayData['gateway'] ?? null) === 'flutterwave' ? 'flutterwave' : ($existing?->gateway ?? 'paystack'),
             'paid_at' => now(),
         ];
 

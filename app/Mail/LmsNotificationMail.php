@@ -4,6 +4,7 @@ namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -44,7 +45,24 @@ class LmsNotificationMail extends Mailable
         // carries the platform's support details.
         public bool $isPlatformMail = false,
         public string $actionLabel = 'Open in your academic portal',
+        // An .ics invite for session emails (App\Support\CalendarInvite), so
+        // the session lands in the recipient's calendar. Null = none.
+        public ?string $calendarIcs = null,
     ) {
+    }
+
+    public function attachments(): array
+    {
+        if (! $this->calendarIcs) {
+            return [];
+        }
+
+        $method = str_contains($this->calendarIcs, 'METHOD:CANCEL') ? 'CANCEL' : 'REQUEST';
+
+        return [
+            Attachment::fromData(fn () => $this->calendarIcs, 'session.ics')
+                ->withMime('text/calendar; charset=UTF-8; method=' . $method),
+        ];
     }
 
     public function envelope(): Envelope

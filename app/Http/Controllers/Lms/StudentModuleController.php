@@ -11,18 +11,31 @@ class StudentModuleController extends BaseLmsController
 {
     /**
      * Return the ids (as a flipped set for O(1) lookup) of the given modules
-     * that already have at least one delivered (past, non-cancelled) class, 
+     * that already have at least one delivered (past, non-cancelled) class,
      * one query instead of an exists() per module.
+     *
+     * Counted from the classes THIS student takes (LmsScheduledClass::visibleTo):
+     * a group student's modules unlock with the group's classes, a one-on-one
+     * student's with their own private sessions.
      */
-    private function taughtModuleIds(\Illuminate\Support\Collection $moduleIds): \Illuminate\Support\Collection
+    private function taughtModuleIds(\Illuminate\Support\Collection $moduleIds, ?\App\Models\LmsStudent $student = null): \Illuminate\Support\Collection
     {
         return LmsScheduledClass::query()
             ->whereIn('module_id', $moduleIds)
+            ->when($student, fn ($q) => $q->visibleTo($student))
             ->where('starts_at', '<', now())
             ->where('status', '!=', 'cancelled')
             ->distinct()
             ->pluck('module_id')
             ->flip();
+    }
+
+    /** The logged-in student, or null. */
+    private function currentStudent(Request $request): ?\App\Models\LmsStudent
+    {
+        $session = $this->sessionFromRequest($request, 'student');
+
+        return $session ? \App\Models\LmsStudent::find($session->user_id) : null;
     }
 
     public function index(Request $request): JsonResponse
@@ -45,7 +58,7 @@ class StudentModuleController extends BaseLmsController
             ->orderBy('sort_order')
             ->get();
 
-        $taughtModuleIds = $this->taughtModuleIds($allModules->pluck('id'));
+        $taughtModuleIds = $this->taughtModuleIds($allModules->pluck('id'), $student);
 
         $modules = [];
         $previousTaught = true;
@@ -60,8 +73,10 @@ class StudentModuleController extends BaseLmsController
         return response()->json($modules);
     }
 
-    public function show(int $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
+        $student = $this->currentStudent($request);
+
         $module = LmsModule::with('contents')
             ->where('id', $id)
             ->where('status', 'published')
@@ -74,7 +89,7 @@ class StudentModuleController extends BaseLmsController
             ->get();
 
         if ($prevModules->isNotEmpty()) {
-            $taughtModuleIds = $this->taughtModuleIds($prevModules->pluck('id'));
+            $taughtModuleIds = $this->taughtModuleIds($prevModules->pluck('id'), $student);
 
             foreach ($prevModules as $prev) {
                 if (! $taughtModuleIds->has($prev->id)) {
@@ -109,7 +124,7 @@ class StudentModuleController extends BaseLmsController
             ->get();
 
         if ($prevModules->isNotEmpty()) {
-            $taughtModuleIds = $this->taughtModuleIds($prevModules->pluck('id'));
+            $taughtModuleIds = $this->taughtModuleIds($prevModules->pluck('id'), \App\Models\LmsStudent::find($session->user_id));
 
             foreach ($prevModules as $prev) {
                 if (! $taughtModuleIds->has($prev->id)) {
@@ -138,10 +153,12 @@ class StudentModuleController extends BaseLmsController
             return response()->json([]);
         }
 
-        $oldClasses = \App\Models\LmsClassroom::query()
+        // Legacy course classrooms are group classes: not shown to a one-on-one
+        // student, who only sees their own private sessions.
+        $oldClasses = ($student->isOneOnOne() ? collect() : \App\Models\LmsClassroom::query()
             ->where('course_id', $courseId)
             ->orderBy('starts_at')
-            ->get()
+            ->get())
             ->map(fn ($c) => [
                 'id' => $c->id,
                 'class_type' => 'classroom',
@@ -156,14 +173,18 @@ class StudentModuleController extends BaseLmsController
                 'module_id' => null,
             ]);
 
-        $scheduledClasses = LmsScheduledClass::with(['module.course'])
+        $scheduledClasses = LmsScheduledClass::with(['module.course', 'teacher'])
             ->whereHas('module', fn($q) => $q->where('course_id', $courseId))
+            ->visibleTo($student)
             ->where('status', '!=', 'cancelled')
             ->orderBy('starts_at')
             ->get()
             ->map(fn ($c) => [
                 'id' => $c->id,
                 'class_type' => 'scheduled',
+                // One-on-one sessions are labelled as such in the portal.
+                'is_private' => $c->isPrivate(),
+                'teacher_name' => $c->isPrivate() ? $c->teacher?->name : null,
                 'title' => $c->title,
                 'starts_at' => $c->starts_at?->toIso8601String(),
                 'ends_at' => $c->ends_at?->toIso8601String(),

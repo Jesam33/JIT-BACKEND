@@ -26,6 +26,7 @@ class LmsStudent extends Model
         'password',
         'selected_course_id',
         'learning_mode',
+        'one_on_one_teacher_id',
         'profile_photo_url',
         'notify_class_reminders',
         'notify_chat',
@@ -48,6 +49,8 @@ class LmsStudent extends Model
         'notify_announcements' => 'boolean',
         'onboarding_completed' => 'boolean',
         'is_active' => 'boolean',
+        // Set by their teacher only (forceFill), never from student input.
+        'one_on_one_self_booking' => 'boolean',
         'deactivated_at' => 'datetime',
         'purge_after' => 'datetime',
         'purged_at' => 'datetime',
@@ -63,6 +66,40 @@ class LmsStudent extends Model
         static::creating(function (self $student): void {
             if (empty($student->username)) {
                 $student->username = static::generateUsername($student);
+            }
+        });
+
+        // Monthly billing follows the account: suspending or deleting a student
+        // (by the academy or by themselves, through any path) stops their
+        // monthly charges at once, and reactivating resumes them. A billing
+        // hiccup must never block the account change itself.
+        // One-on-one students get a teacher automatically (their course's cohort
+        // instructor) the moment they become one-on-one, on every path that
+        // creates or moves them; with nobody available the owner is told.
+        static::saved(function (self $student): void {
+            if (! $student->isOneOnOne() || $student->one_on_one_teacher_id) {
+                return;
+            }
+            if (! $student->wasRecentlyCreated && ! $student->wasChanged(['learning_mode', 'selected_course_id'])) {
+                return;
+            }
+
+            try {
+                \App\Services\OneOnOne::ensureTeacher($student, true);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        });
+
+        static::updated(function (self $student): void {
+            if (! $student->wasChanged(['is_active', 'purge_after', 'purged_at'])) {
+                return;
+            }
+
+            try {
+                \App\Services\CourseBilling::syncWithStudentLifecycle($student);
+            } catch (\Throwable $e) {
+                report($e);
             }
         });
     }
@@ -246,5 +283,23 @@ class LmsStudent extends Model
     public function course(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(LmsCourse::class, 'selected_course_id');
+    }
+
+    /** The third learning mode: private sessions with an assigned teacher. */
+    public const MODE_ONE_ON_ONE = 'one_on_one';
+
+    /**
+     * Taking their course one-on-one: they see only their own private sessions
+     * (never the group's classes) and chat only with their own teacher.
+     */
+    public function isOneOnOne(): bool
+    {
+        return $this->learning_mode === self::MODE_ONE_ON_ONE;
+    }
+
+    /** Their one-on-one teacher (null = still needs one assigned). */
+    public function oneOnOneTeacher(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(LmsTeacher::class, 'one_on_one_teacher_id');
     }
 }

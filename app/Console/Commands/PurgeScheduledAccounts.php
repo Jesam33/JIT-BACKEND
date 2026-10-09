@@ -81,9 +81,7 @@ class PurgeScheduledAccounts extends Command
                 continue;
             }
 
-            // A false return means the staffer still leads a cohort, and deleting
-            // them would cascade that cohort and its students away with them. The
-            // row stays scheduled for a human to reassign and the next run retries.
+            // Cohorts they still lead become Unassigned (see LmsTeacher::purge).
             $teacher->purge() ? $purged++ : $deferred[] = "staff #{$teacher->id}";
         }
 

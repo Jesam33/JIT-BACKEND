@@ -87,4 +87,18 @@ return [
         'public_key' => env('PAYSTACK_PUBLIC_KEY'),
     ],
 
+    // Academy course payments in every country (App\Services\FlutterwaveService):
+    // each academy's bank is a Flutterwave subaccount, every student payment is
+    // split (academy's share to its bank, the platform service charge to us).
+    // Same rule as Paystack: read via config() only, never env() at call sites.
+    'flutterwave' => [
+        'secret_key' => env('FLUTTERWAVE_SECRET_KEY'),
+        'public_key' => env('FLUTTERWAVE_PUBLIC_KEY'),
+        'encryption_key' => env('FLUTTERWAVE_ENCRYPTION_KEY'),
+        // The "secret hash" set on the Flutterwave dashboard's Webhooks page;
+        // Flutterwave sends it back in the `verif-hash` header of every webhook.
+        'webhook_hash' => env('FLUTTERWAVE_WEBHOOK_HASH'),
+        'base_url' => env('FLUTTERWAVE_BASE_URL', 'https://api.flutterwave.com/v3'),
+    ],
+
 ];

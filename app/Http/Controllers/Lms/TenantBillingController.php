@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Lms;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\PaystackService;
+use App\Services\PlatformBilling;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -154,8 +155,10 @@ class TenantBillingController extends BaseLmsController
             // counts, so the billing page can show "12 / 50 students" and which
             // features the current plan includes. Primary institute reads as 'pro'.
             'plan_summary' => $tenant->planSummaryArray(),
-            'plans' => $this->planCatalogue(),
-            'billing_configured' => app(PaystackService::class)->isConfigured(),
+            // Each plan also priced in the academy's own currency (local_price).
+            'plans' => \App\Support\PlanCatalogue::all(PlatformBilling::gateway() === \App\Services\CoursePayments::FLUTTERWAVE ? $tenant->currency() : 'NGN'),
+            'currency' => $tenant->currency(),
+            'billing_configured' => PlatformBilling::gateway() !== null,
         ]);
     }
 
@@ -227,8 +230,7 @@ class TenantBillingController extends BaseLmsController
             ]);
         }
 
-        $paystack = app(PaystackService::class);
-        if (! $paystack->isConfigured()) {
+        if (! PlatformBilling::gateway()) {
             return response()->json([
                 'message' => 'Payments are not enabled yet. Please contact support.',
                 'billing_configured' => false,
@@ -255,34 +257,33 @@ class TenantBillingController extends BaseLmsController
             . '&tenant=' . urlencode((string) $tenant->slug);
 
         try {
-            $response = $paystack->initializeTransaction(
-                $owner->email,
-                $amount,
+            // Flutterwave in the academy's own currency (Paystack/naira without
+            // Flutterwave keys); records the pending ledger row.
+            $init = PlatformBilling::start(
+                $tenant,
+                (string) $owner->email,
+                trim(($owner->first_name ?? '') . ' ' . ($owner->last_name ?? '')),
+                $plan,
+                PlatformBilling::UPGRADE,
                 $reference,
-                [
-                    'tenant_id' => $tenant->id,
-                    'plan' => $plan,
-                    'purpose' => 'plan_upgrade',
-                ],
                 $callbackUrl
             );
 
+            if (! $init['ok']) {
+                return response()->json(['message' => $init['message'] ?? 'Could not start checkout. Please try again.'], 502);
+            }
+
             // Record the pending reference so a later verify can be cross-checked
-            // even if Paystack metadata is ever unavailable.
+            // even if gateway metadata is ever unavailable.
             if (\Illuminate\Support\Facades\Schema::hasColumn('tenants', 'paystack_init_reference')) {
                 $tenant->update(['paystack_init_reference' => $reference]);
             }
 
-            // Pending row in the platform revenue ledger; confirmed on verify/webhook.
-            try {
-                \App\Models\PlatformTransaction::recordPending($tenant, $reference, $amount, 'plan_upgrade', $plan);
-            } catch (\Throwable $e) {
-                Log::warning('Could not record pending platform transaction (upgrade)', ['tenant_id' => $tenant->id, 'err' => $e->getMessage()]);
-            }
-
             return response()->json([
-                'authorization_url' => $response['data']['authorization_url'] ?? null,
+                'authorization_url' => $init['authorization_url'],
                 'reference' => $reference,
+                'amount' => $init['amount'] ?? $amount,
+                'currency' => $init['currency'] ?? 'NGN',
             ]);
         } catch (\Throwable $e) {
             Log::error('Tenant plan-upgrade initialization failed', [
@@ -312,6 +313,33 @@ class TenantBillingController extends BaseLmsController
         $validated = $request->validate([
             'reference' => ['required', 'string'],
         ]);
+
+        // Paid through Flutterwave: the ledger row says whose and which plan.
+        $tx = \App\Models\PlatformTransaction::query()->where('reference', $validated['reference'])->first();
+        if ($tx && $tx->gateway === \App\Services\CoursePayments::FLUTTERWAVE) {
+            if ((int) $tx->tenant_id !== (int) $tenant->id) {
+                return response()->json(['message' => 'This payment does not belong to your organisation.'], 403);
+            }
+
+            $status = PlatformBilling::confirm($tx);
+            if ($status !== 'success') {
+                return response()->json([
+                    'status' => $status,
+                    'message' => $status === 'review'
+                        ? 'We received a payment that needs checking. Our team will confirm it shortly.'
+                        : 'Payment not yet confirmed.',
+                ], 202);
+            }
+
+            $tenant->refresh();
+
+            return response()->json([
+                'status' => 'active',
+                'plan' => $tenant->plan,
+                'subscription_status' => $tenant->subscription_status,
+                'current_period_end' => $tenant->current_period_end,
+            ]);
+        }
 
         $paystack = app(PaystackService::class);
         if (! $paystack->isConfigured()) {

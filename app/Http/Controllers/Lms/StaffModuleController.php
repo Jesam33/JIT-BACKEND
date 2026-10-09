@@ -402,6 +402,15 @@ class StaffModuleController extends BaseLmsController
         // is FOR are exactly the ones an enrollment-only fan-out misses.
         $students = $this->studentIdsInCourses($courseIds);
 
+        // A group class isn't for one-on-one students (they only take their own
+        // private sessions), so they aren't told about it.
+        $oneOnOneIds = \App\Models\LmsStudent::query()
+            ->whereIn('id', $students)
+            ->where('learning_mode', \App\Models\LmsStudent::MODE_ONE_ON_ONE)
+            ->pluck('id')
+            ->all();
+        $students = array_values(array_diff($students, $oneOnOneIds));
+
         foreach ($students as $studentId) {
             $meetingPwd = $validated['meeting_password'] ?? null;
             \App\Models\LmsNotification::create([
@@ -422,7 +431,9 @@ class StaffModuleController extends BaseLmsController
         $this->ensureLmsEnabled();
         $teacher = $this->teacherOrFail($request);
 
-        $query = LmsScheduledClass::with(['module.course'])
+        // `student` is set on one-on-one sessions, so the timetable can label
+        // whose private session it is.
+        $query = LmsScheduledClass::with(['module.course', 'student:id,first_name,last_name'])
             // Actor-aware: a staffer sees their own classes, the owner's mirror
             // sees every class in the academy.
             ->whereIn('id', $this->actorScheduledClassIds($teacher))

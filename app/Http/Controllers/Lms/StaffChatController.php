@@ -367,6 +367,19 @@ class StaffChatController extends BaseLmsController
             }
         }
 
+        // Plus this teacher's one-on-one students, who may sit in a cohort the
+        // teacher doesn't instruct. The thread is filed under the student's own
+        // cohort (a DM thread always belongs to one).
+        $oneOnOneIds = \App\Models\LmsStudent::query()
+            ->where('one_on_one_teacher_id', $teacherId)
+            ->pluck('id')
+            ->all();
+        if ($oneOnOneIds) {
+            foreach (LmsEnrollment::query()->whereIn('student_id', $oneOnOneIds)->get(['student_id', 'track_id']) as $enrollment) {
+                $trackByStudent[$enrollment->student_id] ??= $enrollment->track_id;
+            }
+        }
+
         $existingStudentIds = LmsDmThread::query()
             ->where('instructor_id', $teacherId)
             ->pluck('student_id')

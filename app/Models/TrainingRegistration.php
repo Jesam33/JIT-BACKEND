@@ -39,6 +39,7 @@ class TrainingRegistration extends Model
         'billing_reminded_for',
         'billing_last_attempt_at',
         'billing_lock_notified_at',
+        'billing_end_reason',
     ];
 
     protected $casts = [

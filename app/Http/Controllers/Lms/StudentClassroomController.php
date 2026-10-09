@@ -89,12 +89,6 @@ class StudentClassroomController extends BaseLmsController
             ], 402);
         }
 
-        $cfg = $this->jitsiConfig();
-
-        if (! $cfg) {
-            return response()->json(['message' => 'Live classes are not configured yet.'], 503);
-        }
-
         // The display name the student typed in the portal's own pre-join step.
         // Jitsi shows the name from the JWT (userInfo.displayName is only a
         // fallback), so the choice has to be minted into the token here.
@@ -107,15 +101,39 @@ class StudentClassroomController extends BaseLmsController
         $classroom = null;
         $scheduled = null;
 
+        $student = \App\Models\LmsStudent::query()->findOrFail($session->user_id);
+        // Same course resolution as the dashboard/timetable: the student's own
+        // course, else their cohort's (older accounts only have the cohort).
+        $studentCourseId = (int) ($student->selected_course_id ?: \App\Models\LmsTrack::query()
+            ->whereKey(\App\Models\LmsEnrollment::query()->where('student_id', $student->id)->value('track_id'))
+            ->value('course_id'));
+
         if ($classType === 'scheduled') {
-            $scheduled = LmsScheduledClass::query()->findOrFail($id);
+            $scheduled = LmsScheduledClass::query()->with('module')->findOrFail($id);
+            // Only a class of the student's own course, and one they may see: a
+            // one-on-one session is for its one student only, and a one-on-one
+            // student doesn't join the group's classes. Checked before a room
+            // token is minted, since the token is what gets you in.
+            if ((int) $scheduled->module?->course_id !== $studentCourseId
+                || ! $scheduled->isVisibleTo($student)) {
+                return response()->json(['message' => 'This class is not one of yours.'], 403);
+            }
             $room = $this->ensureRoom($scheduled, 'scheduled');
         } else {
             $classroom = LmsClassroom::query()->findOrFail($id);
+            if ((int) $classroom->course_id !== $studentCourseId || $student->isOneOnOne()) {
+                return response()->json(['message' => 'This class is not one of yours.'], 403);
+            }
             $room = $this->ensureRoom($classroom, 'classroom');
         }
 
-        $student = \App\Models\LmsStudent::query()->findOrFail($session->user_id);
+        // After the access check, so "not your class" is reported as such.
+        $cfg = $this->jitsiConfig();
+
+        if (! $cfg) {
+            return response()->json(['message' => 'Live classes are not configured yet.'], 503);
+        }
+
         $userName = trim($student->first_name . ' ' . $student->last_name) ?: 'Student';
         // Prefer the name the student chose at the pre-join step; the profile
         // name is only the prefill/default.

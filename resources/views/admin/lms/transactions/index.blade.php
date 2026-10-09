@@ -97,7 +97,8 @@
                 Platform Revenue (confirmed)
             </div>
             <div class="rev-value">₦{{ number_format($platformRevenue, 2) }}</div>
-            <p class="rev-sub">{{ $successCount }} successful subscription payment{{ $successCount === 1 ? '' : 's' }}, reconcile against Paystack</p>
+            <p class="rev-sub">{{ $successCount }} successful subscription payment{{ $successCount === 1 ? '' : 's' }}, reconcile against Flutterwave / Paystack</p>
+            <p class="rev-sub">{{ \App\Support\PlatformMoney::totalNote($platformRevenueMoney ?? []) }}</p>
         </div>
         <div class="rev-card">
             <div class="rev-label">
@@ -106,6 +107,9 @@
             </div>
             <div class="rev-value">₦{{ number_format($pendingPlatform, 2) }}</div>
             <p class="rev-sub">Initialised but not yet confirmed</p>
+            @if (\App\Support\PlatformMoney::breakdownLine($pendingPlatformMoney['breakdown'] ?? []) !== '')
+                <p class="rev-sub">{{ \App\Support\PlatformMoney::breakdownLine($pendingPlatformMoney['breakdown']) }}</p>
+            @endif
         </div>
         <div class="rev-card">
             <div class="rev-label">
@@ -114,6 +118,7 @@
             </div>
             <div class="rev-value">₦{{ number_format($totalCommission, 2) }}</div>
             <p class="rev-sub">Platform cut of ₦{{ number_format($totalCourseGross, 2) }} in institute course sales</p>
+            <p class="rev-sub">{{ \App\Support\PlatformMoney::totalNote($totalCommissionMoney ?? []) }}</p>
         </div>
     </div>
 
@@ -192,16 +197,16 @@
                                 <td><strong>{{ $e['tenant_name'] }}</strong></td>
                                 <td style="text-transform:capitalize">{{ $e['plan'] }}</td>
                                 <td class="num-cell">{{ $e['sales'] }}</td>
-                                <td class="num-cell">₦{{ number_format($e['gross'], 2) }}</td>
+                                <td class="num-cell">{{ $e['currency'] }} {{ number_format($e['gross'], 2) }}</td>
                                 <td class="num-cell">{{ rtrim(rtrim(number_format($e['commission_percent'], 2), '0'), '.') }}%</td>
-                                <td class="num-cell">₦{{ number_format($e['commission'], 2) }}</td>
-                                <td class="num-cell">₦{{ number_format($e['net_to_institute'], 2) }}</td>
+                                <td class="num-cell">{{ $e['currency'] }} {{ number_format($e['commission'], 2) }}</td>
+                                <td class="num-cell">{{ $e['currency'] }} {{ number_format($e['net_to_institute'], 2) }}</td>
                             </tr>
                         @endforeach
                     </tbody>
                     <tfoot>
                         <tr class="total-row">
-                            <td colspan="3">Totals</td>
+                            <td colspan="3">Totals (in naira, at today's rate)</td>
                             <td class="num-cell">₦{{ number_format($totalCourseGross, 2) }}</td>
                             <td class="num-cell">N/A</td>
                             <td class="num-cell">₦{{ number_format($totalCommission, 2) }}</td>

@@ -43,11 +43,13 @@ class LmsLoginDevice extends Model
         'device_label',
         'first_seen_at',
         'last_seen_at',
+        'by_device_id',
     ];
 
     protected $casts = [
         'user_id' => 'integer',
         'first_seen_at' => 'datetime',
         'last_seen_at' => 'datetime',
+        'by_device_id' => 'boolean',
     ];
 }

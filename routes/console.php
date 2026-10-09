@@ -33,6 +33,13 @@ Schedule::command('lms:calculate-attendance')
     ->everyFiveMinutes()
     ->withoutOverlapping();
 
+// One-on-one sessions: "starting soon" reminder to the student and teacher
+// (saas.one_on_one_booking.reminder_minutes before). Stamped per session, and
+// the notification-email sweep above delivers the emails.
+Schedule::command('lms:send-one-on-one-reminders')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
 // CEO's Forum: invite owners when a forum is scheduled, remind ~1h before start,
 // and advance forum status (scheduled → live → ended). Per-forum stamps keep each
 // sweep idempotent, so running every minute never double-sends.
@@ -55,7 +62,7 @@ Schedule::command('lms:notify-ended-cohorts')
 // per-minute — it is one reminder per tenant per calendar day, and the tenant's
 // `subscription_reminder_on` stamp keeps a re-run from double-sending.
 // Monthly courses: remind students before their month is due, auto-charge saved
-// cards on the due date (at most once a day), and pause access after the 3-day
+// cards on the due date (at most once a day), and pause access after the 2-day
 // grace window. Hourly so a due date is acted on the same morning; every step is
 // stamped on the registration, so re-runs never double-charge or double-notify.
 Schedule::command('lms:process-course-renewals')

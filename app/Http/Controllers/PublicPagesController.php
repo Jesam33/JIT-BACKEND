@@ -25,9 +25,26 @@ class PublicPagesController extends Controller
     // truth). Serves the FULL catalogue via the shared PlanCatalogue (the same
     // source the billing portal's cards use) so the signup page renders cards
     // identical to /lms/admin/billing. Unauthenticated, it carries no secrets.
-    public function plansJson()
+    //
+    // ?country=GH also prices every plan in that country's currency
+    // (local_price + currency), which is what the signup charges. `countries`
+    // is the list the signup country picker offers.
+    public function plansJson(Request $request)
     {
-        return response()->json(['plans' => \App\Support\PlanCatalogue::all()]);
+        $flutterwave = \App\Services\CoursePayments::linkProvider() === \App\Services\CoursePayments::FLUTTERWAVE;
+        $countries = $flutterwave
+            ? \App\Support\PayoutCountries::options()
+            : array_values(array_filter(\App\Support\PayoutCountries::options(), fn ($c) => $c['code'] === 'NG'));
+
+        $country = strtoupper((string) $request->query('country', ''));
+        $currency = $country !== '' && \App\Support\PayoutCountries::supports($country)
+            ? ($flutterwave ? \App\Support\PayoutCountries::currencyFor($country) : 'NGN')
+            : null;
+
+        return response()->json([
+            'plans' => \App\Support\PlanCatalogue::all($currency),
+            'countries' => $countries,
+        ]);
     }
 
     // Resolve tenant by host or slug. Accepts ?host=example.tenant.com or ?slug=tenant-slug

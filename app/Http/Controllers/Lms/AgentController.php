@@ -355,7 +355,17 @@ class AgentController extends BaseLmsController
             'has_bank_details' => !empty($agent->bank_name) && !empty($agent->account_number) && !empty($agent->account_name),
             'recent_referrals' => $recentReferrals,
             'recent_transactions' => $recentTransactions,
+            // Commissions are in the academy's own currency.
+            'currency' => $this->agentCurrency(),
         ]);
+    }
+
+    /** The currency of the bound academy (the agent's), for labelling money. */
+    private function agentCurrency(): string
+    {
+        $tenant = app()->bound('currentTenant') ? app('currentTenant') : null;
+
+        return $tenant ? $tenant->currency() : 'NGN';
     }
 
     // --- Register Student Directly ---
@@ -384,10 +394,16 @@ class AgentController extends BaseLmsController
             'phone_number' => 'required|string|max:40',
             'whatsapp' => 'required|string|max:40',
             'course_id' => 'required|integer|exists:lms_courses,id',
-            'learning_mode' => 'required|in:live,pre_recorded',
+            'learning_mode' => 'required|in:live,pre_recorded,one_on_one',
         ]);
 
         $course = LmsCourse::findOrFail($validated['course_id']);
+
+        // One course per student per academy (see EnrollmentGuard): an agent
+        // can't register someone who is already enrolled here.
+        if ($conflict = \App\Support\EnrollmentGuard::conflict($tenant, $validated['email'], (int) $course->id)) {
+            return response()->json($conflict, 409);
+        }
 
         if ($course->isFull()) {
             return response()->json(['message' => 'This course is full.', 'is_full' => true], 422);
@@ -418,14 +434,19 @@ class AgentController extends BaseLmsController
             ], 422);
         }
 
-        // Pre-recorded (on-demand) is cheaper when the course sets a distinct
-        // prerecorded_price; otherwise both modes charge the live price. This is
-        // the amount frozen into the registration (feeds Paystack + commissions).
-        $price = ($validated['learning_mode'] === 'pre_recorded' && $course->prerecorded_price !== null)
-            ? (float) $course->prerecorded_price
-            : (float) $course->price;
+        // Same one-on-one gate as the public intake.
+        if ($validated['learning_mode'] === \App\Models\LmsStudent::MODE_ONE_ON_ONE && ! $course->offersOneOnOne($tenant)) {
+            return response()->json([
+                'message' => 'One-on-one classes aren’t offered for this course right now.',
+                'one_on_one_unavailable' => true,
+            ], 422);
+        }
 
-        $registration = \App\Models\TrainingRegistration::create([
+        // Each mode at its own price (LmsCourse::priceFor). This is the amount
+        // frozen into the registration (feeds Paystack + commissions).
+        $price = $course->priceFor($validated['learning_mode']);
+
+        $attributes = [
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
             'date_of_birth' => $validated['date_of_birth'],
@@ -437,9 +458,27 @@ class AgentController extends BaseLmsController
             'course_name' => $course->title,
             'learning_mode' => $validated['learning_mode'],
             'course_price' => $price,
+            // Charged in the academy's own currency.
+            'charge_currency' => $this->agentCurrency(),
             'status' => 'pending',
             'registered_by_agent_id' => $agent->id,
-        ]);
+            // A reused registration must not keep an earlier referral too, or
+            // two agents would be credited for one sale.
+            'referred_by_agent_id' => null,
+        ];
+
+        // Reuse an unpaid registration for the same student + course rather than
+        // stacking duplicates (see EnrollmentGuard::pendingRegistration).
+        $registration = \App\Support\EnrollmentGuard::pendingRegistration($tenant, $validated['email'], (int) $course->id);
+        if ($registration) {
+            $registration->update($attributes + [
+                'billing_type' => $price > 0 && $course->isMonthly()
+                    ? LmsCourse::BILLING_MONTHLY
+                    : LmsCourse::BILLING_ONE_TIME,
+            ]);
+        } else {
+            $registration = \App\Models\TrainingRegistration::create($attributes);
+        }
 
         // Both bells for one event: the agent gets their own activity record
         // (this replaces the inline AgentNotification::create that used to live
@@ -457,6 +496,7 @@ class AgentController extends BaseLmsController
             'course' => [
                 'title' => $course->title,
                 'price' => $price,
+                'currency' => $this->agentCurrency(),
             ],
         ], 201);
     }
@@ -465,8 +505,12 @@ class AgentController extends BaseLmsController
 
     public function courses(): JsonResponse
     {
+        $currency = $this->agentCurrency();
+
         return response()->json(
             LmsCourse::where('is_active', true)->get(['id', 'title', 'slug', 'price'])
+                ->map(fn (LmsCourse $c) => $c->toArray() + ['currency' => $currency])
+                ->values()
         );
     }
 
@@ -480,7 +524,8 @@ class AgentController extends BaseLmsController
             ->latest()
             ->paginate(20);
 
-        return response()->json($items);
+        // Amounts are in the academy's own currency.
+        return response()->json($items->toArray() + ['currency' => $this->agentCurrency()]);
     }
 
     public function registrations(Request $request): JsonResponse
@@ -526,6 +571,7 @@ class AgentController extends BaseLmsController
                 'student_id' => $student?->id,
                 'payment_status' => $payment?->status ?? 'none',
                 'commission' => $commission ? (float) $commission->commission_amount : 0,
+                'currency' => $r->charge_currency ?: 'NGN',
                 'commission_status' => $commission?->status ?? null,
                 'created_at' => $r->created_at->toIso8601String(),
             ];
@@ -565,7 +611,7 @@ class AgentController extends BaseLmsController
             'commission_amount' => -$pendingCommission,
             'status' => 'withdrawal_requested',
             'type' => 'withdrawal',
-            'notes' => "Withdrawal request for ₦" . number_format($pendingCommission, 2),
+            'notes' => 'Withdrawal request for ' . \App\Services\CourseBilling::money($this->agentCurrency(), (float) $pendingCommission),
         ]);
 
         $this->sendWithdrawalEmail($agent, $pendingCommission);

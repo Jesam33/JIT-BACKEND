@@ -12,6 +12,7 @@ use App\Models\LmsTeacher;
 use App\Models\LmsTeacherNotification;
 use App\Models\Tenant;
 use App\Scopes\TenantScope;
+use App\Support\CalendarInvite;
 use App\Support\NotificationLinks;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
@@ -333,6 +334,15 @@ class SendNotificationEmails extends Command
         $logo = $brandLogos[$tid] ?? null;
         $url = NotificationLinks::forNotification($audience, $n->reference_type, $n->reference_id, $slug);
 
+        // One-on-one session booked / moved / cancelled: attach a calendar
+        // invite. Best effort; never blocks the email itself.
+        $ics = null;
+        try {
+            $ics = CalendarInvite::forNotification((string) $n->type, $n->reference_type, $n->reference_id ? (int) $n->reference_id : null, $email, $institute, $url);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
         try {
             Mail::to($email)->send(new LmsNotificationMail(
                 greetingName: $name,
@@ -347,6 +357,7 @@ class SendNotificationEmails extends Command
                 // (primary) tenant, is platform mail and carries our support
                 // block. An academy's notification never shows our details.
                 isPlatformMail: ! $tid || in_array((int) $tid, Tenant::platformTenantIds(), true),
+                calendarIcs: $ics,
             ));
 
             $n->forceFill(['emailed_at' => now()])->saveQuietly();

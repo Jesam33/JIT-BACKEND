@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\CoursePayments;
 use App\Services\PaystackService;
+use App\Services\PlatformBilling;
 use App\Services\TenantOnboardingService;
+use App\Support\PayoutCountries;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Hash;
@@ -58,6 +61,10 @@ class TenantSignupController extends Controller
             // the dropdown of general niches lives on the frontend (src/lib/niches.ts),
             // so we never constrain the stored value to a fixed list here.
             'niche' => ['required', 'string', 'max:80'],
+            // Where the academy is based: fixes the currency it sells in and pays
+            // its plan in (App\Support\PayoutCountries). Optional for older
+            // clients; they default to Nigeria.
+            'country' => ['nullable', 'string', 'size:2'],
         ], [
             'slug.regex' => 'The subdomain may only contain lowercase letters, numbers, and hyphens.',
             'slug.not_in' => 'That subdomain is reserved. Please choose another.',
@@ -70,12 +77,21 @@ class TenantSignupController extends Controller
         $email = $validated['admin_email'];
         $niche = trim($validated['niche']);
 
+        $country = strtoupper((string) ($validated['country'] ?? 'NG'));
+        if (! PayoutCountries::supports($country)
+            || (CoursePayments::linkProvider() === CoursePayments::PAYSTACK && $country !== 'NG')) {
+            throw ValidationException::withMessages([
+                'country' => 'We can’t take academies from that country yet.',
+            ]);
+        }
+        $currency = (string) PayoutCountries::currencyFor($country);
+
         // A free plan (price ≤ 0) provisions without payment; only paid signups
-        // need a live gateway. Fail loud for a paid plan when Paystack is unset
+        // need a live gateway. Fail loud for a paid plan when no gateway is set
         // (but only after validation) so we never create a pending tenant that can
         // never be paid for. A free plan is unaffected.
         $isFree = (float) config("saas.plans.$plan.price", 0) <= 0;
-        if (! $isFree && ! $paystack->isConfigured()) {
+        if (! $isFree && ! PlatformBilling::gateway()) {
             return response()->json([
                 'message' => 'Online signup is temporarily unavailable. Please contact us to get started.',
             ], 503);
@@ -129,6 +145,9 @@ class TenantSignupController extends Controller
             $profile = (array) ($settings['profile'] ?? []);
             $profile['niche'] = $niche;
             $settings['profile'] = $profile;
+            // Nothing has been paid yet, so the country can still change.
+            $settings['country'] = $country;
+            $settings['currency'] = $currency;
             $tenant->update(['name' => $validated['name'], 'settings' => $settings]);
 
             // Switching an abandoned (still-pending) signup to the free plan:
@@ -170,7 +189,7 @@ class TenantSignupController extends Controller
                 'name' => $validated['name'],
                 'slug' => $slug,
                 'status' => 'pending', // nothing provisioned until payment confirms
-                'settings' => ['plan' => $plan, 'profile' => ['niche' => $niche]],
+                'settings' => ['plan' => $plan, 'profile' => ['niche' => $niche], 'country' => $country, 'currency' => $currency],
             ]);
 
             [$first, $last] = array_pad(explode(' ', $validated['admin_name'], 2), 2, '');
@@ -303,6 +322,40 @@ class TenantSignupController extends Controller
             ]);
         }
 
+        // Paid through Flutterwave: confirm there (amount + currency checked,
+        // provisioning idempotent).
+        $tx = \App\Models\PlatformTransaction::query()->where('reference', $reference)->first();
+        if ($tx && $tx->gateway === CoursePayments::FLUTTERWAVE) {
+            try {
+                $status = PlatformBilling::confirm($tx);
+            } catch (\Throwable $e) {
+                Log::error('Paid-signup activation failed after confirmed payment', ['tenant_id' => $tenant->id, 'reference' => $reference, 'err' => $e->getMessage()]);
+
+                return response()->json([
+                    'status' => 'pending',
+                    'message' => 'Payment received, we are finalizing your Online Academy. This can take a moment; please click Check again.',
+                ], 503);
+            }
+
+            if ($status !== 'success') {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $status === 'review'
+                        ? 'We received a payment that needs checking. Our team will confirm it shortly.'
+                        : 'Payment has not been confirmed yet. If you were charged, it will be confirmed shortly.',
+                ], 402);
+            }
+
+            $tenant->refresh();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Payment confirmed. Your Online Academy is ready, check your email for your setup link.',
+                'front_door' => $this->frontDoor($tenant),
+                'tenant' => $tenant->only(['id', 'name', 'slug']),
+            ]);
+        }
+
         $result = $paystack->verifyTransaction($reference);
         $ok = (bool) data_get($result, 'status') && data_get($result, 'data.status') === 'success';
         if (! $ok) {
@@ -362,47 +415,35 @@ class TenantSignupController extends Controller
      */
     private function initPayment(PaystackService $paystack, Tenant $tenant, User $user, string $plan): array
     {
-        $plans = config('saas.plans', []);
-        $amount = (float) ($plans[$plan]['price'] ?? 0);
         $reference = 'ten_signup_' . Str::random(16);
 
-        // Pre-fill the callback with this reference (Paystack echoes the same
-        // value back, so the frontend reads a correct ?reference=). Points at the
+        // Pre-fill the callback with this reference (the gateway returns to it
+        // unchanged, so the frontend reads a correct ?reference=). Points at the
         // tenant-signup verify page, NOT the student /institute/verify flow.
         $callbackUrl = config('saas.frontend_url') . '/signup/verify?reference=' . $reference;
 
-        try {
-            $resp = $paystack->initializeTransaction($user->email, $amount, $reference, [
-                'tenant_id' => $tenant->id,
-                'plan' => $plan,
-                'purpose' => 'tenant_signup',
-            ], $callbackUrl);
-        } catch (\Throwable $e) {
-            Log::warning('Paystack init failed during signup', ['tenant_id' => $tenant->id, 'err' => $e->getMessage()]);
+        // Flutterwave in the academy's own currency (Paystack/naira without
+        // Flutterwave keys). Records the pending ledger row too.
+        $init = PlatformBilling::start(
+            $tenant,
+            (string) $user->email,
+            trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
+            $plan,
+            PlatformBilling::SIGNUP,
+            $reference,
+            $callbackUrl
+        );
 
-            return ['ok' => false, 'message' => 'Could not start payment. Please try again.'];
-        }
+        if (! $init['ok']) {
+            Log::warning('Signup payment could not start', ['tenant_id' => $tenant->id, 'message' => $init['message'] ?? null]);
 
-        $authUrl = data_get($resp, 'data.authorization_url');
-        if (! (data_get($resp, 'status') && $authUrl)) {
-            Log::warning('Paystack init returned no authorization_url', ['tenant_id' => $tenant->id, 'resp' => $resp]);
-
-            return ['ok' => false, 'message' => (string) data_get($resp, 'message', 'Could not start payment. Please try again.')];
+            return ['ok' => false, 'message' => $init['message'] ?? 'Could not start payment. Please try again.'];
         }
 
         // Persist the reference so verify()/the webhook can find this tenant later.
         $tenant->update(['paystack_init_reference' => $reference]);
 
-        // Record a pending row in the platform revenue ledger. Marked success once
-        // the charge confirms (verify or webhook). Best-effort, a ledger hiccup
-        // must never block the owner's checkout.
-        try {
-            \App\Models\PlatformTransaction::recordPending($tenant, $reference, $amount, 'tenant_signup', $plan);
-        } catch (\Throwable $e) {
-            Log::warning('Could not record pending platform transaction (signup)', ['tenant_id' => $tenant->id, 'err' => $e->getMessage()]);
-        }
-
-        return ['ok' => true, 'authorization_url' => $authUrl, 'reference' => $reference];
+        return ['ok' => true, 'authorization_url' => $init['authorization_url'], 'reference' => $reference];
     }
 
     /**

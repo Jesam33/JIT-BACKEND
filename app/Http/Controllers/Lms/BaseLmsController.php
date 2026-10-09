@@ -392,11 +392,21 @@ abstract class BaseLmsController extends Controller
 
         $track = LmsTrack::query()->findOrFail($enrollment->track_id);
         $groupChat = LmsGroupChat::query()->firstOrCreate(['track_id' => $track->id]);
-        $dmThread = LmsDmThread::query()->firstOrCreate([
-            'student_id' => $studentId,
-            'instructor_id' => $track->instructor_id,
-            'track_id' => $track->id,
-        ]);
+
+        // Private messages go to the student's teacher: their one-on-one teacher,
+        // else the cohort's instructor. No thread while there is nobody yet
+        // (unassigned cohort, or a one-on-one student awaiting a teacher);
+        // callers treat a null thread as "no instructor yet".
+        $student = \App\Models\LmsStudent::query()->find($studentId);
+        $instructorId = $student ? \App\Services\OneOnOne::dmInstructorId($student, $track) : $track->instructor_id;
+
+        $dmThread = $instructorId
+            ? LmsDmThread::query()->firstOrCreate([
+                'student_id' => $studentId,
+                'instructor_id' => $instructorId,
+                'track_id' => $track->id,
+            ])
+            : null;
 
         return [$track, $groupChat, $dmThread];
     }

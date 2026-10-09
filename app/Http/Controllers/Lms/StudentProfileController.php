@@ -38,6 +38,9 @@ class StudentProfileController extends BaseLmsController
             // Monthly-course standing, so the shell can send a student whose
             // access has paused straight to the billing page.
             'billing' => \App\Services\CourseBilling::summary(\App\Services\CourseBilling::currentRegistration($student)),
+            // The course they're enrolled in, so the academy's public pages can
+            // mark it "Enrolled" instead of offering to sell it again.
+            'enrolment' => \App\Support\EnrollmentGuard::summaryFor($student),
         ]));
     }
 

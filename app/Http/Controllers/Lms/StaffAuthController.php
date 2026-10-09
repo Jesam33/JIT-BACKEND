@@ -147,6 +147,13 @@ class StaffAuthController extends BaseLmsController
             // Per-feature gates for the staff shell (the sidebar shows
             // "Create with AI" only when the academy's plan includes it).
             'ai_materials' => $this->featureForSession($session, 'ai_materials'),
+            // How many one-on-one students this staffer teaches (the whole
+            // academy's for the owner); the sidebar shows "One-on-one students"
+            // when there are any.
+            'one_on_one_students' => \App\Models\LmsStudent::query()
+                ->where('learning_mode', \App\Models\LmsStudent::MODE_ONE_ON_ONE)
+                ->when(! $actor->isAcademyOwner(), fn ($q) => $q->where('one_on_one_teacher_id', $actor->id))
+                ->count(),
             // Lets the staff shell re-pin its `tenant` cookie from this
             // authenticated session so the inactivity → login redirect keeps
             // the institute instead of falling back to the primary slug.

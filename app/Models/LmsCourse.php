@@ -39,6 +39,11 @@ class LmsCourse extends Model
         'registered_count',
         'is_live_available',
         'is_prerecorded_available',
+        'is_one_on_one_available',
+        'one_on_one_price',
+        'one_on_one_session_minutes',
+        'one_on_one_session_limit',
+        'one_on_one_extra_session_price',
         'is_active',
     ];
 
@@ -46,12 +51,43 @@ class LmsCourse extends Model
         'price' => 'decimal:2',
         'original_price' => 'decimal:2',
         'prerecorded_price' => 'decimal:2',
+        'one_on_one_price' => 'decimal:2',
         'max_students' => 'integer',
         'registered_count' => 'integer',
         'is_live_available' => 'boolean',
         'is_prerecorded_available' => 'boolean',
+        'is_one_on_one_available' => 'boolean',
+        'one_on_one_session_minutes' => 'integer',
+        'one_on_one_session_limit' => 'integer',
+        'one_on_one_extra_session_price' => 'decimal:2',
         'is_active' => 'boolean',
     ];
+
+    /**
+     * What this course costs in a given learning mode: live (group) is the
+     * course price; pre-recorded and one-on-one use their own price when set.
+     * Monthly courses: per month. The one place every sale path asks.
+     */
+    public function priceFor(string $learningMode): float
+    {
+        return match ($learningMode) {
+            'pre_recorded' => (float) ($this->prerecorded_price ?? $this->price),
+            LmsStudent::MODE_ONE_ON_ONE => (float) ($this->one_on_one_price ?? $this->price),
+            default => (float) $this->price,
+        };
+    }
+
+    /**
+     * Whether students can take this course one-on-one right now: switched on
+     * for the course AND part of the academy's plan (Basic and up). Re-checked
+     * at every sale, so a downgrade can't keep selling it.
+     */
+    public function offersOneOnOne(?Tenant $tenant): bool
+    {
+        return (bool) $this->is_one_on_one_available
+            && $this->one_on_one_price !== null
+            && ($tenant === null || $tenant->planFeature('one_on_one'));
+    }
 
     protected static function booted(): void
     {
@@ -105,6 +141,95 @@ class LmsCourse extends Model
                 ? \App\Support\PlanGate::courseSeatCap($tenant)
                 : min($requested, \App\Support\PlanGate::maxStudentsPerCourse());
         });
+
+        // A monthly course bills until its cohort ends, so every cohort needs an
+        // end date or billing would never stop. Enforced here (switching a course
+        // TO monthly) and on LmsTrack (creating/editing a cohort), so no path can
+        // leave an open-ended monthly cohort.
+        static::saving(function (LmsCourse $course): void {
+            if (! $course->exists || ! $course->isDirty('billing_type') || ! $course->isMonthly()) {
+                return;
+            }
+
+            $openEnded = $course->tracks()->withoutGlobalScope(TenantScope::class)->whereNull('end_date')->pluck('name');
+            if ($openEnded->isNotEmpty()) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'billing_type' => 'Before making this course monthly, set an end date on every cohort ('
+                        . $openEnded->implode(', ') . '), so students stop being billed when it finishes.',
+                ]);
+            }
+        });
+
+        // Deleting a course stops billing its monthly students straight away
+        // (before the foreign key nulls their course), and tells them why.
+        static::deleting(function (LmsCourse $course): void {
+            try {
+                \App\Services\CourseBilling::endForCourse(
+                    (int) $course->id,
+                    $course->tenant_id ? (int) $course->tenant_id : null,
+                    \App\Services\CourseBilling::END_COURSE_DELETED
+                );
+            } catch (\Throwable $e) {
+                // The hourly sweep also catches deleted courses; never block a delete.
+                report($e);
+            }
+        });
+    }
+
+    /**
+     * Why the academy may NOT delete this course, or null when it may.
+     *
+     * Anti-scam: once any student has paid for a course, the academy cannot
+     * delete it (take the money, then make the course vanish). It can still
+     * unpublish it (off the storefront, enrolled students keep access) or stop
+     * monthly billing. Only the platform's back office can remove it.
+     */
+    public function deleteBlockedReason(): ?string
+    {
+        // List endpoints preload this for every course in one query
+        // (paidEnrolmentCounts) instead of one query per course.
+        $paidCount = array_key_exists('paid_enrolments', $this->attributes)
+            ? (int) $this->attributes['paid_enrolments']
+            : (static::paidEnrolmentCounts([$this->id])[$this->id] ?? 0);
+
+        if ($paidCount === 0) {
+            return null;
+        }
+
+        return "Students have paid for this course ({$paidCount} paid enrolment" . ($paidCount === 1 ? '' : 's')
+            . "), so it can't be deleted. Unpublish it instead: it leaves your public page and enrolled students keep their access."
+            . ($this->isMonthly() ? ' You can also stop monthly billing.' : '');
+    }
+
+    /**
+     * [course id => number of registrations with a successful, non-zero
+     * payment] for the given courses, in one query.
+     *
+     * @param  array<int>  $courseIds
+     * @return array<int,int>
+     */
+    public static function paidEnrolmentCounts(array $courseIds): array
+    {
+        if ($courseIds === []) {
+            return [];
+        }
+
+        return \Illuminate\Support\Facades\DB::table('payments')
+            ->join('training_registrations', 'training_registrations.id', '=', 'payments.registration_id')
+            ->whereIn('training_registrations.course_id', $courseIds)
+            ->where('payments.status', 'success')
+            ->where('payments.amount', '>', 0)
+            ->groupBy('training_registrations.course_id')
+            ->selectRaw('training_registrations.course_id, COUNT(DISTINCT payments.registration_id) as paid')
+            ->pluck('paid', 'course_id')
+            ->map(fn ($n) => (int) $n)
+            ->all();
+    }
+
+    /** Every registration (purchase) for this course. */
+    public function registrations(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(TrainingRegistration::class, 'course_id');
     }
 
     /** Billed once for the whole course (every course before monthly billing). */

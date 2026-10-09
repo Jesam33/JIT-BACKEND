@@ -301,7 +301,6 @@ class PublicInstituteController extends Controller
         $forced = strtoupper(trim((string) $request->query('currency', ''))) ?: null;
 
         $isNonPrimary = $tenant->slug && $tenant->slug !== config('saas.primary_slug', 'jorsas');
-        $hasSubaccount = (bool) data_get($tenant->settings, 'paystack.subaccount_code');
 
         $fx = app(CurrencyService::class);
 
@@ -309,12 +308,18 @@ class PublicInstituteController extends Controller
             'fx' => $fx,
             'country' => $country,
             'forced_currency' => $forced,
-            'charge_currency' => $fx->chargeCurrencyForCountry($country),
-            'block_unlinked' => $isNonPrimary && ! $hasSubaccount,
+            // Prices are in the academy's own currency and students are charged
+            // in it; display conversions start from it.
+            'base_currency' => $tenant->currency(),
+            'charge_currency' => $tenant->currency(),
+            // No linked bank (Flutterwave, or a pre-move Paystack link) = can't sell.
+            'block_unlinked' => $isNonPrimary && ! $tenant->payoutConfigured(),
             // Pre-recorded video is a paid-plan feature. On a plan without it the
             // storefront must not offer pre-recorded at all (the radio is disabled),
             // regardless of the per-course setting.
             'plan_prerecorded' => $tenant->planFeature('pre_recorded_video'),
+            // One-on-one classes are Basic and up.
+            'tenant' => $tenant,
         ];
     }
 
@@ -331,8 +336,8 @@ class PublicInstituteController extends Controller
         $price = (float) $course->price;
 
         $display = $ctx['forced_currency']
-            ? $ctx['fx']->displayInCurrency($price, $ctx['forced_currency'])
-            : $ctx['fx']->displayFor($price, $ctx['country']);
+            ? $ctx['fx']->displayInCurrency($price, $ctx['forced_currency'], $ctx['base_currency'] ?? 'NGN')
+            : $ctx['fx']->displayFor($price, $ctx['country'], $ctx['base_currency'] ?? 'NGN');
 
         // Optional "was" price, the card struck-through renders it ONLY when it
         // exceeds the current price (the frontend enforces this too). Display uses
@@ -341,8 +346,8 @@ class PublicInstituteController extends Controller
         $originalPriceDisplay = null;
         if ($originalPrice !== null) {
             $od = $ctx['forced_currency']
-                ? $ctx['fx']->displayInCurrency($originalPrice, $ctx['forced_currency'])
-                : $ctx['fx']->displayFor($originalPrice, $ctx['country']);
+                ? $ctx['fx']->displayInCurrency($originalPrice, $ctx['forced_currency'], $ctx['base_currency'] ?? 'NGN')
+                : $ctx['fx']->displayFor($originalPrice, $ctx['country'], $ctx['base_currency'] ?? 'NGN');
             $originalPriceDisplay = $od['amount'];
         }
 
@@ -368,9 +373,21 @@ class PublicInstituteController extends Controller
         $prerecordedPriceDisplay = null;
         if ($prerecordedPrice !== null) {
             $pd = $ctx['forced_currency']
-                ? $ctx['fx']->displayInCurrency($prerecordedPrice, $ctx['forced_currency'])
-                : $ctx['fx']->displayFor($prerecordedPrice, $ctx['country']);
+                ? $ctx['fx']->displayInCurrency($prerecordedPrice, $ctx['forced_currency'], $ctx['base_currency'] ?? 'NGN')
+                : $ctx['fx']->displayFor($prerecordedPrice, $ctx['country'], $ctx['base_currency'] ?? 'NGN');
             $prerecordedPriceDisplay = $pd['amount'];
+        }
+
+        // One-on-one: offered only when the course has it on, with a price, on a
+        // plan that includes it. Localized through the same FX path.
+        $oneOnOneAvailable = $course->offersOneOnOne($ctx['tenant'] ?? null);
+        $oneOnOnePrice = $oneOnOneAvailable ? (float) $course->one_on_one_price : null;
+        $oneOnOnePriceDisplay = null;
+        if ($oneOnOnePrice !== null) {
+            $oo = $ctx['forced_currency']
+                ? $ctx['fx']->displayInCurrency($oneOnOnePrice, $ctx['forced_currency'], $ctx['base_currency'] ?? 'NGN')
+                : $ctx['fx']->displayFor($oneOnOnePrice, $ctx['country'], $ctx['base_currency'] ?? 'NGN');
+            $oneOnOnePriceDisplay = $oo['amount'];
         }
 
         $payload = [
@@ -379,12 +396,13 @@ class PublicInstituteController extends Controller
             'title' => $course->title,
             'description' => $course->description,
             'price' => $price,
-            'currency' => 'NGN',
+            // The academy's own currency: `price` and the *_price fields are in it.
+            'currency' => $ctx['base_currency'] ?? 'NGN',
             'display_currency' => $display['currency'],
             'display_symbol' => $display['symbol'],
             'price_display' => $display['amount'],
             'is_base_currency' => $display['is_base'],
-            'charge_currency' => $price > 0 ? $ctx['charge_currency'] : 'NGN',
+            'charge_currency' => $ctx['charge_currency'],
             'purchasable' => $purchasable,
             'original_price' => $originalPrice,
             'original_price_display' => $originalPriceDisplay,
@@ -414,6 +432,9 @@ class PublicInstituteController extends Controller
             // 'monthly' → every price above is per month (the storefront says
             // "/month" and the student pays again each month).
             'billing_type' => $course->billing_type ?: LmsCourse::BILLING_ONE_TIME,
+            'is_one_on_one_available' => $oneOnOneAvailable,
+            'one_on_one_price' => $oneOnOnePrice,
+            'one_on_one_price_display' => $oneOnOnePriceDisplay,
         ];
 
         if ($detail) {

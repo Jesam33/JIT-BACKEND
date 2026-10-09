@@ -36,5 +36,10 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
+        <!-- Never call the real Flutterwave from tests; tests that need it set
+             config and fake the HTTP calls. -->
+        <env name="FLUTTERWAVE_SECRET_KEY" value=""/>
+        <env name="FLUTTERWAVE_PUBLIC_KEY" value=""/>
+        <env name="FLUTTERWAVE_WEBHOOK_HASH" value=""/>
     </php>
 </phpunit>

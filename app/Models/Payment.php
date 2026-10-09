@@ -37,6 +37,9 @@ class Payment extends Model
     /** A monthly course's second-or-later payment (see App\Services\CourseBilling). */
     public const KIND_RENEWAL = 'renewal';
 
+    /** Extra one-on-one sessions (see App\Services\OneOnOneExtras). */
+    public const KIND_EXTRA_SESSIONS = 'extra_sessions';
+
     public function registration(): BelongsTo
     {
         return $this->belongsTo(TrainingRegistration::class, 'registration_id');

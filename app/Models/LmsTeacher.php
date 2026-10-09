@@ -49,24 +49,23 @@ class LmsTeacher extends Model
     ];
 
     /**
-     * Remove this staff member, unless doing so would take a cohort with them.
-     *
-     * `lms_tracks.instructor_id` is NOT NULL with cascadeOnDelete, so deleting a
-     * teacher who still leads a cohort silently destroys that cohort and, through
-     * it, its enrolments, DM threads and group chat. The owner's Remove button
-     * refuses in that case and tells them to reassign first; this refuses the same
-     * way, but returns false instead of erroring, because the caller here is a
-     * scheduled sweep with nobody to show a message to.
-     *
-     * Refusing is the whole point: the row stays scheduled and intact, so a human
-     * reassigns the cohort and the next run completes the deletion. Cascade-
-     * deleting a cohort because a deletion fell due would be unrecoverable.
+     * Remove this staff member. Any cohort they still lead becomes Unassigned
+     * (lms_tracks.instructor_id is nullOnDelete since 2026-09-30), keeping its
+     * students, enrolments and group chat; the owner assigns a new instructor.
+     * It used to cascade-delete the cohort, which is why this once refused.
      */
     public function purge(): bool
     {
-        if (\App\Models\LmsTrack::query()->where('instructor_id', $this->id)->exists()) {
-            return false;
-        }
+        // One-on-one students: cancel this teacher's upcoming private sessions
+        // (students told), unassign them, tell the owner to assign someone new.
+        \App\Services\OneOnOne::teacherLeaving($this);
+
+        // Explicit rather than left to the foreign key, so it holds on any
+        // database where the key predates the nullOnDelete migration.
+        \App\Models\LmsTrack::query()
+            ->withoutGlobalScope(\App\Scopes\TenantScope::class)
+            ->where('instructor_id', $this->id)
+            ->update(['instructor_id' => null]);
 
         \App\Models\LmsSession::query()
             ->withoutGlobalScope(\App\Scopes\TenantScope::class)

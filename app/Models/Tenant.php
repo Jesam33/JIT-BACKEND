@@ -192,7 +192,35 @@ class Tenant extends Model
     {
         $paystack = (array) (data_get($this->settings, 'paystack') ?? []);
 
-        return ! empty($paystack['subaccount_code']);
+        return $this->flutterwaveSubaccountId() !== null || ! empty($paystack['subaccount_code']);
+    }
+
+    /**
+     * The currency this academy sells in and is paid in (course prices are
+     * entered in it). Set from the academy's country on the payout page; every
+     * academy that hasn't chosen one is a naira academy, as before.
+     */
+    public function currency(): string
+    {
+        $currency = strtoupper(trim((string) data_get($this->settings, 'currency', '')));
+
+        return $currency !== '' ? $currency : 'NGN';
+    }
+
+    /** The academy's country (ISO-2), which fixes its currency and payout bank form. */
+    public function payoutCountry(): string
+    {
+        $country = strtoupper(trim((string) data_get($this->settings, 'country', '')));
+
+        return $country !== '' ? $country : 'NG';
+    }
+
+    /** The academy's Flutterwave subaccount (RS_…) when its bank is linked there. */
+    public function flutterwaveSubaccountId(): ?string
+    {
+        $id = data_get($this->settings, 'flutterwave.subaccount_id');
+
+        return is_string($id) && $id !== '' ? $id : null;
     }
 
     /**
@@ -214,7 +242,7 @@ class Tenant extends Model
             return false;
         }
 
-        return app(\App\Services\PaystackService::class)->isConfigured();
+        return \App\Services\CoursePayments::canLinkBanks();
     }
 
     /**
@@ -681,6 +709,7 @@ class Tenant extends Model
                 'chat' => $this->planFeature('chat'),
                 'certificates' => $this->planFeature('certificates'),
                 'pre_recorded_video' => $this->planFeature('pre_recorded_video'),
+                'one_on_one' => $this->planFeature('one_on_one'),
                 'admission_marketer' => $this->planFeature('admission_marketer'),
                 'remove_branding' => $this->planFeature('remove_branding'),
                 'advanced_analytics' => $this->planFeature('advanced_analytics'),

@@ -15,7 +15,12 @@ namespace App\Support;
  */
 class PlanCatalogue
 {
-    public static function all(): array
+    /**
+     * @param  string|null  $currency  also price each plan in this currency
+     *                                 (local_price + currency, see PlanPricing);
+     *                                 `price` always stays the naira base.
+     */
+    public static function all(?string $currency = null): array
     {
         $default = config('saas.platform_commission_percent', 2);
 
@@ -47,8 +52,23 @@ class PlanCatalogue
                 'features' => collect($featureKeys)
                     ->mapWithKeys(fn ($k) => [$k => (bool) data_get($plan, "features.$k", false)])
                     ->all(),
-            ])
+            ] + static::localPrice((string) $slug, $currency))
             ->values()
             ->all();
+    }
+
+    /** @return array{local_price?: ?float, currency?: string} */
+    private static function localPrice(string $slug, ?string $currency): array
+    {
+        if ($currency === null) {
+            return [];
+        }
+
+        $local = PlanPricing::priceIn($slug, $currency);
+
+        return [
+            'local_price' => $local['amount'] ?? null,
+            'currency' => $local['currency'] ?? strtoupper($currency),
+        ];
     }
 }
