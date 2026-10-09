@@ -144,6 +144,9 @@ class FlutterwaveService
             'customer' => ['email' => $email, 'name' => $name !== '' ? $name : $email],
             'meta' => $meta,
             'customizations' => ['title' => $title],
+            // Ask for the methods people in that currency actually use. Without
+            // this the checkout shows only what the dashboard defaults allow.
+            'payment_options' => static::paymentOptions($currency),
         ];
 
         if ($split = $this->split($subaccountId, $serviceCharge)) {
@@ -151,6 +154,28 @@ class FlutterwaveService
         }
 
         return $this->call('POST', 'payments', $payload);
+    }
+
+    /**
+     * Checkout payment methods for a currency (Flutterwave `payment_options`).
+     * Card everywhere, plus the local favourites: bank transfer and USSD in
+     * Nigeria, mobile money across East/West Africa, M-Pesa in Kenya.
+     * A method not enabled on the Flutterwave account is simply not shown.
+     */
+    public static function paymentOptions(string $currency): string
+    {
+        return match (strtoupper($currency)) {
+            'NGN' => 'card,banktransfer,ussd,account',
+            'GHS' => 'card,mobilemoneyghana',
+            'KES' => 'card,mpesa',
+            'UGX' => 'card,mobilemoneyuganda',
+            'RWF' => 'card,mobilemoneyrwanda',
+            'TZS' => 'card,mobilemoneytanzania',
+            'ZMW' => 'card,mobilemoneyzambia',
+            'XAF', 'XOF' => 'card,mobilemoneyfranco',
+            'USD', 'GBP', 'EUR' => 'card,paypal',
+            default => 'card',
+        };
     }
 
     /** Charge a saved card token (monthly renewal, no student present). */

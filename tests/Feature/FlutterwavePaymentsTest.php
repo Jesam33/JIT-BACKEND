@@ -178,6 +178,7 @@ class FlutterwavePaymentsTest extends TestCase
         Http::assertSent(fn (HttpRequest $r) => $r->url() === self::FLW . 'payments'
             && $r['currency'] === 'GHS'
             && (float) $r['amount'] === 1200.0
+            && $r['payment_options'] === 'card,mobilemoneyghana'
             && $r['subaccounts'][0]['id'] === 'RS_GH'
             && $r['subaccounts'][0]['transaction_charge_type'] === 'flat_subaccount'
             && (float) $r['subaccounts'][0]['transaction_charge'] === $fee
