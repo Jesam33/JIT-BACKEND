@@ -147,6 +147,8 @@ class StaffAuthController extends BaseLmsController
             // Per-feature gates for the staff shell (the sidebar shows
             // "Create with AI" only when the academy's plan includes it).
             'ai_materials' => $this->featureForSession($session, 'ai_materials'),
+            // Module quizzes (Basic and up): the sidebar shows "Quizzes".
+            'quizzes' => $this->featureForSession($session, 'quizzes'),
             // How many one-on-one students this staffer teaches (the whole
             // academy's for the owner); the sidebar shows "One-on-one students"
             // when there are any.

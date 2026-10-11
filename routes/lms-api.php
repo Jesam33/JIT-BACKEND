@@ -424,6 +424,14 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::post('/api/frontend/lms/notifications/clear', [StudentDashboardController::class, 'clearNotifications']);
     Route::get('/api/frontend/lms/attendance', [StudentDashboardController::class, 'attendance']);
 
+    // Module quizzes: list, take (one attempt, server clock), result, scoreboard.
+    Route::get('/api/frontend/lms/quizzes', [\App\Http\Controllers\Lms\StudentQuizController::class, 'index']);
+    Route::get('/api/frontend/lms/quizzes/{quizId}', [\App\Http\Controllers\Lms\StudentQuizController::class, 'show'])->whereNumber('quizId');
+    Route::post('/api/frontend/lms/quizzes/{quizId}/start', [\App\Http\Controllers\Lms\StudentQuizController::class, 'start'])->whereNumber('quizId')->middleware('throttle:20,1');
+    Route::put('/api/frontend/lms/quizzes/{quizId}/answers', [\App\Http\Controllers\Lms\StudentQuizController::class, 'answer'])->whereNumber('quizId')->middleware('throttle:120,1');
+    Route::post('/api/frontend/lms/quizzes/{quizId}/submit', [\App\Http\Controllers\Lms\StudentQuizController::class, 'submit'])->whereNumber('quizId')->middleware('throttle:20,1');
+    Route::get('/api/frontend/lms/quizzes/{quizId}/scoreboard', [\App\Http\Controllers\Lms\StudentQuizController::class, 'scoreboard'])->whereNumber('quizId');
+
     // One-on-one self-booking: open slots in the teacher's week, book, cancel
     // (inside the cancellation window). Rules in App\Services\OneOnOneBooking.
     Route::get('/api/frontend/lms/one-on-one/booking', [\App\Http\Controllers\Lms\StudentOneOnOneController::class, 'show']);
@@ -558,6 +566,18 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
         // Moderator token so the instructor can host the live Jitsi room (both live-class
         // models via ?class_type=scheduled|classroom).
         Route::post('/api/frontend/lms/staff/classrooms/{id}/meeting-token', [StaffClassroomController::class, 'meetingToken']);
+    });
+
+    // Module quizzes (paid plans; same permission as tasks): write one 5-question
+    // quiz per module, publish it, see the scoreboard.
+    Route::middleware('staff.can:tasks')->group(function () {
+        Route::get('/api/frontend/lms/staff/quizzes', [\App\Http\Controllers\Lms\StaffQuizController::class, 'index']);
+        Route::get('/api/frontend/lms/staff/modules/{moduleId}/quiz', [\App\Http\Controllers\Lms\StaffQuizController::class, 'show'])->whereNumber('moduleId');
+        Route::put('/api/frontend/lms/staff/modules/{moduleId}/quiz', [\App\Http\Controllers\Lms\StaffQuizController::class, 'save'])->whereNumber('moduleId');
+        Route::post('/api/frontend/lms/staff/quizzes/{quizId}/publish', [\App\Http\Controllers\Lms\StaffQuizController::class, 'publish'])->whereNumber('quizId');
+        Route::post('/api/frontend/lms/staff/quizzes/{quizId}/close', [\App\Http\Controllers\Lms\StaffQuizController::class, 'close'])->whereNumber('quizId');
+        Route::delete('/api/frontend/lms/staff/quizzes/{quizId}', [\App\Http\Controllers\Lms\StaffQuizController::class, 'destroy'])->whereNumber('quizId');
+        Route::get('/api/frontend/lms/staff/quizzes/{quizId}/results', [\App\Http\Controllers\Lms\StaffQuizController::class, 'results'])->whereNumber('quizId');
     });
 
     // Staff Tasks (list)

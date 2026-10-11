@@ -41,6 +41,8 @@ class StudentProfileController extends BaseLmsController
             // The course they're enrolled in, so the academy's public pages can
             // mark it "Enrolled" instead of offering to sell it again.
             'enrolment' => \App\Support\EnrollmentGuard::summaryFor($student),
+            // Module quizzes are a paid-plan feature (shows the Quizzes link).
+            'quizzes' => $this->featureForSession($session, 'quizzes'),
         ]));
     }
 

@@ -372,6 +372,7 @@ return [
                 'certificates' => false,
                 'pre_recorded_video' => false,
                 'one_on_one' => false,       // one-on-one classes: Basic and up
+                'quizzes' => false,          // module quizzes + scoreboard: Basic and up
                 'admission_marketer' => false,
                 // false → the storefront shows the "Powered by Jorsas" badge.
                 'remove_branding' => false,
@@ -407,6 +408,7 @@ return [
                 // `free`) so the intent reads clearly here.
                 'pre_recorded_video' => false,
                 'one_on_one' => true,
+                'quizzes' => true,
                 'admission_marketer' => true,
                 'remove_branding' => true,
                 // Basic gets standard analytics; "advanced" analytics is Pro+.
@@ -434,6 +436,7 @@ return [
                 'certificates' => true,
                 'pre_recorded_video' => true,
                 'one_on_one' => true,
+                'quizzes' => true,
                 'admission_marketer' => true,
                 'remove_branding' => true,
                 'advanced_analytics' => true,
@@ -465,6 +468,7 @@ return [
                 'certificates' => true,
                 'pre_recorded_video' => true,
                 'one_on_one' => true,
+                'quizzes' => true,
                 'admission_marketer' => true,
                 'remove_branding' => true,
                 'advanced_analytics' => true,

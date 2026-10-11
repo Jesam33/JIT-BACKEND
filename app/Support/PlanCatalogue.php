@@ -28,7 +28,7 @@ class PlanCatalogue
         // sync with config/saas.php `features` and the card UI's labels. `free`
         // lists them all (false), so data_get always resolves.
         $featureKeys = [
-            'live_classes', 'chat', 'certificates', 'pre_recorded_video',
+            'live_classes', 'chat', 'certificates', 'pre_recorded_video', 'quizzes',
             'admission_marketer', 'remove_branding', 'advanced_analytics',
             'advanced_reporting', 'custom_domain', 'priority_support',
             'ai_materials', 'api_access', 'white_label',

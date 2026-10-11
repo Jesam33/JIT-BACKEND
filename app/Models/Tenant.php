@@ -710,6 +710,7 @@ class Tenant extends Model
                 'certificates' => $this->planFeature('certificates'),
                 'pre_recorded_video' => $this->planFeature('pre_recorded_video'),
                 'one_on_one' => $this->planFeature('one_on_one'),
+                'quizzes' => $this->planFeature('quizzes'),
                 'admission_marketer' => $this->planFeature('admission_marketer'),
                 'remove_branding' => $this->planFeature('remove_branding'),
                 'advanced_analytics' => $this->planFeature('advanced_analytics'),

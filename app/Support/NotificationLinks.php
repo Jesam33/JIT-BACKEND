@@ -77,6 +77,7 @@ class NotificationLinks
                 'group_chat' => '/lms/staff/chats',
                 'dm_thread' => '/lms/staff/chats',
                 'scheduled_class' => '/lms/staff/timetable',
+                'quiz' => '/lms/staff/quizzes',
                 default => '/lms/staff/notifications',
             },
             'agent' => match ($refType) {
@@ -106,6 +107,7 @@ class NotificationLinks
                 // module class: the page lists both delivery types.
                 'classroom' => '/lms/app/classroom',
                 'module' => $id ? '/lms/app/modules/' . $id : '/lms/app/modules',
+                'quiz' => $id ? '/lms/app/quizzes/' . $id : '/lms/app/quizzes',
                 'course' => '/lms/app/modules',
                 'certificate' => '/lms/app/certificates',
                 // Monthly-course reminders, receipts and "access paused".
