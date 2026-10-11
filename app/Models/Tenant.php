@@ -47,17 +47,27 @@ class Tenant extends Model
      * really is over (the grace/frozen tail), which is exactly when the owner is
      * allowed to drop to Free.
      */
-    public function activatePlan(string $plan): void
+    public function activatePlan(string $plan, ?string $cycle = null): void
     {
         $settings = (array) ($this->settings ?? []);
         // A fresh period restarts the grace reminders: drop the stamp so a later
         // lapse notifies on its own first day instead of looking already-sent.
         unset($settings['subscription_reminder_on']);
 
+        // Yearly buys 12 months, monthly one. Free has no period or cycle.
+        $cycle = \App\Support\PlanPricing::cycle($cycle);
+        if ($plan === 'free') {
+            unset($settings['billing_cycle']);
+        } else {
+            $settings['billing_cycle'] = $cycle;
+        }
+
         $this->update([
             'plan' => $plan,
             'subscription_status' => 'active',
-            'current_period_end' => $plan === 'free' ? null : now()->addMonthNoOverflow(),
+            'current_period_end' => $plan === 'free'
+                ? null
+                : ($cycle === \App\Support\PlanPricing::YEARLY ? now()->addYearNoOverflow() : now()->addMonthNoOverflow()),
             'settings' => $settings,
         ]);
 
@@ -68,6 +78,25 @@ class Tenant extends Model
         // lets a gateway hiccup break plan activation. (No-op at signup, the bank
         // is linked later, and for the primary, which has no subaccount.)
         $this->syncPayoutCommission();
+    }
+
+    /** How the current paid plan is billed: 'monthly' (also the default) or 'yearly'. */
+    public function billingCycle(): string
+    {
+        return \App\Support\PlanPricing::cycle(data_get($this->settings, 'billing_cycle'));
+    }
+
+    /**
+     * A running YEARLY period can't be swapped for a monthly checkout: activation
+     * starts a fresh period, so it would trade the months already paid for one
+     * month. They can renew or upgrade yearly at any time, and pick monthly
+     * once the year is over.
+     */
+    public function cycleIsLocked(?string $cycle): bool
+    {
+        return $this->paidPeriodRunning()
+            && $this->billingCycle() === \App\Support\PlanPricing::YEARLY
+            && \App\Support\PlanPricing::cycle($cycle) === \App\Support\PlanPricing::MONTHLY;
     }
 
     /**

@@ -65,6 +65,8 @@ class TenantSignupController extends Controller
             // its plan in (App\Support\PayoutCountries). Optional for older
             // clients; they default to Nigeria.
             'country' => ['nullable', 'string', 'size:2'],
+            // Pay for a month or a year (yearly is discounted; PlanPricing).
+            'billing_cycle' => ['nullable', 'in:monthly,yearly'],
         ], [
             'slug.regex' => 'The subdomain may only contain lowercase letters, numbers, and hyphens.',
             'slug.not_in' => 'That subdomain is reserved. Please choose another.',
@@ -74,6 +76,7 @@ class TenantSignupController extends Controller
         ]);
 
         $plan = $validated['plan'];
+        $cycle = \App\Support\PlanPricing::cycle($validated['billing_cycle'] ?? null);
         $email = $validated['admin_email'];
         $niche = trim($validated['niche']);
 
@@ -141,6 +144,7 @@ class TenantSignupController extends Controller
             $tenant = Tenant::find($pendingTenantId);
             $settings = $tenant->settings ?? [];
             $settings['plan'] = $plan;
+            $settings['billing_cycle'] = $cycle;
             // Persist the chosen niche without disturbing any other profile keys.
             $profile = (array) ($settings['profile'] ?? []);
             $profile['niche'] = $niche;
@@ -156,7 +160,7 @@ class TenantSignupController extends Controller
                 return $this->activateFreeSignup($onboarding, $tenant, true);
             }
 
-            $init = $this->initPayment($paystack, $tenant, $existingUser, $plan);
+            $init = $this->initPayment($paystack, $tenant, $existingUser, $plan, $cycle);
             if (! ($init['ok'] ?? false)) {
                 return response()->json(['message' => $init['message']], 502);
             }
@@ -189,7 +193,7 @@ class TenantSignupController extends Controller
                 'name' => $validated['name'],
                 'slug' => $slug,
                 'status' => 'pending', // nothing provisioned until payment confirms
-                'settings' => ['plan' => $plan, 'profile' => ['niche' => $niche], 'country' => $country, 'currency' => $currency],
+                'settings' => ['plan' => $plan, 'billing_cycle' => $cycle, 'profile' => ['niche' => $niche], 'country' => $country, 'currency' => $currency],
             ]);
 
             [$first, $last] = array_pad(explode(' ', $validated['admin_name'], 2), 2, '');
@@ -238,7 +242,7 @@ class TenantSignupController extends Controller
             return $this->activateFreeSignup($onboarding, $tenant, false);
         }
 
-        $init = $this->initPayment($paystack, $tenant, $user, $plan);
+        $init = $this->initPayment($paystack, $tenant, $user, $plan, $cycle);
         if (! ($init['ok'] ?? false)) {
             // Payment couldn't be started. The pending tenant/user remain and can
             // be resumed on a later retry with the same email.
@@ -374,6 +378,7 @@ class TenantSignupController extends Controller
                 'tenant_signup',
                 data_get($tenant->settings, 'plan', $tenant->plan),
                 (array) data_get($result, 'data', []),
+                data_get($tenant->settings, 'billing_cycle'),
             );
         } catch (\Throwable $e) {
             Log::warning('Could not mark platform transaction success (signup verify)', ['tenant_id' => $tenant->id, 'err' => $e->getMessage()]);
@@ -413,7 +418,7 @@ class TenantSignupController extends Controller
      * Returns ['ok'=>true,'authorization_url'=>..,'reference'=>..] on success,
      * or ['ok'=>false,'message'=>..] so the caller can surface a clean error.
      */
-    private function initPayment(PaystackService $paystack, Tenant $tenant, User $user, string $plan): array
+    private function initPayment(PaystackService $paystack, Tenant $tenant, User $user, string $plan, string $cycle = 'monthly'): array
     {
         $reference = 'ten_signup_' . Str::random(16);
 
@@ -431,7 +436,8 @@ class TenantSignupController extends Controller
             $plan,
             PlatformBilling::SIGNUP,
             $reference,
-            $callbackUrl
+            $callbackUrl,
+            $cycle
         );
 
         if (! $init['ok']) {

@@ -36,34 +36,36 @@ class PlatformBilling
     }
 
     /** What this academy pays for a plan now. @return array{amount: float, currency: string}|null */
-    public static function priceFor(Tenant $tenant, string $plan): ?array
+    public static function priceFor(Tenant $tenant, string $plan, ?string $cycle = PlanPricing::MONTHLY): ?array
     {
         // Paystack only collects naira for us.
         $currency = static::gateway() === CoursePayments::FLUTTERWAVE ? $tenant->currency() : 'NGN';
 
-        return PlanPricing::priceIn($plan, $currency);
+        return PlanPricing::priceIn($plan, $currency, $cycle);
     }
 
     /**
-     * Start a checkout and record the pending ledger row.
+     * Start a checkout (a month or a year of $plan) and record the pending
+     * ledger row.
      *
      * @return array{ok: bool, authorization_url?: string, message?: string, amount?: float, currency?: string}
      */
-    public static function start(Tenant $tenant, string $email, string $name, string $plan, string $purpose, string $reference, string $callbackUrl): array
+    public static function start(Tenant $tenant, string $email, string $name, string $plan, string $purpose, string $reference, string $callbackUrl, ?string $cycle = PlanPricing::MONTHLY): array
     {
+        $cycle = PlanPricing::cycle($cycle);
         $gateway = static::gateway();
-        $price = static::priceFor($tenant, $plan);
+        $price = static::priceFor($tenant, $plan, $cycle);
         if (! $gateway || ! $price || $price['amount'] <= 0) {
             return ['ok' => false, 'message' => 'Payments are not available right now. Please contact support.'];
         }
 
-        $meta = ['tenant_id' => $tenant->id, 'plan' => $plan, 'purpose' => $purpose];
+        $meta = ['tenant_id' => $tenant->id, 'plan' => $plan, 'purpose' => $purpose, 'billing_cycle' => $cycle];
 
         try {
             if ($gateway === CoursePayments::FLUTTERWAVE) {
                 $body = CoursePayments::flutterwave()->initializePayment(
                     $reference, $price['amount'], $price['currency'], $email, $name, $callbackUrl,
-                    null, null, $meta, 'Jorsas ' . ucfirst($plan) . ' plan'
+                    null, null, $meta, 'Jorsas ' . ucfirst($plan) . ' plan (' . $cycle . ')'
                 );
                 $url = FlutterwaveService::ok($body) ? ($body['data']['link'] ?? null) : null;
                 $message = $body['message'] ?? null;
@@ -83,7 +85,7 @@ class PlatformBilling
         }
 
         try {
-            PlatformTransaction::recordPending($tenant, $reference, $price['amount'], $purpose, $plan, $price['currency'], $gateway);
+            PlatformTransaction::recordPending($tenant, $reference, $price['amount'], $purpose, $plan, $price['currency'], $gateway, $cycle);
         } catch (\Throwable $e) {
             Log::warning('Could not record pending platform transaction', ['tenant_id' => $tenant->id, 'err' => $e->getMessage()]);
         }
@@ -138,7 +140,7 @@ class PlatformBilling
                     return;
                 }
                 if ($fresh->purpose === self::UPGRADE && $fresh->plan && isset(config('saas.plans', [])[$fresh->plan])) {
-                    $tenant->activatePlan($fresh->plan);
+                    $tenant->activatePlan($fresh->plan, $fresh->billing_cycle);
                 }
                 PlatformTransaction::markSuccess($tenant, (string) $fresh->reference, (string) $fresh->purpose, $fresh->plan, $data);
             });

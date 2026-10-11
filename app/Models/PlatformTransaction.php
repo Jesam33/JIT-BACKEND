@@ -22,6 +22,7 @@ class PlatformTransaction extends Model
         'tenant_id',
         'tenant_name',
         'plan',
+        'billing_cycle',
         'purpose',
         'reference',
         'amount',
@@ -49,7 +50,7 @@ class PlatformTransaction extends Model
      * pending row rather than inserting a duplicate, and never overwrites a row
      * that already reached a terminal state (success/failed).
      */
-    public static function recordPending(Tenant $tenant, string $reference, float $amount, string $purpose, ?string $plan = null, string $currency = 'NGN', string $gateway = 'paystack'): void
+    public static function recordPending(Tenant $tenant, string $reference, float $amount, string $purpose, ?string $plan = null, string $currency = 'NGN', string $gateway = 'paystack', string $cycle = 'monthly'): void
     {
         if ($reference === '') {
             return;
@@ -66,6 +67,7 @@ class PlatformTransaction extends Model
                 'tenant_id' => $tenant->id,
                 'tenant_name' => $tenant->name,
                 'plan' => $plan ?? $tenant->plan,
+                'billing_cycle' => \App\Support\PlanPricing::cycle($cycle),
                 'purpose' => $purpose,
                 'amount' => $amount,
                 'currency' => strtoupper($currency),
@@ -84,7 +86,7 @@ class PlatformTransaction extends Model
      * `$verifiedAmountMinor` is Paystack's amount in minor units (kobo/cents) from
      * the verified payload; when present it's the authoritative figure recorded.
      */
-    public static function markSuccess(Tenant $tenant, string $reference, string $purpose, ?string $plan = null, ?array $gatewayData = null): void
+    public static function markSuccess(Tenant $tenant, string $reference, string $purpose, ?string $plan = null, ?array $gatewayData = null, ?string $cycle = null): void
     {
         if ($reference === '') {
             return;
@@ -105,6 +107,10 @@ class PlatformTransaction extends Model
             'gateway' => ($gatewayData['gateway'] ?? null) === 'flutterwave' ? 'flutterwave' : ($existing?->gateway ?? 'paystack'),
             'paid_at' => now(),
         ];
+        // Keep the cycle recorded at checkout unless the confirming path knows it.
+        if ($cycle !== null) {
+            $attributes['billing_cycle'] = \App\Support\PlanPricing::cycle($cycle);
+        }
 
         if (is_array($gatewayData)) {
             $attributes['gateway_response'] = $gatewayData;
@@ -119,7 +125,7 @@ class PlatformTransaction extends Model
 
         // Fall back to the plan price if we're creating fresh with no gateway amount.
         if (! isset($attributes['amount']) && ! $existing) {
-            $attributes['amount'] = (float) (config("saas.plans.$plan.price", 0) ?? 0);
+            $attributes['amount'] = (float) (\App\Support\PlanPricing::priceIn((string) $plan, 'NGN', $cycle)['amount'] ?? 0);
             $attributes['currency'] = 'NGN';
         }
 

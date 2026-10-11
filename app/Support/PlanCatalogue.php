@@ -42,6 +42,9 @@ class PlanCatalogue
                 // Enterprise has no self-serve price, it's a contact-sales tier,
                 // so price stays null (the UI renders "Contact sales", not ₦0).
                 'price' => array_key_exists('price', $plan) && $plan['price'] !== null ? (float) $plan['price'] : null,
+                // A year paid up front (12x monthly less the yearly discount).
+                'yearly_price' => PlanPricing::priceIn((string) $slug, 'NGN', PlanPricing::YEARLY)['amount'] ?? null,
+                'yearly_discount_percent' => PlanPricing::yearlyDiscountPercent(),
                 'contact_sales' => (bool) ($plan['contact_sales'] ?? false),
                 'commission_percent' => (float) ($plan['commission_percent'] ?? $default),
                 'limits' => [
@@ -57,7 +60,7 @@ class PlanCatalogue
             ->all();
     }
 
-    /** @return array{local_price?: ?float, currency?: string} */
+    /** @return array{local_price?: ?float, local_yearly_price?: ?float, currency?: string} */
     private static function localPrice(string $slug, ?string $currency): array
     {
         if ($currency === null) {
@@ -65,9 +68,11 @@ class PlanCatalogue
         }
 
         $local = PlanPricing::priceIn($slug, $currency);
+        $yearly = PlanPricing::priceIn($slug, $currency, PlanPricing::YEARLY);
 
         return [
             'local_price' => $local['amount'] ?? null,
+            'local_yearly_price' => $yearly['amount'] ?? null,
             'currency' => $local['currency'] ?? strtoupper($currency),
         ];
     }

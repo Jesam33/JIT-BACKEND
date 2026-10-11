@@ -157,6 +157,12 @@ class TenantBillingController extends BaseLmsController
             'plan_summary' => $tenant->planSummaryArray(),
             // Each plan also priced in the academy's own currency (local_price).
             'plans' => \App\Support\PlanCatalogue::all(PlatformBilling::gateway() === \App\Services\CoursePayments::FLUTTERWAVE ? $tenant->currency() : 'NGN'),
+            // Monthly or yearly: how the current plan is billed, the yearly
+            // discount, and (while a paid year is running) the rule that monthly
+            // only opens up once that year is over.
+            'billing_cycle' => $tenant->billingCycle(),
+            'yearly_discount_percent' => \App\Support\PlanPricing::yearlyDiscountPercent(),
+            'monthly_locked_until' => $tenant->cycleIsLocked('monthly') ? $tenant->current_period_end : null,
             'currency' => $tenant->currency(),
             'billing_configured' => PlatformBilling::gateway() !== null,
         ]);
@@ -180,9 +186,11 @@ class TenantBillingController extends BaseLmsController
             // The frontend sends the origin the owner is actually on, so the
             // Paystack callback returns them THERE (see safeReturnOrigin + below).
             'return_origin' => ['nullable', 'string', 'max:2048'],
+            'billing_cycle' => ['nullable', 'in:monthly,yearly'],
         ]);
 
         $plan = $validated['plan'];
+        $cycle = \App\Support\PlanPricing::cycle($validated['billing_cycle'] ?? null);
         $plans = config('saas.plans', []);
 
         if (! isset($plans[$plan])) {
@@ -218,7 +226,20 @@ class TenantBillingController extends BaseLmsController
             ], 422);
         }
 
+        // A yearly plan that's still running renews or upgrades yearly; monthly
+        // opens up once the year ends (see Tenant::cycleIsLocked).
         $amount = (float) ($plans[$plan]['price'] ?? 0);
+        if ($amount > 0 && $tenant->cycleIsLocked($cycle)) {
+            $until = $tenant->current_period_end;
+
+            return response()->json([
+                'message' => 'Your yearly plan runs until ' . ($until ? $until->toFormattedDateString() : 'the end of the year')
+                    . '. You can renew or upgrade yearly now, and switch to monthly once it ends.',
+                'cycle_locked' => true,
+                'locked_until' => $until,
+            ], 422);
+        }
+
         if ($amount <= 0) {
             // The free plan needs no payment, activate directly.
             $tenant->activatePlan($plan);
@@ -266,7 +287,8 @@ class TenantBillingController extends BaseLmsController
                 $plan,
                 PlatformBilling::UPGRADE,
                 $reference,
-                $callbackUrl
+                $callbackUrl,
+                $cycle
             );
 
             if (! $init['ok']) {
@@ -284,6 +306,7 @@ class TenantBillingController extends BaseLmsController
                 'reference' => $reference,
                 'amount' => $init['amount'] ?? $amount,
                 'currency' => $init['currency'] ?? 'NGN',
+                'billing_cycle' => $cycle,
             ]);
         } catch (\Throwable $e) {
             Log::error('Tenant plan-upgrade initialization failed', [
@@ -378,12 +401,22 @@ class TenantBillingController extends BaseLmsController
             return response()->json(['message' => 'This payment is not a plan upgrade.'], 422);
         }
 
-        $tenant->activatePlan($plan);
+        // The cycle the checkout was started with (older checkouts: monthly).
+        $cycle = $metadata['billing_cycle']
+            ?? \App\Models\PlatformTransaction::query()->where('reference', $validated['reference'])->value('billing_cycle');
+
+        // Paystack verify can race the webhook; only the first confirmation
+        // activates, so a repeat never restarts the period.
+        $alreadyCounted = \App\Models\PlatformTransaction::query()
+            ->where('reference', $validated['reference'])->where('status', 'success')->exists();
+        if (! $alreadyCounted) {
+            $tenant->activatePlan($plan, $cycle);
+        }
 
         // Confirmed upgrade, record it in the platform revenue ledger (idempotent
         // on the reference, so a racing webhook won't double-count). Best-effort.
         try {
-            \App\Models\PlatformTransaction::markSuccess($tenant, $validated['reference'], 'plan_upgrade', $plan, $data);
+            \App\Models\PlatformTransaction::markSuccess($tenant, $validated['reference'], 'plan_upgrade', $plan, $data, $cycle);
         } catch (\Throwable $e) {
             Log::warning('Could not mark platform transaction success (upgrade verify)', ['tenant_id' => $tenant->id, 'err' => $e->getMessage()]);
         }

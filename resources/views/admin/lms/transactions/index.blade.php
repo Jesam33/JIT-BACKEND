@@ -155,7 +155,7 @@
                             @endphp
                             <tr>
                                 <td><strong>{{ $t['tenant_name'] }}</strong></td>
-                                <td style="text-transform:capitalize">{{ $t['plan'] ?? 'N/A' }}</td>
+                                <td style="text-transform:capitalize">{{ $t['plan'] ?? 'N/A' }} <span style="opacity:.6">({{ $t['billing_cycle'] ?? 'monthly' }})</span></td>
                                 <td>{{ $t['purpose'] === 'tenant_signup' ? 'Signup' : 'Upgrade' }}</td>
                                 <td class="ref-cell">{{ $t['reference'] }}</td>
                                 <td class="num-cell">{{ $t['currency'] }} {{ number_format($t['amount'], 2) }}</td>

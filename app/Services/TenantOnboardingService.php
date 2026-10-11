@@ -165,7 +165,8 @@ class TenantOnboardingService
         // Plan chosen at signup lives in settings until activation makes it real.
         $plan = data_get($tenant->settings, 'plan', 'free');
         if ($plan && isset(config('saas.plans', [])[$plan])) {
-            $tenant->activatePlan($plan); // idempotent, safe on redelivery
+            // idempotent, safe on redelivery; the month/year chosen at signup.
+            $tenant->activatePlan($plan, data_get($tenant->settings, 'billing_cycle'));
         }
 
         if (! $isFirst) {

@@ -98,10 +98,16 @@ class PaystackWebhookController extends Controller
                         // so the plan lands even if the browser never returns.
                         $plan = $metadata['plan'] ?? null;
                         $purpose = $metadata['purpose'] ?? null;
+                        $cycle = $metadata['billing_cycle'] ?? null;
+                        $counted = $reference && \App\Models\PlatformTransaction::query()
+                            ->where('reference', (string) $reference)->where('status', 'success')->exists();
                         if ($purpose === 'plan_upgrade'
                             && $plan
-                            && isset(config('saas.plans', [])[$plan])) {
-                            $tenant->activatePlan($plan);
+                            && isset(config('saas.plans', [])[$plan])
+                            && ! $counted) {
+                            // Skipped when the browser verify already activated
+                            // it, so a late webhook never restarts the period.
+                            $tenant->activatePlan($plan, $cycle);
                         } elseif ($purpose === 'tenant_signup') {
                             // Pay-first signup confirmed asynchronously. Activate
                             // and provision the tenant (seed content + email the
@@ -123,6 +129,7 @@ class PaystackWebhookController extends Controller
                                     $purpose,
                                     $plan ?? data_get($tenant->settings, 'plan', $tenant->plan),
                                     (array) $data,
+                                    $cycle,
                                 );
                             } catch (\Throwable $e) {
                                 Log::warning('Could not mark platform transaction success (webhook)', ['tenant_id' => $tenant->id, 'err' => $e->getMessage()]);

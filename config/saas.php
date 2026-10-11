@@ -265,6 +265,12 @@ return [
     // portal freezes. Default 7 days.
     'subscription_grace_days' => (int) env('SUBSCRIPTION_GRACE_DAYS', 7),
 
+    // Yearly plan billing: an owner can pay for 12 months at once, priced at 12x
+    // the monthly price less this discount (App\Support\PlanPricing). Applies in
+    // every currency, including fixed per-currency prices. 0 turns the discount
+    // off (yearly still offered, just at 12x).
+    'yearly_discount_percent' => (float) env('PLAN_YEARLY_DISCOUNT_PERCENT', 20),
+
     // Where a frozen owner is told to reach the platform ("contact management
     // services"). Optional: when set, the freeze screen shows it as a mailto.
     // Falls back to the training admin address if that is configured. Read via

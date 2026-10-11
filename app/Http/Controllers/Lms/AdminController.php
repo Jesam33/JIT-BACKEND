@@ -877,6 +877,7 @@ class AdminController extends BaseLmsController
                 'id' => $t->id,
                 'tenant_name' => $t->tenant_name ?? '—',
                 'plan' => $t->plan,
+                'billing_cycle' => $t->billing_cycle ?? 'monthly',
                 'purpose' => $t->purpose,
                 'reference' => $t->reference,
                 'amount' => (float) $t->amount,
