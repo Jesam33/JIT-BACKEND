@@ -31,8 +31,12 @@ class StudentLiveQuizController extends BaseLmsController
             'class_id' => ['required', 'integer'],
         ]);
 
+        // The class screen polls this anyway, so it also says whether the
+        // teacher is recording the class (on every plan, quizzes or not).
+        $recording = StaffClassRecordingController::isRecording($data['class_type'], (int) $data['class_id']);
+
         if (! $this->enabled($student)) {
-            return response()->json(['run' => null]);
+            return response()->json(['run' => null, 'recording' => $recording]);
         }
 
         $run = LiveQuizzes::activeRun($data['class_type'], (int) $data['class_id']);
@@ -43,13 +47,13 @@ class StudentLiveQuizController extends BaseLmsController
             ->latest('id')->first();
 
         if (! $run || (int) $run->course_id !== LearnerProof::courseId($student)) {
-            return response()->json(['run' => null]);
+            return response()->json(['run' => null, 'recording' => $recording]);
         }
 
         $run = LiveQuizzes::settle($run);
         LiveQuizzes::markSeen($run, (int) $student->id);
 
-        return response()->json(['run' => $this->state($run, $student)]);
+        return response()->json(['run' => $this->state($run, $student), 'recording' => $recording]);
     }
 
     public function answer(Request $request, int $runId): JsonResponse

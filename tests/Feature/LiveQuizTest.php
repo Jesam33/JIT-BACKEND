@@ -256,6 +256,25 @@ class LiveQuizTest extends TestCase
         $this->assertSame($c['overall_progress'] + 5, $a['overall_progress']);
     }
 
+    public function test_students_see_when_the_teacher_is_recording_the_class(): void
+    {
+        $staff = $this->token('staff', $this->teacher->id);
+        $ada = $this->token('student', $this->student('Ada')->id);
+        $flag = fn (bool $on) => $this->withToken($staff)->postJson('/api/frontend/lms/staff/class-recording', [
+            'class_type' => 'scheduled', 'class_id' => $this->class->id, 'on' => $on,
+        ]);
+
+        $this->withToken($ada)->getJson('/api/frontend/lms/live-quiz?' . $this->cls())->assertJsonPath('recording', false);
+        $flag(true)->assertOk();
+        $this->withToken($ada)->getJson('/api/frontend/lms/live-quiz?' . $this->cls())->assertJsonPath('recording', true);
+        $flag(false)->assertOk();
+        $this->withToken($ada)->getJson('/api/frontend/lms/live-quiz?' . $this->cls())->assertJsonPath('recording', false);
+
+        // A class that isn't theirs can't be flagged.
+        $this->withToken($staff)->postJson('/api/frontend/lms/staff/class-recording', ['class_type' => 'scheduled', 'class_id' => 999999, 'on' => true])
+            ->assertNotFound();
+    }
+
     public function test_free_plans_have_no_live_quiz(): void
     {
         $this->acme->update(['plan' => 'free']);

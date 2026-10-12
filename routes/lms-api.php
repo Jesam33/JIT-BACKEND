@@ -594,6 +594,9 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     // and the control panel that runs one in a class. Whoever can run the
     // classroom can run its quiz.
     Route::middleware('staff.can:classroom')->group(function () {
+        // "This class is being recorded" (the teacher's free in-browser recorder).
+        Route::post('/api/frontend/lms/staff/class-recording', [\App\Http\Controllers\Lms\StaffClassRecordingController::class, 'update']);
+
         $lq = \App\Http\Controllers\Lms\StaffLiveQuizController::class;
         Route::get('/api/frontend/lms/staff/live-quiz/class', [$lq, 'forClass']);
         Route::post('/api/frontend/lms/staff/live-quiz/rounds', [$lq, 'storeRound']);
