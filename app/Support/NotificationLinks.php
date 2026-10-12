@@ -93,6 +93,8 @@ class NotificationLinks
                 'staff' => '/lms/admin/staff',
                 'student' => '/lms/admin/students',
                 'payment' => '/lms/admin/payments',
+                // "Link your bank again" (payouts moved to Flutterwave).
+                'payout' => '/lms/admin/profile?tab=payment',
                 'agent', 'registration' => '/lms/admin/agents',
                 default => '/lms/admin',
             },

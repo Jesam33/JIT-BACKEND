@@ -60,8 +60,10 @@ class OwnerPayoutController extends OwnerAdminController
         return response()->json(array_merge($base, [
             'payment' => $payment + [
                 'provider' => $onFlutterwave ? CoursePayments::FLUTTERWAVE : ($onPaystack ? CoursePayments::PAYSTACK : null),
-                // Linked on Paystack before the move: works, but should re-link.
-                'needs_relink' => ! $onFlutterwave && $onPaystack && $linkProvider === CoursePayments::FLUTTERWAVE,
+                // Linked on Paystack before the move (or that old link was
+                // cleared): payments are paused until they link again here.
+                'needs_relink' => ! $onFlutterwave && $linkProvider === CoursePayments::FLUTTERWAVE
+                    && ($onPaystack || ! empty(data_get($tenant->settings, 'payout_relink_required'))),
             ],
             'academy' => [
                 'country' => $tenant->payoutCountry(),
@@ -291,6 +293,8 @@ class OwnerPayoutController extends OwnerAdminController
         ];
         $settings['country'] = $country;
         $settings['currency'] = $currency;
+        // Re-linked after the move to Flutterwave: the "link your bank again" ask is done.
+        unset($settings['payout_relink_required']);
         $tenant->update(['settings' => $settings]);
 
         return response()->json([

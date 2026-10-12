@@ -219,9 +219,16 @@ class Tenant extends Model
      */
     public function payoutConfigured(): bool
     {
+        if ($this->flutterwaveSubaccountId() !== null) {
+            return true;
+        }
+
+        // An old Paystack link only counts where Flutterwave isn't set up; with
+        // Flutterwave on, payments go through it alone (CoursePayments::gatewayFor),
+        // so a Paystack-only academy must re-link before it can sell.
         $paystack = (array) (data_get($this->settings, 'paystack') ?? []);
 
-        return $this->flutterwaveSubaccountId() !== null || ! empty($paystack['subaccount_code']);
+        return ! empty($paystack['subaccount_code']) && ! \App\Services\CoursePayments::flutterwave()->isConfigured();
     }
 
     /**

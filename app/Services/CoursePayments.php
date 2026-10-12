@@ -57,11 +57,23 @@ class CoursePayments
         return static::linkProvider() !== null;
     }
 
-    /** The gateway this academy's student payments use, or null (can't take money yet). */
+    /**
+     * The gateway this academy's student payments use, or null (can't take money yet).
+     *
+     * With Flutterwave set up, it is Flutterwave only: an academy still holding
+     * an old Paystack link gets no gateway until the owner re-links through
+     * Flutterwave (`lms:clear-paystack-payouts` clears those links and asks
+     * them to). Paystack links only count where Flutterwave isn't configured.
+     */
     public static function gatewayFor(?Tenant $tenant): ?string
     {
-        if ($tenant && $tenant->flutterwaveSubaccountId() && static::flutterwave()->isConfigured()) {
-            return self::FLUTTERWAVE;
+        if (static::flutterwave()->isConfigured()) {
+            if ($tenant && $tenant->flutterwaveSubaccountId()) {
+                return self::FLUTTERWAVE;
+            }
+
+            // The platform's own academy settles to the platform account.
+            return (! $tenant || $tenant->isPrimary()) ? self::FLUTTERWAVE : null;
         }
 
         if ($tenant && CourseBilling::subaccountCode($tenant) && static::paystack()->isConfigured()) {

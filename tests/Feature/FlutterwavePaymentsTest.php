@@ -370,17 +370,43 @@ class FlutterwavePaymentsTest extends TestCase
         $this->assertSame('GHS', $gh->fresh()->currency());
     }
 
-    public function test_paystack_academies_keep_working_and_are_asked_to_relink(): void
+    public function test_with_flutterwave_on_an_old_paystack_link_takes_no_payments_until_relinked(): void
     {
         $legacy = $this->academy('lagos', ['paystack' => ['subaccount_code' => 'ACCT_old', 'bank_code' => '058', 'account_number' => '0123456789']]);
         config(['services.paystack.secret_key' => 'sk_test_fake']);
 
-        $this->assertSame('paystack', CoursePayments::gatewayFor($legacy));
-        $this->assertSame('NGN', $legacy->currency());
+        // Everything goes through Flutterwave: no Paystack fallback, no selling.
+        $this->assertNull(CoursePayments::gatewayFor($legacy));
+        $this->assertFalse($legacy->payoutConfigured());
 
         $this->withToken($this->ownerToken($legacy))->getJson('/api/frontend/lms/owner/payment-settings')
             ->assertOk()
-            ->assertJsonPath('payment.provider', 'paystack')
+            ->assertJsonPath('payment.needs_relink', true);
+    }
+
+    public function test_clearing_paystack_links_archives_them_and_asks_owners_to_relink(): void
+    {
+        $legacy = $this->academy('lagos', ['paystack' => ['subaccount_code' => 'ACCT_old', 'bank_code' => '058', 'account_number' => '0123456789']]);
+        $gh = $this->ghana(); // already on Flutterwave: untouched
+
+        $this->artisan('lms:clear-paystack-payouts', ['--dry-run' => true])->assertSuccessful();
+        $this->assertSame('ACCT_old', data_get($legacy->fresh()->settings, 'paystack.subaccount_code'));
+
+        $this->artisan('lms:clear-paystack-payouts')->assertSuccessful();
+
+        $settings = $legacy->fresh()->settings;
+        $this->assertNull(data_get($settings, 'paystack'));
+        $this->assertSame('ACCT_old', data_get($settings, 'paystack_archived.subaccount_code'));
+        $this->assertTrue((bool) data_get($settings, 'payout_relink_required'));
+        $this->assertSame('RS_GH', $gh->fresh()->flutterwaveSubaccountId());
+
+        // The owner is told (in-app, and emailed by the sweep) where to fix it.
+        $note = \App\Models\LmsOwnerNotification::withoutGlobalScope(TenantScope::class)->where('tenant_id', $legacy->id)->sole();
+        $this->assertSame('payout_relink', $note->type);
+        $this->assertStringEndsWith('/lms/admin/profile?tab=payment', \App\Support\NotificationLinks::pathFor('owner', 'payout'));
+
+        // The payout page keeps asking until they link again.
+        $this->withToken($this->ownerToken($legacy))->getJson('/api/frontend/lms/owner/payment-settings')
             ->assertJsonPath('payment.needs_relink', true);
     }
 
