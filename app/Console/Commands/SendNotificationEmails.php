@@ -37,6 +37,13 @@ class SendNotificationEmails extends Command
 
     protected $description = 'Email pending in-app notifications (emailed_at IS NULL) to students, staff, agents and academy owners.';
 
+    /**
+     * Notification types the PLATFORM sends (not the academy), even though the
+     * rows sit under an academy so they reach its people and link into its
+     * portal. Emailed with Jorsas branding instead of the academy's.
+     */
+    private const PLATFORM_TYPES = ['platform_announcement', 'payout_relink'];
+
     public function handle(): int
     {
         if (! config('saas.notification_emails_enabled')) {
@@ -187,19 +194,21 @@ class SendNotificationEmails extends Command
 
         $tenantIds = $notifs->pluck('tenant_id')->unique()->filter()->all();
 
-        $ownerEmails = DB::table('tenant_admins')
+        $owners = DB::table('tenant_admins')
             ->join('users', 'users.id', '=', 'tenant_admins.user_id')
             ->whereIn('tenant_admins.tenant_id', $tenantIds)
             ->where('tenant_admins.role', 'owner')
-            ->pluck('users.email', 'tenant_admins.tenant_id')
-            ->all();
+            ->get(['tenant_admins.tenant_id', 'users.email', 'users.first_name'])
+            ->keyBy('tenant_id');
 
         $sent = 0;
         foreach ($notifs as $n) {
+            $owner = $owners->get($n->tenant_id);
             // $replyTos is contact-address-first, owner-second — exactly the
             // right fallback ordering for reaching this academy.
-            $email = $ownerEmails[$n->tenant_id] ?? ($replyTos[$n->tenant_id] ?? null);
-            $sent += $this->deliver($n, 'owner', $email, 'there', $tenantNames, $slugs, $replyTos, $brandColors, $brandLogos) ? 1 : 0;
+            $email = $owner->email ?? ($replyTos[$n->tenant_id] ?? null);
+            $name = trim((string) ($owner->first_name ?? '')) ?: 'there';
+            $sent += $this->deliver($n, 'owner', $email, $name, $tenantNames, $slugs, $replyTos, $brandColors, $brandLogos) ? 1 : 0;
         }
 
         return $sent;
@@ -334,6 +343,18 @@ class SendNotificationEmails extends Command
         $logo = $brandLogos[$tid] ?? null;
         $url = NotificationLinks::forNotification($audience, $n->reference_type, $n->reference_id, $slug);
 
+        // Sent by the PLATFORM, though delivered to an academy's people (a host
+        // announcement, "link your bank again"): Jorsas branding, Jorsas as the
+        // sender, no academy reply-to. The link still opens their own academy.
+        $fromPlatform = in_array((string) $n->type, self::PLATFORM_TYPES, true);
+        if ($fromPlatform) {
+            // Same platform name the email layout prints in the header.
+            $institute = (string) config('mail.from.name') ?: 'Jorsas';
+            $replyTo = null;
+            $color = null;
+            $logo = null;
+        }
+
         // One-on-one session booked / moved / cancelled: attach a calendar
         // invite. Best effort; never blocks the email itself.
         $ics = null;
@@ -356,7 +377,7 @@ class SendNotificationEmails extends Command
                 // A notification with no tenant, or one under the platform's own
                 // (primary) tenant, is platform mail and carries our support
                 // block. An academy's notification never shows our details.
-                isPlatformMail: ! $tid || in_array((int) $tid, Tenant::platformTenantIds(), true),
+                isPlatformMail: $fromPlatform || ! $tid || in_array((int) $tid, Tenant::platformTenantIds(), true),
                 calendarIcs: $ics,
             ));
 

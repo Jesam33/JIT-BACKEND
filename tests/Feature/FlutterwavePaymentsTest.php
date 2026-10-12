@@ -405,8 +405,22 @@ class FlutterwavePaymentsTest extends TestCase
         $this->assertSame('payout_relink', $note->type);
         $this->assertStringEndsWith('/lms/admin/profile?tab=payment', \App\Support\NotificationLinks::pathFor('owner', 'payout'));
 
+        // The email comes from Jorsas (it's the platform's message, not the
+        // academy's): platform header and sender, no academy logo or reply-to,
+        // greeting the owner by name, linking into their own academy.
+        $token = $this->ownerToken($legacy);
+        config(['mail.from.name' => 'Jorsas']);
+        \Illuminate\Support\Facades\Artisan::call('lms:send-notification-emails');
+        Mail::assertSent(\App\Mail\LmsNotificationMail::class, fn ($mail) => $mail->hasTo('owner@lagos.test')
+            && $mail->isPlatformMail
+            && $mail->instituteName === 'Jorsas'
+            && $mail->instituteLogo === null
+            && $mail->instituteReplyTo === null
+            && $mail->greetingName === 'Kofi'
+            && str_contains($mail->actionUrl, '/lms/admin/profile?tab=payment&tenant=lagos'));
+
         // The payout page keeps asking until they link again.
-        $this->withToken($this->ownerToken($legacy))->getJson('/api/frontend/lms/owner/payment-settings')
+        $this->withToken($token)->getJson('/api/frontend/lms/owner/payment-settings')
             ->assertJsonPath('payment.needs_relink', true);
     }
 

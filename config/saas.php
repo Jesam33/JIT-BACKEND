@@ -315,6 +315,12 @@ return [
     // top course regardless of volume (still requires ≥1 enrollment to be "top").
     'bestseller_min_enrollments' => (int) env('BESTSELLER_MIN_ENROLLMENTS', 10),
 
+    // Live classes: 8x8 JaaS CLOUD recording (billed per minute by 8x8, files
+    // kept 24h on their side) for teachers. Off by default: teachers record for
+    // free to their own computer with Jitsi's local recording instead (enabled
+    // in the staff Host link, Chrome/Edge on a computer).
+    'jitsi_cloud_recording' => filter_var(env('JITSI_CLOUD_RECORDING', false), FILTER_VALIDATE_BOOLEAN),
+
     // Live class quizzes add a participation bonus to a student's overall
     // progress: up to this many percentage points, in proportion to how many of
     // the live quizzes played in their classes they took part in (answered at

@@ -1093,7 +1093,11 @@ abstract class BaseLmsController extends Controller
                 ],
                 'features' => [
                     'livestreaming' => 'false',
-                    'recording' => $isModerator ? 'true' : 'false',
+                    // 8x8's CLOUD recording is billed per minute and kept for
+                    // only 24h, so it's off unless JITSI_CLOUD_RECORDING is set.
+                    // Teachers record for free to their own computer instead
+                    // (Jitsi local recording, switched on in the host link).
+                    'recording' => $isModerator && config('saas.jitsi_cloud_recording') ? 'true' : 'false',
                     'transcription' => 'false',
                     'outbound-call' => 'false',
                 ],
