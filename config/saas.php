@@ -315,6 +315,17 @@ return [
     // top course regardless of volume (still requires ≥1 enrollment to be "top").
     'bestseller_min_enrollments' => (int) env('BESTSELLER_MIN_ENROLLMENTS', 10),
 
+    // Verified-learner reviews (App\Support\LearnerProof): a student may review
+    // their course once they have FINISHED it (certificate issued), OR attended
+    // at least `min_attended` live classes AND `min_attendance_percent` of the
+    // classes held so far, OR (self-paced) completed `min_activities` tasks and
+    // quizzes. Only these verified reviews count toward a course's stars.
+    'reviews' => [
+        'min_attended' => (int) env('REVIEWS_MIN_ATTENDED', 3),
+        'min_attendance_percent' => (int) env('REVIEWS_MIN_ATTENDANCE_PERCENT', 50),
+        'min_activities' => (int) env('REVIEWS_MIN_ACTIVITIES', 3),
+    ],
+
     // ─── Plans, limits, per-plan commission & feature gates ─────────────
     // The self-serve tiers. Prices are NGN/month (Paystack amounts). Each plan
     // carries three tunable dimensions, all read through the Tenant model

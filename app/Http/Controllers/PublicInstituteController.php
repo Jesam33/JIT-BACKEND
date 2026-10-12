@@ -233,7 +233,45 @@ class PublicInstituteController extends Controller
             'branding' => $tenant->brandingArray(),
             'profile' => $tenant->profileArray(),
             'course' => $this->serializeCourse($course, $ctx, true),
+            'reviews' => $this->verifiedReviews($course),
         ]);
+    }
+
+    /**
+     * The course's verified-learner reviews for its public page: the star
+     * breakdown and the latest reviews, each with its author (first name + last
+     * initial), the proof they learned, and the academy's reply.
+     */
+    private function verifiedReviews(LmsCourse $course): array
+    {
+        $base = \App\Models\LmsCourseReview::query()->verified()->where('course_id', $course->id);
+
+        $breakdown = array_fill_keys([5, 4, 3, 2, 1], 0);
+        (clone $base)->selectRaw('rating, COUNT(*) AS cnt')->groupBy('rating')->get()
+            ->each(function ($row) use (&$breakdown): void {
+                $breakdown[(int) $row->rating] = (int) $row->cnt;
+            });
+
+        $items = (clone $base)
+            ->with('student:id,first_name,last_name')
+            ->orderByRaw('comment IS NULL') // reviews with something to read first
+            ->orderByDesc('updated_at')
+            ->limit(20)
+            ->get()
+            ->map(fn (\App\Models\LmsCourseReview $r) => [
+                'id' => $r->id,
+                'name' => trim(($r->student?->first_name ?? 'Student') . ' ' . mb_substr((string) ($r->student?->last_name ?? ''), 0, 1) . ($r->student?->last_name ? '.' : '')),
+                'rating' => $r->rating,
+                'comment' => $r->comment,
+                'proof' => $r->proofText(),
+                'finished' => $r->finished,
+                'reply' => $r->reply,
+                'replied_at' => $r->replied_at?->toIso8601String(),
+                'date' => $r->updated_at?->toIso8601String(),
+            ])
+            ->values();
+
+        return ['breakdown' => $breakdown, 'items' => $items];
     }
 
     /**

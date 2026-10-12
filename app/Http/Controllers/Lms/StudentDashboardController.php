@@ -38,47 +38,14 @@ class StudentDashboardController extends BaseLmsController
         $courseId = $student->selected_course_id ?? $track?->course_id;
         $course = $courseId ? LmsCourse::query()->find($courseId) : null;
 
-        // Delivered classes across BOTH delivery types: legacy course classrooms
-        // and module-based scheduled classes. Only classes that have already
-        // started (and weren't cancelled) count toward the rate, so future
-        // classes don't drag it down before they happen.
-        $classroomIds = collect();
-        $scheduledIds = collect();
-        // A one-on-one student is measured on their own private sessions only;
-        // the group's classes (scheduled and legacy) aren't theirs to attend.
+        // Delivered classes across BOTH delivery types and how many the student
+        // attended: shared with verified reviews (App\Support\LearnerProof) so
+        // the dashboard rate and a review's proof line always agree.
+        // A one-on-one student is measured on their own private sessions only.
         $oneOnOne = $student->isOneOnOne();
-
-        if ($course) {
-            $classroomIds = $oneOnOne ? collect() : \App\Models\LmsClassroom::query()
-                ->where('course_id', $course->id)
-                ->where('starts_at', '<=', now())
-                ->pluck('id');
-
-            $scheduledIds = \App\Models\LmsScheduledClass::query()
-                ->whereHas('module', fn($q) => $q->where('course_id', $course->id))
-                ->visibleTo($student)
-                ->where('status', '!=', 'cancelled')
-                ->where('starts_at', '<=', now())
-                ->pluck('id');
-        }
-
-        $classesTotal = $classroomIds->count() + $scheduledIds->count();
-        // A row only exists because the student joined the room, but an
-        // instant join-and-leave computes to status 'absent' — that should
-        // NOT count as attended. Unclosed rows (student still inside / never
-        // left via the close-out) read as present, matching the attendance
-        // endpoint's own semantics.
-        $attendedCount = LmsAttendance::query()
-            ->where('student_id', $studentId)
-            ->where(fn ($q) => $q->whereNull('status')->orWhereIn('status', ['present', 'partial', 'late', 'made_up']))
-            ->where(function ($q) use ($classroomIds, $scheduledIds) {
-                $q->where(function ($w) use ($classroomIds) {
-                    $w->where('class_type', 'classroom')->whereIn('classroom_id', $classroomIds);
-                })->orWhere(function ($w) use ($scheduledIds) {
-                    $w->where('class_type', 'scheduled')->whereIn('scheduled_class_id', $scheduledIds);
-                });
-            })
-            ->count();
+        ['held' => $classesTotal, 'attended' => $attendedCount] = $course
+            ? \App\Support\LearnerProof::attendance($student, $course)
+            : ['held' => 0, 'attended' => 0];
         $attendanceRate = $classesTotal > 0 ? round(($attendedCount / $classesTotal) * 100) : 0;
 
         $upcomingClass = null;
@@ -289,22 +256,36 @@ class StudentDashboardController extends BaseLmsController
         // The student's own rating for their course + the course aggregate, so
         // the dashboard can render a "Rate this course" control pre-filled with
         // any existing rating. Null when the student has no resolved course.
+        // Verified-learner reviews: the aggregate counts verified reviews only,
+        // and `proof` says whether this student has learned enough to review
+        // yet (and, if not, what's left).
         $rating = null;
         if ($course) {
             $agg = LmsCourseReview::query()
+                ->verified()
                 ->where('course_id', $course->id)
                 ->selectRaw('AVG(rating) AS avg_rating, COUNT(*) AS cnt')
                 ->first();
             $yours = LmsCourseReview::query()
                 ->where('course_id', $course->id)
                 ->where('student_id', $studentId)
-                ->value('rating');
+                ->first();
+            $proof = \App\Support\LearnerProof::for($student, (int) $course->id);
 
             $rating = [
                 'course_id' => $course->id,
-                'your_rating' => $yours !== null ? (int) $yours : null,
+                'your_rating' => $yours?->rating,
+                'your_comment' => $yours?->comment,
                 'average' => round((float) ($agg->avg_rating ?? 0), 1),
                 'count' => (int) ($agg->cnt ?? 0),
+                'eligible' => $proof['eligible'],
+                'missing' => $proof['missing'],
+                'proof' => [
+                    'attended' => $proof['attended'],
+                    'held' => $proof['held'],
+                    'activities' => $proof['activities'],
+                    'finished' => $proof['finished'],
+                ],
             ];
         }
 

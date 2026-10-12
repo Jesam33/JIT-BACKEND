@@ -277,6 +277,11 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     // shared (see /account/devices above).
     Route::post('/api/frontend/lms/owner/rights-request', [AccountSafetyController::class, 'ownerRightsRequest'])->middleware('throttle:lms-password-reset');
 
+    // Verified-learner reviews of the academy's courses, and its public reply.
+    // Owners answer reviews; they can't edit or delete them.
+    Route::get('/api/frontend/lms/owner/reviews', [\App\Http\Controllers\Lms\OwnerReviewController::class, 'index']);
+    Route::post('/api/frontend/lms/owner/reviews/{id}/reply', [\App\Http\Controllers\Lms\OwnerReviewController::class, 'reply'])->middleware('throttle:30,1');
+
     // Owner Admission Marketer (agent) management: everyone advertising the
     // academy with their referral numbers and payout balance, plus
     // approve/reject. Admission-marketer network is Basic+, gated via 402 → the
@@ -423,6 +428,11 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
     Route::delete('/api/frontend/lms/notifications/{id}', [StudentDashboardController::class, 'dismissNotification']);
     Route::post('/api/frontend/lms/notifications/clear', [StudentDashboardController::class, 'clearNotifications']);
     Route::get('/api/frontend/lms/attendance', [StudentDashboardController::class, 'attendance']);
+
+    // Live quizzes during a live class: the class screen follows the teacher's
+    // quiz and answers it. Polled, so not throttled tightly.
+    Route::get('/api/frontend/lms/live-quiz', [\App\Http\Controllers\Lms\StudentLiveQuizController::class, 'current']);
+    Route::post('/api/frontend/lms/live-quiz/{runId}/answer', [\App\Http\Controllers\Lms\StudentLiveQuizController::class, 'answer'])->whereNumber('runId')->middleware('throttle:60,1');
 
     // Module quizzes: list, take (one attempt, server clock), result, scoreboard.
     Route::get('/api/frontend/lms/quizzes', [\App\Http\Controllers\Lms\StudentQuizController::class, 'index']);
@@ -578,6 +588,23 @@ Route::middleware(['tenant.required', 'subscription.gate'])->group(function () {
         Route::post('/api/frontend/lms/staff/quizzes/{quizId}/close', [\App\Http\Controllers\Lms\StaffQuizController::class, 'close'])->whereNumber('quizId');
         Route::delete('/api/frontend/lms/staff/quizzes/{quizId}', [\App\Http\Controllers\Lms\StaffQuizController::class, 'destroy'])->whereNumber('quizId');
         Route::get('/api/frontend/lms/staff/quizzes/{quizId}/results', [\App\Http\Controllers\Lms\StaffQuizController::class, 'results'])->whereNumber('quizId');
+    });
+
+    // Live quizzes during a live class (Kahoot-style): saved rounds per course,
+    // and the control panel that runs one in a class. Whoever can run the
+    // classroom can run its quiz.
+    Route::middleware('staff.can:classroom')->group(function () {
+        $lq = \App\Http\Controllers\Lms\StaffLiveQuizController::class;
+        Route::get('/api/frontend/lms/staff/live-quiz/class', [$lq, 'forClass']);
+        Route::post('/api/frontend/lms/staff/live-quiz/rounds', [$lq, 'storeRound']);
+        Route::put('/api/frontend/lms/staff/live-quiz/rounds/{roundId}', [$lq, 'updateRound'])->whereNumber('roundId');
+        Route::delete('/api/frontend/lms/staff/live-quiz/rounds/{roundId}', [$lq, 'destroyRound'])->whereNumber('roundId');
+        Route::post('/api/frontend/lms/staff/live-quiz/runs', [$lq, 'start']);
+        Route::get('/api/frontend/lms/staff/live-quiz/runs/{runId}', [$lq, 'show'])->whereNumber('runId');
+        Route::post('/api/frontend/lms/staff/live-quiz/runs/{runId}/next', [$lq, 'next'])->whereNumber('runId');
+        Route::post('/api/frontend/lms/staff/live-quiz/runs/{runId}/reveal', [$lq, 'reveal'])->whereNumber('runId');
+        Route::post('/api/frontend/lms/staff/live-quiz/runs/{runId}/finish', [$lq, 'finish'])->whereNumber('runId');
+        Route::post('/api/frontend/lms/staff/live-quiz/runs/{runId}/auto-advance', [$lq, 'autoAdvance'])->whereNumber('runId');
     });
 
     // Staff Tasks (list)

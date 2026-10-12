@@ -41,8 +41,9 @@ class CourseCards
             return compact('ratings', 'instructors', 'bestseller') + ['fallback' => $fallbackInstructor];
         }
 
-        // ── Ratings: one aggregate row per course. ──
+        // ── Ratings: one aggregate row per course, verified-learner reviews only. ──
         LmsCourseReview::query()
+            ->verified()
             ->whereIn('course_id', $courseIds)
             ->selectRaw('course_id, AVG(rating) AS avg_rating, COUNT(*) AS cnt')
             ->groupBy('course_id')
