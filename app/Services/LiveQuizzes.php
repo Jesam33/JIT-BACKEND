@@ -169,8 +169,9 @@ class LiveQuizzes
     }
 
     /**
-     * A student's answer to the open question. One answer per question (a
-     * second tap is ignored); refused once the question has closed.
+     * A student's answer to the open question. One answer per question, which
+     * they can change until it closes (the last one counts, timed from that
+     * tap); refused once the question has closed.
      *
      * @return array{ok: bool, message?: string, answer?: LmsLiveQuizAnswer}
      */
@@ -196,9 +197,19 @@ class LiveQuizzes
         $correct = $choice === (int) $q['correct_index'];
         $points = $correct ? (int) round(self::MAX_POINTS / 2 + (self::MAX_POINTS / 2) * (1 - $ms / $limitMs)) : 0;
 
+        $fields = ['choice' => $choice, 'correct' => $correct, 'response_ms' => $ms, 'points' => $points];
+
+        // Changing their mind before the buzzer: the new answer replaces the
+        // old, timed from the new tap, so a switch costs some speed bonus but
+        // a mis-tap is never final. Nobody sees answers before the reveal, so
+        // switching can't be used to copy.
         $existing = LmsLiveQuizAnswer::query()
             ->where('run_id', $run->id)->where('student_id', $student->id)->where('question_index', $index)->first();
         if ($existing) {
+            if ((int) $existing->choice !== $choice) {
+                $existing->forceFill($fields)->save();
+            }
+
             return ['ok' => true, 'answer' => $existing];
         }
 
@@ -213,9 +224,10 @@ class LiveQuizzes
                 'points' => $points,
             ]);
         } catch (\Illuminate\Database\QueryException $e) {
-            // A double tap raced us to the unique index: keep the first answer.
+            // Two quick taps raced to the unique index: the later tap wins.
             $answer = LmsLiveQuizAnswer::query()
                 ->where('run_id', $run->id)->where('student_id', $student->id)->where('question_index', $index)->firstOrFail();
+            $answer->forceFill($fields)->save();
         }
 
         return ['ok' => true, 'answer' => $answer];
@@ -269,6 +281,51 @@ class LiveQuizzes
                 'you' => $viewerId !== null && (int) $r->student_id === $viewerId,
             ];
         })->all();
+    }
+
+    /**
+     * A student's live-quiz participation in their course, and the bonus it
+     * earns on their overall progress (config saas.live_quiz_bonus_max, in
+     * percentage points). Counted: quizzes actually played (finished, at least
+     * one answer from anyone) in classes this student could attend; joined =
+     * the ones they answered at least one question in.
+     *
+     * @return array{held: int, joined: int, bonus: int}
+     */
+    public static function participation(LmsStudent $student, int $courseId): array
+    {
+        $max = max(0.0, (float) config('saas.live_quiz_bonus_max', 5));
+
+        // The classes this student could be in: their visible module classes,
+        // plus the course's legacy classrooms unless they're one-on-one.
+        $scheduledIds = LmsScheduledClass::query()
+            ->whereHas('module', fn ($q) => $q->where('course_id', $courseId))
+            ->visibleTo($student)
+            ->pluck('id');
+        $classroomIds = $student->isOneOnOne()
+            ? collect()
+            : LmsClassroom::query()->where('course_id', $courseId)->pluck('id');
+
+        $runIds = LmsLiveQuizRun::query()
+            ->where('course_id', $courseId)
+            ->where('phase', LmsLiveQuizRun::FINISHED)
+            ->where(function ($q) use ($scheduledIds, $classroomIds) {
+                $q->where(fn ($w) => $w->where('class_type', 'scheduled')->whereIn('class_id', $scheduledIds))
+                    ->orWhere(fn ($w) => $w->where('class_type', 'classroom')->whereIn('class_id', $classroomIds));
+            })
+            ->whereHas('answers')
+            ->pluck('id');
+
+        $held = $runIds->count();
+        $joined = $held > 0
+            ? LmsLiveQuizAnswer::query()->whereIn('run_id', $runIds)->where('student_id', $student->id)->distinct()->count('run_id')
+            : 0;
+
+        return [
+            'held' => $held,
+            'joined' => $joined,
+            'bonus' => $held > 0 ? (int) round($max * $joined / $held) : 0,
+        ];
     }
 
     /** Remember that a student's screen is following this run (for the teacher's "joined" count). */

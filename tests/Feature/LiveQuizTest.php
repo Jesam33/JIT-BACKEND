@@ -140,10 +140,13 @@ class LiveQuizTest extends TestCase
             ->assertJsonPath('run.question.prompt', 'Which tag makes a link?')
             ->assertJsonMissingPath('run.correct_index');
 
-        // Ada answers right after 2s, Bola wrong after 10s; a second tap is ignored.
-        Carbon::setTestNow(now()->addSeconds(2));
-        $this->withToken($ada)->postJson("/api/frontend/lms/live-quiz/{$runId}/answer", ['question_index' => 0, 'choice' => 1])->assertOk();
-        $this->withToken($ada)->postJson("/api/frontend/lms/live-quiz/{$runId}/answer", ['question_index' => 0, 'choice' => 0])->assertOk()->assertJsonPath('choice', 1);
+        // Ada mis-taps a wrong answer at 1s and changes it to the right one at
+        // 2s: the last tap counts, timed from when she made it. Bola answers
+        // wrong after 10s.
+        Carbon::setTestNow(now()->addSecond());
+        $this->withToken($ada)->postJson("/api/frontend/lms/live-quiz/{$runId}/answer", ['question_index' => 0, 'choice' => 0])->assertOk()->assertJsonPath('choice', 0);
+        Carbon::setTestNow(now()->addSecond());
+        $this->withToken($ada)->postJson("/api/frontend/lms/live-quiz/{$runId}/answer", ['question_index' => 0, 'choice' => 1])->assertOk()->assertJsonPath('choice', 1);
         Carbon::setTestNow(now()->addSeconds(8));
         $this->withToken($bola)->postJson("/api/frontend/lms/live-quiz/{$runId}/answer", ['question_index' => 0, 'choice' => 2])->assertOk();
 
@@ -219,6 +222,38 @@ class LiveQuizTest extends TestCase
             'course_id' => $this->course->id, 'title' => 'Bad',
             'questions' => [['prompt' => 'Q?', 'options' => ['Only one'], 'correct_index' => 0]],
         ])->assertStatus(422)->assertJsonPath('message', 'Question 1: give 2 to 4 answers.');
+    }
+
+    public function test_taking_part_in_live_quizzes_adds_a_bonus_to_overall_progress(): void
+    {
+        $staff = $this->token('staff', $this->teacher->id);
+        $ada = $this->student('Ada');   // joins both quizzes
+        $bola = $this->student('Bola'); // joins one
+        $chi = $this->student('Chi');   // joins none
+        $roundId = $this->round($staff);
+
+        foreach ([0, 1] as $game) {
+            $runId = $this->withToken($staff)->postJson('/api/frontend/lms/staff/live-quiz/runs?' . $this->cls(), ['round_id' => $roundId])->json('run.id');
+            $this->withToken($staff)->postJson("/api/frontend/lms/staff/live-quiz/runs/{$runId}/next");
+            // Wrong answers still count: it rewards taking part, not the score.
+            $this->withToken($this->token('student', $ada->id))->postJson("/api/frontend/lms/live-quiz/{$runId}/answer", ['question_index' => 0, 'choice' => 0])->assertOk();
+            if ($game === 0) {
+                $this->withToken($this->token('student', $bola->id))->postJson("/api/frontend/lms/live-quiz/{$runId}/answer", ['question_index' => 0, 'choice' => 1])->assertOk();
+            }
+            $this->withToken($staff)->postJson("/api/frontend/lms/staff/live-quiz/runs/{$runId}/finish");
+        }
+
+        $summary = fn (LmsStudent $s) => $this->withToken($this->token('student', $s->id))->getJson('/api/frontend/lms/dashboard')->assertOk()->json('summary');
+
+        $a = $summary($ada);
+        $this->assertSame([2, 2, 5], [$a['live_quizzes_held'], $a['live_quizzes_joined'], $a['live_quiz_bonus']]);
+        $b = $summary($bola);
+        $this->assertSame([2, 1, 3], [$b['live_quizzes_held'], $b['live_quizzes_joined'], $b['live_quiz_bonus']]);
+        $c = $summary($chi);
+        $this->assertSame([2, 0, 0], [$c['live_quizzes_held'], $c['live_quizzes_joined'], $c['live_quiz_bonus']]);
+
+        // The bonus is inside the overall number.
+        $this->assertSame($c['overall_progress'] + 5, $a['overall_progress']);
     }
 
     public function test_free_plans_have_no_live_quiz(): void

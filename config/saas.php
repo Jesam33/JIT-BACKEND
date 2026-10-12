@@ -315,6 +315,13 @@ return [
     // top course regardless of volume (still requires ≥1 enrollment to be "top").
     'bestseller_min_enrollments' => (int) env('BESTSELLER_MIN_ENROLLMENTS', 10),
 
+    // Live class quizzes add a participation bonus to a student's overall
+    // progress: up to this many percentage points, in proportion to how many of
+    // the live quizzes played in their classes they took part in (answered at
+    // least one question). Rewards showing up and engaging, not speed or score.
+    // 0 turns the bonus off. App\Services\LiveQuizzes::participation().
+    'live_quiz_bonus_max' => (float) env('LIVE_QUIZ_BONUS_MAX', 5),
+
     // Verified-learner reviews (App\Support\LearnerProof): a student may review
     // their course once they have FINISHED it (certificate issued), OR attended
     // at least `min_attended` live classes AND `min_attendance_percent` of the

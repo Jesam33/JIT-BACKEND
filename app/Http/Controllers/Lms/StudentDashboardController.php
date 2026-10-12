@@ -238,6 +238,12 @@ class StudentDashboardController extends BaseLmsController
             ? (int) round(array_sum($overallComponents) / count($overallComponents))
             : 0;
 
+        // Live class quizzes: a participation bonus on top (never past 100%).
+        $liveQuiz = $course
+            ? \App\Services\LiveQuizzes::participation($student, (int) $course->id)
+            : ['held' => 0, 'joined' => 0, 'bonus' => 0];
+        $overallProgress = min(100, $overallProgress + $liveQuiz['bonus']);
+
         $notifications = LmsNotification::query()
             ->where('student_id', $studentId)
             ->orderByDesc('created_at')
@@ -308,6 +314,10 @@ class StudentDashboardController extends BaseLmsController
                 'task_score_total' => $taskScoreTotal,
                 'task_progress' => $taskProgress,
                 'overall_progress' => $overallProgress,
+                // Included in overall_progress above.
+                'live_quizzes_held' => $liveQuiz['held'],
+                'live_quizzes_joined' => $liveQuiz['joined'],
+                'live_quiz_bonus' => $liveQuiz['bonus'],
             ],
             'upcoming_class' => $upcomingClass,
             // One-on-one students: who teaches them (null teacher = not yet
