@@ -40,6 +40,14 @@ Schedule::command('lms:send-one-on-one-reminders')
     ->everyFiveMinutes()
     ->withoutOverlapping();
 
+// Group classes: "starts in 20 minutes" and "starts in 5 minutes" to every
+// student, skipping any reminder the class was created too late for (the "new
+// class" notice covers those). Every minute, since a 5-minute reminder can't
+// wait for a slower sweep; stamps keep each reminder to one send.
+Schedule::command('lms:send-class-reminders')
+    ->everyMinute()
+    ->withoutOverlapping();
+
 // CEO's Forum: invite owners when a forum is scheduled, remind ~1h before start,
 // and advance forum status (scheduled → live → ended). Per-forum stamps keep each
 // sweep idempotent, so running every minute never double-sends.

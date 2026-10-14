@@ -179,7 +179,8 @@ class LmsIntakeController extends BaseLmsController
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:120'],
             'last_name' => ['required', 'string', 'max:120'],
-            'date_of_birth' => ['required', 'date'],
+            // No longer asked on the course form; kept accepted for older clients.
+            'date_of_birth' => ['nullable', 'date'],
             'qualification_level' => ['required', 'string', 'max:255'],
             'phone_number' => ['required', 'string', 'max:40'],
             'email' => ['required', 'email', 'max:255'],
@@ -327,7 +328,7 @@ class LmsIntakeController extends BaseLmsController
         $attributes = [
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
-            'date_of_birth' => $validated['date_of_birth'],
+            'date_of_birth' => $validated['date_of_birth'] ?? null,
             'qualification_level' => $validated['qualification_level'],
             'phone_number' => $validated['phone_number'],
             'email' => $validated['email'],

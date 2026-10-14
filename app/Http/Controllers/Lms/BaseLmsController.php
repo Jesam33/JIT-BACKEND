@@ -231,6 +231,25 @@ abstract class BaseLmsController extends Controller
         return \App\Models\LmsTeacher::ownerMirror($tenant);
     }
 
+    /**
+     * Save the person's own timezone from their device (the portal sends it as
+     * X-Timezone, e.g. "Europe/London"), so times in their emails are in their
+     * own time (App\Support\LocalTime). Only a real IANA name, only when it
+     * changed; never blocks the request.
+     */
+    protected function rememberTimezone(Request $request, ?\Illuminate\Database\Eloquent\Model $person): void
+    {
+        $tz = trim((string) $request->header('X-Timezone', ''));
+        if (! $person || ! \App\Support\LocalTime::valid($tz) || $person->getAttribute('timezone') === $tz) {
+            return;
+        }
+        try {
+            $person->forceFill(['timezone' => $tz])->saveQuietly();
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
     /** Whether this actor is an academy owner's mirror, i.e. scoped academy-wide. */
     protected function actorIsOwner(?\App\Models\LmsTeacher $actor): bool
     {

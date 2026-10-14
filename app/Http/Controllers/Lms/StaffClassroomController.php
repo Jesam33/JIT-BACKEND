@@ -107,7 +107,7 @@ class StaffClassroomController extends BaseLmsController
                 'student_id' => $studentId,
                 'type' => 'class_scheduled',
                 'title' => 'New live class: ' . $classroom->title,
-                'body' => 'A live class "' . $classroom->title . '" has been scheduled for ' . $classroom->starts_at . '. Join it from your Classroom page.',
+                'body' => 'A live class "' . $classroom->title . '" has been scheduled for ' . \App\Support\LocalTime::marker($classroom->starts_at) . '. Join it from your Classroom page.',
                 'reference_type' => 'classroom',
                 'reference_id' => $classroom->id,
             ]);

@@ -424,6 +424,23 @@ class FlutterwavePaymentsTest extends TestCase
             ->assertJsonPath('payment.needs_relink', true);
     }
 
+    public function test_registration_needs_no_date_of_birth_and_keeps_the_country_code(): void
+    {
+        $gh = $this->ghana();
+        $course = $this->course($gh);
+
+        $this->postJson('/api/frontend/training/register', [
+            'first_name' => 'Ama', 'last_name' => 'Owusu',
+            'qualification_level' => 'SSCE', 'email' => 'ama@student.test',
+            'phone_number' => '+233 241234567', 'whatsapp' => '+233 241234567',
+            'course_id' => $course->id, 'learning_mode' => 'live', 'institute_slug' => $gh->slug,
+        ])->assertSuccessful();
+
+        $reg = \App\Models\TrainingRegistration::withoutGlobalScope(TenantScope::class)->where('email', 'ama@student.test')->sole();
+        $this->assertNull($reg->date_of_birth);
+        $this->assertSame('+233 241234567', $reg->phone_number);
+    }
+
     public function test_disconnecting_removes_the_flutterwave_subaccount(): void
     {
         $gh = $this->ghana();

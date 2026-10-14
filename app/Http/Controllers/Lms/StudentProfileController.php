@@ -25,6 +25,8 @@ class StudentProfileController extends BaseLmsController
         }
 
         $student = LmsStudent::query()->findOrFail($session->user_id);
+        // Their device's timezone, for the times in their emails.
+        $this->rememberTimezone($request, $student);
 
         // Merge the tenant plan so the student shell can gate paid-only features
         // (chat) without a second round-trip, plus a `tenant` descriptor so the

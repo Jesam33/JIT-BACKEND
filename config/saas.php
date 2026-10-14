@@ -419,6 +419,9 @@ return [
             'name' => 'Basic',
             'label' => 'Grow',
             'price' => (float) env('PLAN_BASIC_PRICE', 5000),
+            // Outside Nigeria: this many US dollars a month, charged in the
+            // academy's own currency at the day's rate (App\Support\PlanPricing).
+            'usd_price' => (float) env('PLAN_BASIC_USD_PRICE', 15),
             'commission_percent' => (float) env('PLAN_BASIC_COMMISSION', 5),
             'limits' => [
                 'courses' => (int) env('PLAN_BASIC_MAX_COURSES', 10),
@@ -449,6 +452,8 @@ return [
             'name' => 'Pro',
             'label' => 'Scale',
             'price' => (float) env('PLAN_PRO_PRICE', 15000),
+            // Outside Nigeria: $30 a month in the academy's own currency.
+            'usd_price' => (float) env('PLAN_PRO_USD_PRICE', 30),
             'commission_percent' => (float) env('PLAN_PRO_COMMISSION', 5),
             'limits' => [
                 'courses' => (int) env('PLAN_PRO_MAX_COURSES', 50),

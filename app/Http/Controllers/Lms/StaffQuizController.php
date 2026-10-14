@@ -198,7 +198,7 @@ class StaffQuizController extends BaseLmsController
                 'New quiz: ' . $quiz->title,
                 LmsQuiz::QUESTIONS . ' questions on ' . ($quiz->module?->title ?? 'your module') . '.'
                     . ($quiz->time_limit_minutes ? ' You have ' . $quiz->time_limit_minutes . ' minutes once you start.' : '')
-                    . ($quiz->closes_at ? ' Closes ' . $quiz->closes_at->copy()->setTimezone((string) config('saas.monthly_reminder_timezone', 'Africa/Lagos'))->format('l j M, g:ia') . '.' : '')
+                    . ($quiz->closes_at ? ' Closes ' . \App\Support\LocalTime::marker($quiz->closes_at) . '.' : '')
                     . ' Your score goes on the class scoreboard.',
                 'quiz',
                 $quiz->id

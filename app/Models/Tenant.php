@@ -243,6 +243,21 @@ class Tenant extends Model
         return $currency !== '' ? $currency : 'NGN';
     }
 
+    /**
+     * The academy's timezone, for times written into its emails when the
+     * reader's own timezone isn't known: settings.timezone if the owner set
+     * one, else the usual one for its country, else the platform default.
+     */
+    public function timezone(): string
+    {
+        $set = (string) data_get($this->settings, 'timezone', '');
+        if (\App\Support\LocalTime::valid($set)) {
+            return $set;
+        }
+
+        return \App\Support\LocalTime::forCountry($this->payoutCountry()) ?? \App\Support\LocalTime::platformTimezone();
+    }
+
     /** The academy's country (ISO-2), which fixes its currency and payout bank form. */
     public function payoutCountry(): string
     {

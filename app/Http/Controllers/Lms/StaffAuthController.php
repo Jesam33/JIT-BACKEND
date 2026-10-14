@@ -123,6 +123,8 @@ class StaffAuthController extends BaseLmsController
         if (! $actor) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
+        // Their device's timezone, for the times in their emails.
+        $this->rememberTimezone($request, $actor);
 
         // Never surface the mirror's synthetic address: an owner signs in with the
         // account email below.

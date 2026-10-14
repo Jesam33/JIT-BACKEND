@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\LocalTime;
 use App\Models\LmsScheduledClass;
 use App\Models\LmsStudent;
 use App\Models\LmsTeacher;
@@ -59,7 +60,7 @@ class OneOnOneOutcomes
             return $session;
         }
 
-        $when = OneOnOneBooking::local($session->starts_at);
+        $when = LocalTime::marker($session->starts_at); // each reader's own time
         $studentName = static::studentName($session);
         $teacherName = LmsTeacher::query()->withoutGlobalScope(TenantScope::class)->whereKey($session->teacher_id)->value('name') ?? 'Your teacher';
 
@@ -143,7 +144,7 @@ class OneOnOneOutcomes
 
         $session->forceFill(['no_show_reported_at' => now()])->save();
 
-        $when = OneOnOneBooking::local($session->starts_at);
+        $when = LocalTime::marker($session->starts_at); // each reader's own time
         $name = static::studentName($session);
 
         Notify::owner(

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\LocalTime;
 use App\Models\LmsEnrollment;
 use App\Models\LmsModule;
 use App\Models\LmsScheduledClass;
@@ -158,7 +159,7 @@ class OneOnOne
             'class_scheduled',
             'One-on-one session scheduled',
             $teacher->name . ' scheduled your one-on-one session "' . $session->title . '" for '
-                . $startsAt->copy()->setTimezone(static::tz())->format('l j M, g:ia') . '.',
+                . LocalTime::marker($startsAt) . '.',
             'scheduled_class',
             $session->id
         );
@@ -176,7 +177,7 @@ class OneOnOne
             'class_rescheduled',
             'One-on-one session moved',
             'Your session "' . $session->title . '" is now on '
-                . $startsAt->copy()->setTimezone(static::tz())->format('l j M, g:ia') . '.',
+                . LocalTime::marker($startsAt) . '.',
             'scheduled_class',
             $session->id
         );
@@ -192,7 +193,7 @@ class OneOnOne
             'class_cancelled',
             'One-on-one session cancelled',
             'Your session "' . $session->title . '" on '
-                . $session->starts_at?->copy()->setTimezone(static::tz())->format('l j M, g:ia') . ' was cancelled.'
+                . LocalTime::marker($session->starts_at) . ' was cancelled.'
                 . ($reason !== '' ? ' ' . $reason : ''),
             'scheduled_class',
             $session->id

@@ -92,7 +92,7 @@ class SendNotificationEmails extends Command
             $name = $r
                 ? (trim(($r->first_name ?? '') . ' ' . ($r->last_name ?? '')) ?: ($r->username ?: 'there'))
                 : 'there';
-            $sent += $this->deliver($n, 'student', $r?->email, $name, $tenantNames, $slugs, $replyTos, $brandColors, $brandLogos) ? 1 : 0;
+            $sent += $this->deliver($n, 'student', $r?->email, $name, $tenantNames, $slugs, $replyTos, $brandColors, $brandLogos, $r?->timezone) ? 1 : 0;
         }
 
         return $sent;
@@ -144,7 +144,7 @@ class SendNotificationEmails extends Command
             // then treats it as an unsendable address (retries, then gives up)
             // rather than mailing the internal placeholder.
             $email = $r && $r->is_academy_owner ? ($ownerEmails[$r->tenant_id] ?? null) : $r?->email;
-            $sent += $this->deliver($n, 'staff', $email, $name, $tenantNames, $slugs, $replyTos, $brandColors, $brandLogos) ? 1 : 0;
+            $sent += $this->deliver($n, 'staff', $email, $name, $tenantNames, $slugs, $replyTos, $brandColors, $brandLogos, $r?->timezone) ? 1 : 0;
         }
 
         return $sent;
@@ -325,8 +325,14 @@ class SendNotificationEmails extends Command
      * @param  array<int,string>  $brandColors
      * @param  array<int,string>  $brandLogos
      */
-    private function deliver(Model $n, string $audience, ?string $email, string $name, array $tenantNames, array $slugs, array $replyTos, array $brandColors, array $brandLogos): bool
+    private function deliver(Model $n, string $audience, ?string $email, string $name, array $tenantNames, array $slugs, array $replyTos, array $brandColors, array $brandLogos, ?string $timezone = null): bool
     {
+        // Times in the text are markers (App\Support\LocalTime): write them in
+        // the recipient's own timezone, else their academy's.
+        $tz = \App\Support\LocalTime::forPerson($timezone, $n->tenant_id ? (int) $n->tenant_id : null);
+        $notifTitle = \App\Support\LocalTime::render((string) $n->title, $tz);
+        $notifBody = \App\Support\LocalTime::render((string) $n->body, $tz);
+
         if (! $email || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             // No deliverable address (recipient deleted, or address invalid).
             // Stamp it so the sweep stops reconsidering it every minute.
@@ -367,8 +373,8 @@ class SendNotificationEmails extends Command
         try {
             Mail::to($email)->send(new LmsNotificationMail(
                 greetingName: $name,
-                notifTitle: (string) $n->title,
-                notifBody: (string) $n->body,
+                notifTitle: $notifTitle,
+                notifBody: $notifBody,
                 actionUrl: $url,
                 instituteName: $institute,
                 instituteReplyTo: $replyTo,

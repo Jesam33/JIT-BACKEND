@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\LocalTime;
 use App\Models\LmsCourse;
 use App\Models\LmsModule;
 use App\Models\LmsOneOnOneCredit;
@@ -273,9 +274,9 @@ class OneOnOneBooking
         $name = static::name($student);
         $count = count($booked);
         $when = $count === 1
-            ? static::local($first->starts_at)
-            : 'every ' . $first->starts_at->copy()->setTimezone(static::tz())->format('l \a\t g:ia')
-                . ' (' . $count . ' sessions, from ' . static::local($first->starts_at, 'j M') . ')';
+            ? LocalTime::marker($first->starts_at)
+            : 'every ' . LocalTime::marker($first->starts_at, 'weekly')
+                . ' (' . $count . ' sessions, from ' . LocalTime::marker($first->starts_at, 'date') . ')';
 
         Notify::staff(
             (int) $teacher->id,
@@ -336,7 +337,7 @@ class OneOnOneBooking
             (int) $session->teacher_id,
             'one_on_one_cancelled',
             'Session cancelled by ' . $name,
-            $name . ' cancelled their one-on-one session on ' . static::local($session->starts_at) . '. The time is open again.',
+            $name . ' cancelled their one-on-one session on ' . LocalTime::marker($session->starts_at) . '. The time is open again.',
             'scheduled_class',
             $session->id,
             true
@@ -422,7 +423,7 @@ class OneOnOneBooking
                 // sent every minute.
                 $session->forceFill(['reminder_sent_at' => now()])->saveQuietly();
 
-                $when = static::local($session->starts_at, 'g:ia');
+                $when = LocalTime::marker($session->starts_at, 'time');
                 $studentName = $session->student ? static::name($session->student) : 'your student';
 
                 Notify::student(

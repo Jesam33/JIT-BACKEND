@@ -417,7 +417,7 @@ class StaffModuleController extends BaseLmsController
                 'student_id' => $studentId,
                 'type' => 'class_scheduled',
                 'title' => 'New class scheduled: ' . $validated['title'],
-                'body' => 'A new class "' . $validated['title'] . '" has been scheduled for ' . $validated['starts_at'] . '.' . ($meetingPwd ? ' Meeting password: ' . $meetingPwd : ''),
+                'body' => 'A new class "' . $validated['title'] . '" has been scheduled for ' . \App\Support\LocalTime::marker($class->starts_at) . '.' . ($meetingPwd ? ' Meeting password: ' . $meetingPwd : ''),
                 'reference_type' => 'scheduled_class',
                 'reference_id' => $class->id,
             ]);

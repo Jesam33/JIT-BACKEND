@@ -7,11 +7,14 @@ use App\Services\CurrencyService;
 /**
  * What a Jorsas plan costs in an academy's own currency, monthly or yearly.
  *
- * Plan prices are set in naira (config saas.plans.{slug}.price). An academy
- * elsewhere pays in its own currency: a fixed price when one is configured
- * (saas.plans.{slug}.prices.{CODE}, e.g. 'USD' => 10), otherwise the naira
- * price converted at today's rate and rounded UP to a whole unit. With no rate
- * available the plan is charged in naira (cards abroad can still pay it).
+ * Regional pricing: Nigeria pays the naira price (config
+ * saas.plans.{slug}.price). Everywhere else pays the plan's US-dollar price
+ * (saas.plans.{slug}.usd_price: Basic $15, Pro $30), charged in the academy's
+ * own currency at today's rate and rounded UP to a whole unit, because
+ * converting the naira price gave richer countries a giveaway price. A fixed
+ * price for one currency (saas.plans.{slug}.prices.{CODE}) overrides both.
+ * With no exchange rate available the dollar price is charged in US dollars.
+ * A plan without a dollar price falls back to converting the naira price.
  *
  * Yearly is 12x that monthly figure less saas.yearly_discount_percent, rounded
  * to a whole unit, so it tracks whatever the monthly price resolves to.
@@ -67,6 +70,19 @@ class PlanPricing
         $fixed = data_get($plan, "prices.$currency");
         if (is_numeric($fixed) && (float) $fixed > 0) {
             return ['amount' => (float) $fixed, 'currency' => $currency];
+        }
+
+        // Outside Nigeria: the dollar price, in the academy's own currency.
+        $usd = (float) ($plan['usd_price'] ?? 0);
+        if ($usd > 0) {
+            if ($currency === 'USD') {
+                return ['amount' => $usd, 'currency' => 'USD'];
+            }
+            $local = app(CurrencyService::class)->convertBetween($usd, 'USD', $currency);
+
+            return $local !== null && $local > 0
+                ? ['amount' => (float) max(1, ceil($local)), 'currency' => $currency]
+                : ['amount' => $usd, 'currency' => 'USD'];
         }
 
         $converted = app(CurrencyService::class)->convertBetween($base, 'NGN', $currency);
